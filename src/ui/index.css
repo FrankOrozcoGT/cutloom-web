@@ -28,19 +28,16 @@
   --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 
-  /* Sombras de elevación: extraídas del CSS de producción real de linear.app
-     (--shadow-low/medium/high y el box-shadow de su componente dialog).
-     El patrón real apila varias capas con blur creciente y alpha decreciente
-     en vez de un solo blur agresivo — así se lee como luz difusa y no como
-     un aro duro alrededor del elemento. El borde hace la separación visual
-     principal; la sombra solo agrega profundidad sutil. */
+  /* Sombras de elevación. --shadow-low/medium/high vienen del CSS de producción
+     de linear.app (patrón de varias capas con blur creciente y alpha
+     decreciente). --shadow-dialog viene del CSS real de la card de login de
+     CapCut (.modal-content-wrapper en capcut.com/login) — verificado que su
+     login real usa card+sombra, a diferencia de linear.app/login que no usa
+     card en absoluto. */
   --shadow-low: 0px 2px 4px rgb(0 0 0 / 0.1);
   --shadow-medium: 0px 4px 24px rgb(0 0 0 / 0.2);
   --shadow-high: 0px 7px 32px rgb(0 0 0 / 0.35);
-  --shadow-dialog:
-    0px 4px 40px rgb(0 0 0 / 0.1), 0px 3px 20px rgb(0 0 0 / 0.13),
-    0px 3px 12px rgb(0 0 0 / 0.13), 0px 2px 8px rgb(0 0 0 / 0.13),
-    0px 1px 1px rgb(0 0 0 / 0.13);
+  --shadow-dialog: 0px 2px 12px rgb(0 0 0 / 0.06), 0px 0px 4px rgb(0 0 0 / 0.25);
 }
 
 :root {
