@@ -67,7 +67,7 @@ export function Sidebar() {
         />
       )}
       <nav
-        className={`fixed inset-y-0 left-0 z-30 flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3 pt-16 transition-transform md:z-10 md:pt-6 md:transition-[width] ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3 pt-16 transition-transform md:top-[57px] md:z-0 md:pt-6 md:transition-[width] ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } ${isOpen ? 'md:w-56' : 'md:w-16'}`}
       >
