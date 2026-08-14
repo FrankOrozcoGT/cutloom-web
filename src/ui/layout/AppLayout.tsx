@@ -2,30 +2,25 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { SidebarProvider } from './SidebarContext'
 import { TopBar } from './TopBar'
-import { useSidebar } from './useSidebar'
 
-function AppLayoutContent() {
-  const { isOpen } = useSidebar()
-
-  return (
-    <div className="flex min-h-svh flex-col bg-bg">
-      <TopBar />
-      <div className="flex flex-1">
-        <Sidebar />
-        <main
-          className={`flex-1 overflow-auto transition-[margin] ${isOpen ? 'md:ml-56' : 'md:ml-16'}`}
-        >
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
-}
-
+/**
+ * Grid de 2x2: la topbar ocupa toda la fila superior, el sidebar toda la
+ * columna izquierda debajo de ella. Al ser celdas de grid (no fixed/sticky
+ * superpuestos), no compiten entre sí por espacio ni z-index — el ancho del
+ * sidebar solo se define una vez, en su propia celda (ver Sidebar.tsx).
+ */
 export function AppLayout() {
   return (
     <SidebarProvider>
-      <AppLayoutContent />
+      <div className="grid min-h-svh grid-cols-[auto_1fr] grid-rows-[auto_1fr] bg-bg">
+        <div className="col-span-2">
+          <TopBar />
+        </div>
+        <Sidebar />
+        <main className="overflow-auto">
+          <Outlet />
+        </main>
+      </div>
     </SidebarProvider>
   )
 }

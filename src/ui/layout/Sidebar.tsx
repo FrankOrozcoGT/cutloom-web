@@ -59,22 +59,20 @@ export function Sidebar() {
 
   return (
     <>
+      {/* Overlay: solo existe en mobile, donde el sidebar flota sobre el contenido. */}
       {isOpen && (
-        <div
-          onClick={toggle}
-          className="fixed inset-0 z-20 bg-black/40 md:hidden"
-          aria-hidden="true"
-        />
+        <div onClick={toggle} className="fixed inset-0 z-20 bg-black/40 md:hidden" aria-hidden="true" />
       )}
+
       <nav
-        className={`fixed inset-y-0 left-0 z-30 flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3 pt-16 transition-transform md:top-[57px] md:z-0 md:pt-6 md:transition-[width] ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } ${isOpen ? 'md:w-56' : 'md:w-16'}`}
+        className={`fixed inset-y-0 left-0 z-30 w-56 -translate-x-full border-r border-border bg-surface p-3 transition-transform md:static md:translate-x-0 md:transition-[width] ${
+          isOpen ? 'translate-x-0 md:w-56' : 'md:w-16'
+        } flex flex-col gap-1`}
       >
         {items.map((item) => (
           <NavLink key={item.to} to={item.to} end={item.end} className={linkClasses} title={item.label}>
             {item.icon}
-            <span className={isOpen ? 'inline md:inline' : 'inline md:hidden'}>{item.label}</span>
+            <span className={isOpen ? 'inline' : 'inline md:hidden'}>{item.label}</span>
           </NavLink>
         ))}
       </nav>
