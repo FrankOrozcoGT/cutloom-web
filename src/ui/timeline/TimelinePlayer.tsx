@@ -26,7 +26,7 @@ export function TimelinePlayer({
   onPlayheadChange,
   onPlayingChange,
 }: TimelinePlayerProps) {
-  const { videoRefA, videoRefB, activeIsA, activeBuffer, waitingBuffer, hasContent } = usePlaybackEngine({
+  const { videoRefA, videoRefB, activeIsA, bufferA, bufferB, hasContent } = usePlaybackEngine({
     timeline,
     assets,
     playheadMs,
@@ -35,8 +35,6 @@ export function TimelinePlayer({
     onPlayingChange,
   })
 
-  const bufferA = activeIsA ? activeBuffer : waitingBuffer
-  const bufferB = activeIsA ? waitingBuffer : activeBuffer
   const durationMs = getTimelineDurationMs(timeline)
   const isWithinTimelineRange = playheadMs >= 0 && playheadMs < durationMs
 

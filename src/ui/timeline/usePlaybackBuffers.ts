@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { VideoAsset } from '@domain/video'
 
 export interface PlaybackBuffer {
@@ -26,6 +26,15 @@ export function usePlaybackBuffers(
 ) {
   const [activeBuffer, setActiveBuffer] = useState<PlaybackBuffer>(EMPTY_BUFFER)
   const [waitingBuffer, setWaitingBuffer] = useState<PlaybackBuffer>(EMPTY_BUFFER)
+
+  // Espejo síncrono del estado, leído por swap() para no depender de closures
+  // capturados: swap() se llama desde un listener nativo del <video> ('ended'),
+  // fuera del ciclo de render de React, donde un re-render intermedio (p.ej.
+  // la precarga del siguiente clip) podía dejar la closure con valores viejos.
+  const activeBufferRef = useRef(activeBuffer)
+  activeBufferRef.current = activeBuffer
+  const waitingBufferRef = useRef(waitingBuffer)
+  waitingBufferRef.current = waitingBuffer
 
   useEffect(() => {
     if (!activeClip) return
@@ -62,8 +71,10 @@ export function usePlaybackBuffers(
 
   /** Intercambia cuál buffer es "activo" tras cruzar el límite de un clip. */
   function swap() {
-    setActiveBuffer(waitingBuffer)
-    setWaitingBuffer(activeBuffer)
+    const nextActive = waitingBufferRef.current
+    const nextWaiting = activeBufferRef.current
+    setActiveBuffer(nextActive)
+    setWaitingBuffer(nextWaiting)
   }
 
   return { activeBuffer, waitingBuffer, swap }

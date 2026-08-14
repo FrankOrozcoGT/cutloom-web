@@ -192,12 +192,20 @@ export function usePlaybackEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
 
+  // bufferA/bufferB se exponen ya resueltos al slot físico correspondiente
+  // (no activeBuffer/waitingBuffer + activeIsA por separado) para que el
+  // componente presentacional no tenga que re-derivar esa relación — un
+  // desfase de un frame ahí fue la causa de un ERR_FILE_NOT_FOUND real: el
+  // <video> quedaba apuntando a una blob URL que este hook ya había revocado.
+  const bufferA = activeIsA.current ? activeBuffer : waitingBuffer
+  const bufferB = activeIsA.current ? waitingBuffer : activeBuffer
+
   return {
     videoRefA,
     videoRefB,
+    bufferA,
+    bufferB,
     activeIsA: activeIsA.current,
-    activeBuffer,
-    waitingBuffer,
     hasContent: mode === 'clip',
   }
 }
