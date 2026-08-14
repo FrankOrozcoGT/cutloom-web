@@ -8,6 +8,7 @@ const ERROR_MESSAGES: Record<UploadError, string> = {
   FILE_TOO_LARGE: 'Archivo demasiado grande. Máximo 2GB.',
   STORAGE_FULL: 'No hay espacio suficiente en el navegador para guardar el video.',
   THUMBNAIL_FAILED: 'No se pudo generar el thumbnail del video.',
+  DURATION_READ_FAILED: 'No se pudo leer la duración del video.',
   UNKNOWN_ERROR: 'Ocurrió un error inesperado al subir el video.',
 }
 

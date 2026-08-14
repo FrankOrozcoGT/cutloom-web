@@ -7,6 +7,7 @@ export interface VideoAsset {
   blob: Blob
   size: number
   type: VideoFormat
+  durationMs: number
   createdAt: string
 }
 
@@ -20,6 +21,7 @@ export type UploadError =
   | 'FILE_TOO_LARGE'
   | 'STORAGE_FULL'
   | 'THUMBNAIL_FAILED'
+  | 'DURATION_READ_FAILED'
   | 'UNKNOWN_ERROR'
 
 export type ValidationError = 'UNSUPPORTED_FORMAT' | 'FILE_TOO_LARGE'

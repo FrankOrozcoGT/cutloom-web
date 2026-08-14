@@ -4,7 +4,7 @@ import type { StorageError, VideoStorage } from '@application/video/ports'
 import { openCutloomDB, runTransaction, VIDEOS_BY_PROJECT_INDEX, VIDEOS_STORE } from './database'
 
 export class IndexedDBAdapter implements VideoStorage {
-  async save(file: File, projectId: string): Promise<Result<VideoAsset, StorageError>> {
+  async save(file: File, projectId: string, durationMs: number): Promise<Result<VideoAsset, StorageError>> {
     const asset: VideoAsset = {
       id: crypto.randomUUID(),
       projectId,
@@ -12,6 +12,7 @@ export class IndexedDBAdapter implements VideoStorage {
       blob: file,
       size: file.size,
       type: file.type as VideoFormat,
+      durationMs,
       createdAt: new Date().toISOString(),
     }
 
