@@ -53,7 +53,7 @@ export function EditorPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-6 p-6">
+    <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-6 overflow-x-hidden p-4 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           {timelineState.timeline ? (
@@ -91,7 +91,9 @@ export function EditorPage() {
       </div>
 
       {assets.length > 0 && (
-        <Timeline state={timelineState} assets={assets} thumbnails={thumbnails} />
+        <div className="min-w-0">
+          <Timeline state={timelineState} assets={assets} thumbnails={thumbnails} />
+        </div>
       )}
     </div>
   )

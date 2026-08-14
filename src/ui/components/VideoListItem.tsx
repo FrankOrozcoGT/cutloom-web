@@ -51,7 +51,7 @@ export function VideoListItem({ asset, thumbnail, onDelete, draggable }: VideoLi
         <button
           type="button"
           onClick={() => onDelete(asset.id)}
-          className="shrink-0 text-sm text-danger hover:underline"
+          className="shrink-0 rounded-lg px-3 py-2.5 text-sm text-danger hover:bg-danger-bg"
         >
           Eliminar
         </button>

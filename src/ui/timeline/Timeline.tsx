@@ -133,12 +133,12 @@ export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) 
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsPlaying((value) => !value)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover sm:h-8 sm:w-8"
             aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
           >
             {isPlaying ? (
@@ -154,11 +154,11 @@ export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) 
           </button>
           <span className="text-sm font-medium text-text-strong">Timeline</span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-text-muted">
+        <div className="flex items-center gap-1 text-sm text-text-muted">
           <button
             type="button"
             onClick={handleFitToScreen}
-            className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
+            className="rounded-lg border border-border px-3 py-2.5 hover:bg-surface-hover sm:py-1"
             title="Ajustar todo el timeline a la pantalla"
           >
             Ajustar
@@ -166,15 +166,17 @@ export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) 
           <button
             type="button"
             onClick={() => setPxPerSec((value) => Math.max(1, Math.floor(value / 2)))}
-            className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
+            aria-label="Reducir zoom"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
             −
           </button>
-          <span>Zoom</span>
+          <span className="hidden sm:inline">Zoom</span>
           <button
             type="button"
             onClick={() => setPxPerSec((value) => Math.max(value * 2, value + 1))}
-            className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
+            aria-label="Aumentar zoom"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
             +
           </button>

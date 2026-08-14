@@ -87,49 +87,56 @@ export function ProjectsPage() {
             {projects.map((project) => (
               <li
                 key={project.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-3"
+                className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-3"
               >
                 {editingId === project.id ? (
-                  <div className="flex flex-1 items-center gap-2">
+                  <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
                     <input
                       value={editingName}
                       onChange={(event) => setEditingName(event.target.value)}
-                      className="flex-1 rounded-lg border border-border bg-bg px-3 py-1.5 text-text-strong outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-bg"
+                      className="flex-1 rounded-lg border border-border bg-bg px-3 py-2.5 text-text-strong outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-bg"
                     />
-                    <button
-                      type="button"
-                      onClick={() => confirmRename(project.id)}
-                      className="text-sm text-accent hover:underline"
-                    >
-                      Guardar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelRename}
-                      className="text-sm text-text-muted hover:underline"
-                    >
-                      Cancelar
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => confirmRename(project.id)}
+                        className="flex-1 rounded-lg px-3 py-2.5 text-sm text-accent hover:bg-accent-bg sm:flex-none"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelRename}
+                        className="flex-1 rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover sm:flex-none"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
-                    <Link to={`/projects/${project.id}`} className="flex-1 text-text-strong hover:underline">
+                    <Link
+                      to={`/projects/${project.id}`}
+                      className="flex-1 rounded-lg px-1 py-2 text-text-strong hover:underline"
+                    >
                       {project.name}
                     </Link>
-                    <button
-                      type="button"
-                      onClick={() => startRename(project)}
-                      className="text-sm text-text-muted hover:underline"
-                    >
-                      Renombrar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(project.id)}
-                      className="text-sm text-danger hover:underline"
-                    >
-                      Eliminar
-                    </button>
+                    <div className="flex gap-1 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => startRename(project)}
+                        className="rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover"
+                      >
+                        Renombrar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(project.id)}
+                        className="rounded-lg px-3 py-2.5 text-sm text-danger hover:bg-danger-bg"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </>
                 )}
               </li>
