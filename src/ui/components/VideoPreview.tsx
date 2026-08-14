@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import type { VideoAsset } from '@domain/video'
 
 interface VideoPreviewProps {
   asset: VideoAsset
   thumbnail?: Blob
   onDelete?: (id: string) => void
+  draggable?: boolean
 }
 
-export function VideoPreview({ asset, thumbnail, onDelete }: VideoPreviewProps) {
+export function VideoPreview({ asset, thumbnail, onDelete, draggable }: VideoPreviewProps) {
   const [videoUrl, setVideoUrl] = useState('')
   const [thumbnailUrl, setThumbnailUrl] = useState('')
 
@@ -27,13 +28,22 @@ export function VideoPreview({ asset, thumbnail, onDelete }: VideoPreviewProps) 
     return () => URL.revokeObjectURL(url)
   }, [thumbnail])
 
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'asset', id: asset.id }))
+  }
+
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3">
+    <div
+      draggable={draggable}
+      onDragStart={draggable ? handleDragStart : undefined}
+      className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3"
+    >
       {videoUrl && (
         <video
           src={videoUrl}
           poster={thumbnailUrl || undefined}
           controls
+          draggable={false}
           className="w-full rounded-lg bg-bg"
         />
       )}
