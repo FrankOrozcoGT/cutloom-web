@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import {
-  detectOverlap,
+  findOverlappingClipIds,
   snapToNearestClip,
   type Timeline as TimelineModel,
   type Track as TrackModel,
@@ -42,6 +42,15 @@ export function Track({
   const [snapLineMs, setSnapLineMs] = useState<number | null>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const trimRef = useRef<{ clipId: string; edge: TrimEdge } | null>(null)
+  // Clip que el usuario está arrastrando actualmente (si es uno existente, no un
+  // asset nuevo), para usar su duración real en el preview de snap durante
+  // dragover — dataTransfer.getData no está disponible en ese evento, así que
+  // esta es la única forma de conocer qué se está moviendo antes del drop.
+  const draggingClipIdRef = useRef<string | null>(null)
+
+  const handleDragStart = useCallback((clipId: string) => {
+    draggingClipIdRef.current = clipId
+  }, [])
 
   const handleDragOver = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -55,12 +64,18 @@ export function Track({
       const offsetPx = Math.max(0, event.clientX - rect.left)
       const offsetMs = (offsetPx / pxPerSec) * 1000
 
-      // Duración estimada solo para previsualizar el snap; el clip real se resuelve en el drop.
-      // dataTransfer.getData no está disponible durante dragover (restricción del navegador),
-      // así que aquí no se puede compensar el punto exacto donde se agarró el clip — el
-      // resultado preciso se calcula en handleDrop, donde sí se puede leer el payload completo.
-      const estimatedDurationMs = 3000
-      const snapped = snapToNearestClip(timeline, offsetMs, estimatedDurationMs, { playheadMs })
+      const draggingClip = draggingClipIdRef.current
+        ? timeline.tracks.flatMap((t) => t.clips).find((c) => c.id === draggingClipIdRef.current)
+        : null
+      // Sin datos del clip (viene de un asset nuevo, aún no creado): se usa una
+      // duración de referencia solo para previsualizar la línea de snap. El
+      // resultado real y preciso siempre se recalcula en handleDrop.
+      const previewDurationMs = draggingClip?.durationMs ?? 3000
+
+      const snapped = snapToNearestClip(timeline, offsetMs, previewDurationMs, {
+        playheadMs,
+        ignoreClipId: draggingClipIdRef.current ?? undefined,
+      })
       setSnapLineMs(snapped !== offsetMs ? snapped : null)
     },
     [pxPerSec, timeline, playheadMs],
@@ -76,6 +91,7 @@ export function Track({
       event.preventDefault()
       setIsOver(false)
       setSnapLineMs(null)
+      draggingClipIdRef.current = null
 
       const raw = event.dataTransfer.getData('text/plain')
       if (!raw) return
@@ -129,13 +145,7 @@ export function Track({
     }
   }, [track.clips, assets, onResizeClip])
 
-  const conflictIds = new Set(
-    track.clips
-      .filter((clip, index) =>
-        track.clips.some((other, otherIndex) => otherIndex !== index && detectOverlap(clip, other)),
-      )
-      .map((clip) => clip.id),
-  )
+  const conflictIds = findOverlappingClipIds(track)
 
   const snapLinePx = snapLineMs !== null ? (snapLineMs / 1000) * pxPerSec : null
 
@@ -167,7 +177,7 @@ export function Track({
             thumbnail={thumbnails[asset.id]}
             pxPerSec={pxPerSec}
             hasConflict={conflictIds.has(clip.id)}
-            onDragStart={() => {}}
+            onDragStart={handleDragStart}
             onTrimStart={handleTrimStart}
           />
         )

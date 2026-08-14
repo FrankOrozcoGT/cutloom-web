@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { getTimelineDurationMs, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
@@ -104,9 +104,11 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
     [assetsById, addClip],
   )
 
-  if (error) {
-    onError?.(error)
-  }
+  useEffect(() => {
+    if (error) {
+      onError?.(error)
+    }
+  }, [error, onError])
 
   if (!timeline) {
     if (error) {

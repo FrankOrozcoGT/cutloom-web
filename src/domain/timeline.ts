@@ -131,6 +131,14 @@ export function clipOverlapsTrackSegment(track: Track, offsetMs: number, duratio
   return track.clips.some((clip) => clip.id !== ignoreClipId && detectOverlap(clip, segment))
 }
 
+/** IDs de los clips de una pista que se superponen con al menos otro clip de la misma pista, para resaltarlos como conflicto. */
+export function findOverlappingClipIds(track: Track): Set<string> {
+  const overlapping = track.clips.filter((clip, index) =>
+    track.clips.some((other, otherIndex) => otherIndex !== index && detectOverlap(clip, other)),
+  )
+  return new Set(overlapping.map((clip) => clip.id))
+}
+
 export function findValidTrack(
   timeline: Timeline,
   clip: Pick<Clip, 'offsetMs' | 'durationMs'>,

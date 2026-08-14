@@ -2,6 +2,7 @@ import {
   addClipToTrack,
   createClip,
   createTimeline,
+  createTrack,
   findValidTrack,
   moveClip as moveClipInDomain,
   resizeClip as resizeClipInDomain,
@@ -60,15 +61,23 @@ export class ArrangeClipsUseCase {
       return err(clipResult.error)
     }
 
-    const targetTrack = trackId
-      ? timeline.tracks.find((track) => track.id === trackId)
-      : findValidTrack(timeline, clipResult.value)
+    let workingTimeline = timeline
+    let targetTrack = trackId
+      ? workingTimeline.tracks.find((track) => track.id === trackId)
+      : findValidTrack(workingTimeline, clipResult.value)
 
     if (!targetTrack) {
-      return err(trackId ? 'TRACK_NOT_FOUND' : 'TRACK_FULL')
+      if (trackId) {
+        return err('TRACK_NOT_FOUND')
+      }
+      // Ninguna pista existente tiene hueco: se crea una nueva en vez de fallar,
+      // igual que en un editor real donde agregar un clip siempre encuentra lugar.
+      const newTrack = createTrack()
+      workingTimeline = { ...workingTimeline, tracks: [...workingTimeline.tracks, newTrack] }
+      targetTrack = newTrack
     }
 
-    const addResult = addClipToTrack(timeline, clipResult.value, targetTrack.id)
+    const addResult = addClipToTrack(workingTimeline, clipResult.value, targetTrack.id)
     if (!addResult.ok) {
       return err(addResult.error)
     }

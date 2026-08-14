@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createTrack, type Timeline, type TrimEdge } from '@domain/timeline'
+import type { Timeline, TrimEdge } from '@domain/timeline'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
-import { arrangeUseCase, timelineStorage } from './composition'
+import { arrangeUseCase } from './composition'
 
 const DEFAULT_PX_PER_SEC = 60
 
@@ -33,28 +33,6 @@ export function useTimeline(projectId: string) {
     async (assetId: string, durationMs: number, trackId?: string, offsetPx?: number) => {
       const offsetMs = offsetPx !== undefined ? pxToMs(offsetPx) : undefined
       const result = await arrangeUseCase.addClip(projectId, assetId, durationMs, trackId, offsetMs)
-
-      if (!result.ok && result.error === 'TRACK_FULL' && !trackId) {
-        const currentResult = await arrangeUseCase.getTimeline(projectId)
-        if (!currentResult.ok) {
-          setError(currentResult.error)
-          return
-        }
-        const newTrack = createTrack()
-        const withNewTrack = { ...currentResult.value, tracks: [...currentResult.value.tracks, newTrack] }
-        const saveResult = await timelineStorage.save(withNewTrack)
-        if (saveResult.ok) {
-          const retry = await arrangeUseCase.addClip(projectId, assetId, durationMs, newTrack.id, offsetMs)
-          if (retry.ok) {
-            setError(null)
-            setTimeline(retry.value)
-            return
-          }
-          setError(retry.error)
-          return
-        }
-      }
-
       if (!result.ok) {
         setError(result.error)
         return
