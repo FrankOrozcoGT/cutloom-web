@@ -7,6 +7,8 @@ import { RegisterPage } from '@ui/pages/RegisterPage'
 import { GoogleCallbackPage } from '@ui/pages/GoogleCallbackPage'
 import { EditorPage } from '@ui/pages/EditorPage'
 import { ProjectsPage } from '@ui/pages/ProjectsPage'
+import { ProfilePage } from '@ui/pages/ProfilePage'
+import { AppLayout } from '@ui/layout/AppLayout'
 
 function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -27,8 +29,12 @@ const router = createBrowserRouter([
     // TODO: volver a envolver con <ProtectedRoute> cuando el login sea
     // requerido para usar la app. Por ahora la lista de proyectos es la
     // pantalla principal y no depende de autenticación.
-    path: '/',
-    element: <ProjectsPage />,
+    element: <AppLayout />,
+    children: [
+      { path: '/', element: <ProjectsPage /> },
+      { path: '/profile', element: <ProfilePage /> },
+      { path: '/projects/:projectId', element: <EditorPage /> },
+    ],
   },
   {
     path: '/login',
@@ -49,10 +55,6 @@ const router = createBrowserRouter([
   {
     path: '/auth/callback',
     element: <GoogleCallbackPage />,
-  },
-  {
-    path: '/projects/:projectId',
-    element: <EditorPage />,
   },
 ])
 

@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Project } from '@domain/project'
-import { useAuth } from '@ui/auth/useAuth'
 import { Button } from '@ui/components/Button'
 import { FormField } from '@ui/components/FormField'
-import { LogoutButton } from '@ui/components/LogoutButton'
 import { projectUseCase } from '@ui/video/composition'
 
 export function ProjectsPage() {
-  const { isAuthenticated } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [newProjectName, setNewProjectName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -66,11 +63,7 @@ export function ProjectsPage() {
   )
 
   return (
-    <div className="min-h-svh bg-bg">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <span className="text-sm text-text-strong">Proyectos</span>
-        {isAuthenticated && <LogoutButton />}
-      </header>
+    <div>
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
         <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
