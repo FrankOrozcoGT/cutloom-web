@@ -173,7 +173,7 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
           </button>
           <button
             type="button"
-            onClick={() => setPxPerSec((value) => Math.max(1, Math.round(value / 1.25)))}
+            onClick={() => setPxPerSec((value) => Math.max(1, Math.min(value - 1, Math.floor(value / 1.25))))}
             className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
           >
             −
@@ -181,7 +181,7 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
           <span>Zoom</span>
           <button
             type="button"
-            onClick={() => setPxPerSec((value) => Math.round(value * 1.25))}
+            onClick={() => setPxPerSec((value) => Math.max(value + 1, Math.ceil(value * 1.25)))}
             className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
           >
             +

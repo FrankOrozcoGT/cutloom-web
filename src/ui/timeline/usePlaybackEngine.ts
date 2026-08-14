@@ -52,19 +52,19 @@ export function usePlaybackEngine({
   const waitingVideoRef = activeIsA.current ? videoRefB : videoRefA
 
   // Detecta seeks externos: cambios de playheadMs que NO vinieron del propio
-  // <video> reportando su avance normal. Se compara contra el último valor que
-  // este motor emitió; cualquier otra fuente (click en el ruler, arrastrar el
-  // playhead) incrementa seekVersion y fuerza una re-sincronización de currentTime
-  // incluso si el playhead se movió dentro del mismo clip. Es estado (no ref)
-  // para poder usarlo como dependencia válida de useEffect. El incremento vive
-  // en un useEffect (no durante el render) para no arriesgar el orden de hooks.
-  const lastEmittedPlayheadMs = useRef<number | null>(null)
+  // <video> reportando su avance normal. isInternalUpdateRef lo marca el propio
+  // handler de timeupdate/tick JUSTO ANTES de llamar onPlayheadChange, y este
+  // efecto lo consume y resetea — así solo hay un escritor de "qué originó el
+  // cambio", evitando la carrera de tener dos efectos leyendo/escribiendo el
+  // mismo valor de referencia en momentos distintos del ciclo de eventos.
+  const isInternalUpdateRef = useRef(false)
   const [seekVersion, setSeekVersion] = useState(0)
   useEffect(() => {
-    if (lastEmittedPlayheadMs.current !== null && playheadMs !== lastEmittedPlayheadMs.current) {
-      setSeekVersion((version) => version + 1)
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false
+      return
     }
-    lastEmittedPlayheadMs.current = playheadMs
+    setSeekVersion((version) => version + 1)
   }, [playheadMs])
 
   // Prepara el buffer en espera en el punto de inicio de su clip, listo para
@@ -118,7 +118,7 @@ export function usePlaybackEngine({
       const nextPlayheadMs = offsetMs + localMs
 
       if (nextPlayheadMs >= durationMs) {
-        lastEmittedPlayheadMs.current = durationMs
+        isInternalUpdateRef.current = true
         onPlayheadChange(durationMs)
         onPlayingChange(false)
         return
@@ -132,7 +132,7 @@ export function usePlaybackEngine({
         swap()
       }
 
-      lastEmittedPlayheadMs.current = nextPlayheadMs
+      isInternalUpdateRef.current = true
       onPlayheadChange(nextPlayheadMs)
     }
 
@@ -156,12 +156,12 @@ export function usePlaybackEngine({
 
       const nextPlayheadMs = playheadMs + elapsedMs
       if (nextPlayheadMs >= durationMs) {
-        lastEmittedPlayheadMs.current = durationMs
+        isInternalUpdateRef.current = true
         onPlayheadChange(durationMs)
         onPlayingChange(false)
         return
       }
-      lastEmittedPlayheadMs.current = nextPlayheadMs
+      isInternalUpdateRef.current = true
       onPlayheadChange(nextPlayheadMs)
       rafId = requestAnimationFrame(tick)
     }
