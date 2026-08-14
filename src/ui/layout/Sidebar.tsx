@@ -31,6 +31,12 @@ const EditorIcon = (
   </svg>
 )
 
+const BackIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5 shrink-0">
+    <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 function linkClasses({ isActive }: { isActive: boolean }) {
   return `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
     isActive ? 'bg-accent-bg text-accent' : 'text-text-muted hover:bg-surface-hover hover:text-text-strong'
@@ -42,7 +48,10 @@ export function Sidebar() {
   const { isOpen, toggle } = useSidebar()
 
   const items: NavItem[] = projectId
-    ? [{ to: `/projects/${projectId}`, label: 'Editor', end: true, icon: EditorIcon }]
+    ? [
+        { to: '/', label: 'Mis proyectos', end: true, icon: BackIcon },
+        { to: `/projects/${projectId}`, label: 'Editor', end: true, icon: EditorIcon },
+      ]
     : [
         { to: '/', label: 'Mis proyectos', end: true, icon: ProjectsIcon },
         { to: '/profile', label: 'Perfil', icon: ProfileIcon },
@@ -58,7 +67,7 @@ export function Sidebar() {
         />
       )}
       <nav
-        className={`fixed inset-y-0 left-0 z-30 flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3 pt-16 transition-transform md:sticky md:top-0 md:z-0 md:h-svh md:pt-3 md:transition-[width] ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3 pt-16 transition-transform md:z-10 md:pt-3 md:transition-[width] ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } ${isOpen ? 'md:w-56' : 'md:w-16'}`}
       >
