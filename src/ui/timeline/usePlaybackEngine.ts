@@ -113,6 +113,22 @@ export function usePlaybackEngine({
     // ambos, el efecto de avance en huecos se encarga de la transición.
     const canSwapDirectly = waitingClip !== null && waitingClip.offsetMs === clipEndMs
 
+    function advanceToClipEnd() {
+      // El navegador no garantiza que currentTime llegue exactamente a
+      // video.duration — timeupdate puede dejar de dispararse con el playhead
+      // a una fracción de ms del final real. `ended` sí es confiable, así que
+      // se usa para forzar el cierre exacto en clipEndMs como red de seguridad.
+      if (canSwapDirectly) {
+        activeIsA.current = !activeIsA.current
+        swap()
+      }
+      isInternalUpdateRef.current = true
+      onPlayheadChange(clipEndMs >= durationMs ? durationMs : clipEndMs)
+      if (clipEndMs >= durationMs) {
+        onPlayingChange(false)
+      }
+    }
+
     function handleTimeUpdate() {
       const localMs = video!.currentTime * 1000 - clipSourceStartMs
       const nextPlayheadMs = offsetMs + localMs
@@ -137,7 +153,11 @@ export function usePlaybackEngine({
     }
 
     video.addEventListener('timeupdate', handleTimeUpdate)
-    return () => video.removeEventListener('timeupdate', handleTimeUpdate)
+    video.addEventListener('ended', advanceToClipEnd)
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('ended', advanceToClipEnd)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClip?.id, waitingClip?.id, durationMs, activeVideoRef, onPlayheadChange, onPlayingChange])
 
