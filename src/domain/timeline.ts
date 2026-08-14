@@ -103,6 +103,21 @@ export function findNextClip(timeline: Timeline, currentClipId: string): Clip | 
   return candidates[0] ?? null
 }
 
+/**
+ * Primer clip que empieza después de playheadMs, en la línea de tiempo
+ * unificada. A diferencia de findNextClip, no depende de un clip activo —
+ * sirve para encontrar qué viene después mientras el playhead está en un
+ * hueco (sin ningún clip cubriendo ese instante).
+ */
+export function findClipAfter(timeline: Timeline, playheadMs: number): Clip | null {
+  const candidates = timeline.tracks
+    .flatMap((track) => track.clips)
+    .filter((c) => c.offsetMs > playheadMs)
+    .sort((a, b) => a.offsetMs - b.offsetMs)
+
+  return candidates[0] ?? null
+}
+
 export function detectOverlap(a: Pick<Clip, 'offsetMs' | 'durationMs'>, b: Pick<Clip, 'offsetMs' | 'durationMs'>): boolean {
   const aStart = a.offsetMs
   const aEnd = a.offsetMs + a.durationMs

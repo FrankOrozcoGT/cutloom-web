@@ -1,12 +1,15 @@
-import { findActiveClip, findNextClip, getTimelineDurationMs, type Timeline } from '@domain/timeline'
+import { findActiveClip, findClipAfter, findNextClip, getTimelineDurationMs, type Timeline } from '@domain/timeline'
 
 export type PlaybackMode = 'clip' | 'gap' | 'ended'
+
+type UpcomingClip = { id: string; assetId: string; sourceStartMs: number; offsetMs: number }
 
 export interface PlaybackSnapshot {
   mode: PlaybackMode
   durationMs: number
   activeClip: { id: string; assetId: string; sourceTimeMs: number; offsetMs: number; durationMs: number } | null
-  waitingClip: { id: string; assetId: string; sourceStartMs: number; offsetMs: number } | null
+  /** Clip precargado en el slot en espera: el siguiente tras el activo (modo 'clip'), o el que sigue al hueco (modo 'gap'). */
+  waitingClip: UpcomingClip | null
 }
 
 /**
@@ -21,7 +24,15 @@ export function computePlaybackSnapshot(timeline: Timeline, playheadMs: number):
 
   if (!active) {
     const mode: PlaybackMode = playheadMs >= durationMs ? 'ended' : 'gap'
-    return { mode, durationMs, activeClip: null, waitingClip: null }
+    const upcoming = mode === 'gap' ? findClipAfter(timeline, playheadMs) : null
+    return {
+      mode,
+      durationMs,
+      activeClip: null,
+      waitingClip: upcoming
+        ? { id: upcoming.id, assetId: upcoming.assetId, sourceStartMs: upcoming.sourceStartMs, offsetMs: upcoming.offsetMs }
+        : null,
+    }
   }
 
   const next = findNextClip(timeline, active.clip.id)

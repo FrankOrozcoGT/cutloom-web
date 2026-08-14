@@ -166,6 +166,14 @@ export function usePlaybackEngine({
   useEffect(() => {
     if (!isPlaying || mode !== 'gap') return
 
+    // El clip que sigue al hueco siempre se precargó en el slot "waiting" (nunca
+    // hubo swap durante un hueco, porque no hay video activo del que escuchar
+    // 'ended'/'timeupdate'). Al cruzar su offset hay que promoverlo a "activo"
+    // explícitamente — si no, el snapshot lógico avanza pero el slot físico del
+    // <video> sigue siendo el del clip viejo, ya sin buffer válido.
+    const upcomingOffsetMs = waitingClip?.offsetMs ?? null
+    const upcomingClipId = waitingClip?.id ?? null
+
     let rafId: number
     let lastTimestamp: number | null = null
 
@@ -181,6 +189,12 @@ export function usePlaybackEngine({
         onPlayingChange(false)
         return
       }
+
+      if (upcomingClipId !== null && upcomingOffsetMs !== null && nextPlayheadMs >= upcomingOffsetMs) {
+        activeIsA.current = !activeIsA.current
+        swap()
+      }
+
       isInternalUpdateRef.current = true
       onPlayheadChange(nextPlayheadMs)
       rafId = requestAnimationFrame(tick)
@@ -190,7 +204,7 @@ export function usePlaybackEngine({
     return () => cancelAnimationFrame(rafId)
     // playheadMs se lee solo como valor inicial del tick; incluirlo reiniciaría el rAF en cada frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
+  }, [isPlaying, mode, durationMs, waitingClip, onPlayheadChange, onPlayingChange])
 
   // bufferA/bufferB se exponen ya resueltos al slot físico correspondiente
   // (no activeBuffer/waitingBuffer + activeIsA por separado) para que el
