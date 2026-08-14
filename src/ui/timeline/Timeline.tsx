@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type DragEvent } from 'react'
-import type { TrimEdge } from '@domain/timeline'
+import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react'
+import { getTimelineDurationMs, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { TimeRuler } from './TimeRuler'
@@ -42,6 +42,20 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
     pxToMs,
   } = useTimeline(projectId)
   const [isOverEmpty, setIsOverEmpty] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleFitToScreen = useCallback(() => {
+    if (!timeline) return
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const durationMs = getTimelineDurationMs(timeline)
+    if (durationMs <= 0) return
+
+    const availableWidthPx = container.clientWidth
+    const fitPxPerSec = (availableWidthPx / durationMs) * 1000
+    setPxPerSec(Math.max(1, Math.floor(fitPxPerSec)))
+  }, [timeline, setPxPerSec])
 
   const assetsById = useMemo(
     () => Object.fromEntries(assets.map((asset) => [asset.id, asset])),
@@ -107,8 +121,9 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
 
   const tracks = timeline.tracks.length > 0 ? timeline.tracks : [{ id: '__placeholder__', clips: [] }]
 
+  const containerWidthPx = scrollContainerRef.current?.clientWidth ?? 600
   const contentWidthPx = Math.max(
-    600,
+    containerWidthPx,
     ...timeline.tracks.flatMap((track) =>
       track.clips.map((clip) => ((clip.offsetMs + clip.durationMs) / 1000) * pxPerSec + 100),
     ),
@@ -150,7 +165,15 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
         <div className="flex items-center gap-2 text-sm text-text-muted">
           <button
             type="button"
-            onClick={() => setPxPerSec((value) => Math.max(20, value - 20))}
+            onClick={handleFitToScreen}
+            className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
+            title="Ajustar todo el timeline a la pantalla"
+          >
+            Ajustar
+          </button>
+          <button
+            type="button"
+            onClick={() => setPxPerSec((value) => Math.max(1, value - 20))}
             className="rounded-lg border border-border px-2 py-1 hover:bg-surface-hover"
           >
             −
@@ -172,7 +195,7 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div ref={scrollContainerRef} className="overflow-x-auto">
         <div className="relative" style={{ width: contentWidthPx }}>
           <TimeRuler pxPerSec={pxPerSec} widthPx={contentWidthPx} onClickPosition={(px) => setPlayheadMs(pxToMs(px))} />
 
