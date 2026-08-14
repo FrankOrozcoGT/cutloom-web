@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Timeline } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import { computePlaybackSnapshot } from './playbackEngine'
@@ -55,11 +55,15 @@ export function usePlaybackEngine({
   // <video> reportando su avance normal. Se compara contra el último valor que
   // este motor emitió; cualquier otra fuente (click en el ruler, arrastrar el
   // playhead) incrementa seekVersion y fuerza una re-sincronización de currentTime
-  // incluso si el playhead se movió dentro del mismo clip.
+  // incluso si el playhead se movió dentro del mismo clip. Es estado (no ref)
+  // para poder usarlo como dependencia válida de useEffect sin violar las
+  // reglas de hooks (un ref leído en el array de deps no es una dependencia
+  // real para React y puede desalinear el tamaño del array entre renders).
   const lastEmittedPlayheadMs = useRef<number | null>(null)
-  const seekVersion = useRef(0)
+  const [seekVersion, setSeekVersion] = useState(0)
   if (lastEmittedPlayheadMs.current !== null && playheadMs !== lastEmittedPlayheadMs.current) {
-    seekVersion.current += 1
+    lastEmittedPlayheadMs.current = playheadMs
+    setSeekVersion((version) => version + 1)
   }
 
   // Prepara el buffer en espera en el punto de inicio de su clip, listo para
@@ -80,7 +84,7 @@ export function usePlaybackEngine({
       video.currentTime = targetSeconds
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClip?.id, activeBuffer, activeVideoRef, seekVersion.current])
+  }, [activeClip?.id, activeBuffer, activeVideoRef, seekVersion])
 
   // Play/pause del video activo; el video en espera nunca reproduce sonido/avance.
   useEffect(() => {
