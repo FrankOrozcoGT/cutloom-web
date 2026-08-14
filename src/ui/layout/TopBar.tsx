@@ -10,7 +10,7 @@ export function TopBar() {
   const { isAuthenticated, user } = useAuth()
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { toggle } = useSidebar()
+  const { isOpen, toggle } = useSidebar()
   const [projects, setProjects] = useState<Project[]>([])
 
   useEffect(() => {
@@ -33,7 +33,8 @@ export function TopBar() {
         <button
           type="button"
           onClick={toggle}
-          aria-label="Alternar menú"
+          aria-label={isOpen ? 'Colapsar menú' : 'Expandir menú'}
+          title={isOpen ? 'Colapsar menú' : 'Expandir menú'}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover hover:text-text-strong"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
