@@ -106,7 +106,11 @@ export function usePlaybackEngine({
 
     const { offsetMs, durationMs: clipDurationMs, sourceTimeMs } = activeClip
     const clipSourceStartMs = sourceTimeMs - (playheadMs - offsetMs)
-    const hasWaitingClip = waitingClip !== null
+    const clipEndMs = offsetMs + clipDurationMs
+    // El swap directo (sin pasar por modo 'gap') solo es válido si el siguiente
+    // clip empieza exactamente donde termina el actual — si hay hueco entre
+    // ambos, el efecto de avance en huecos se encarga de la transición.
+    const canSwapDirectly = waitingClip !== null && waitingClip.offsetMs === clipEndMs
 
     function handleTimeUpdate() {
       const localMs = video!.currentTime * 1000 - clipSourceStartMs
@@ -119,7 +123,7 @@ export function usePlaybackEngine({
         return
       }
 
-      if (nextPlayheadMs >= offsetMs + clipDurationMs && hasWaitingClip) {
+      if (nextPlayheadMs >= clipEndMs && canSwapDirectly) {
         // Mutar el ref no dispara re-render por sí solo; swap() sí es setState
         // y junto con onPlayheadChange(...) más abajo garantiza que el nuevo
         // activeIsA.current se refleje en el próximo render.

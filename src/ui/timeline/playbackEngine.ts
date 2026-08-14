@@ -6,7 +6,7 @@ export interface PlaybackSnapshot {
   mode: PlaybackMode
   durationMs: number
   activeClip: { id: string; assetId: string; sourceTimeMs: number; offsetMs: number; durationMs: number } | null
-  waitingClip: { id: string; assetId: string; sourceStartMs: number } | null
+  waitingClip: { id: string; assetId: string; sourceStartMs: number; offsetMs: number } | null
 }
 
 /**
@@ -36,6 +36,8 @@ export function computePlaybackSnapshot(timeline: Timeline, playheadMs: number):
       offsetMs: active.clip.offsetMs,
       durationMs: active.clip.durationMs,
     },
-    waitingClip: next ? { id: next.id, assetId: next.assetId, sourceStartMs: next.sourceStartMs } : null,
+    waitingClip: next
+      ? { id: next.id, assetId: next.assetId, sourceStartMs: next.sourceStartMs, offsetMs: next.offsetMs }
+      : null,
   }
 }
