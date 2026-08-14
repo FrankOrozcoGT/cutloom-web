@@ -56,15 +56,16 @@ export function usePlaybackEngine({
   // este motor emitió; cualquier otra fuente (click en el ruler, arrastrar el
   // playhead) incrementa seekVersion y fuerza una re-sincronización de currentTime
   // incluso si el playhead se movió dentro del mismo clip. Es estado (no ref)
-  // para poder usarlo como dependencia válida de useEffect sin violar las
-  // reglas de hooks (un ref leído en el array de deps no es una dependencia
-  // real para React y puede desalinear el tamaño del array entre renders).
+  // para poder usarlo como dependencia válida de useEffect. El incremento vive
+  // en un useEffect (no durante el render) para no arriesgar el orden de hooks.
   const lastEmittedPlayheadMs = useRef<number | null>(null)
   const [seekVersion, setSeekVersion] = useState(0)
-  if (lastEmittedPlayheadMs.current !== null && playheadMs !== lastEmittedPlayheadMs.current) {
+  useEffect(() => {
+    if (lastEmittedPlayheadMs.current !== null && playheadMs !== lastEmittedPlayheadMs.current) {
+      setSeekVersion((version) => version + 1)
+    }
     lastEmittedPlayheadMs.current = playheadMs
-    setSeekVersion((version) => version + 1)
-  }
+  }, [playheadMs])
 
   // Prepara el buffer en espera en el punto de inicio de su clip, listo para
   // un corte limpio quando se le haga swap a "activo".
