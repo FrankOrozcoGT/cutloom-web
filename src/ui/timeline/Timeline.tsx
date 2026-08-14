@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { getTimelineDurationMs, type TrimEdge } from '@domain/timeline'
+import { getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { TimeRuler } from './TimeRuler'
-import { TimelinePlayer } from './TimelinePlayer'
 import { Track } from './Track'
-import { useTimeline } from './useTimeline'
+import type { useTimeline } from './useTimeline'
 
 const ERROR_MESSAGES: Record<ArrangeError, string> = {
   OVERLAP: 'El clip se superpone con otro. Muévelo a un espacio libre.',
@@ -20,13 +19,13 @@ const ERROR_MESSAGES: Record<ArrangeError, string> = {
 }
 
 interface TimelineProps {
-  projectId: string
+  state: ReturnType<typeof useTimeline>
   assets: VideoAsset[]
   thumbnails: Record<string, Blob>
   onError?: (error: ArrangeError) => void
 }
 
-export function Timeline({ projectId, assets, thumbnails, onError }: TimelineProps) {
+export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) {
   const {
     timeline,
     error,
@@ -40,7 +39,7 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
     isPlaying,
     setIsPlaying,
     pxToMs,
-  } = useTimeline(projectId)
+  } = state
   const [isOverEmpty, setIsOverEmpty] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -49,7 +48,7 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
     const container = scrollContainerRef.current
     if (!container) return
 
-    const durationMs = getTimelineDurationMs(timeline)
+    const durationMs = getTimelineDurationMs(timeline as TimelineModel)
     if (durationMs <= 0) return
 
     const availableWidthPx = container.clientWidth
@@ -134,15 +133,6 @@ export function Timeline({ projectId, assets, thumbnails, onError }: TimelinePro
 
   return (
     <div className="flex flex-col gap-3">
-      <TimelinePlayer
-        timeline={timeline}
-        assets={assetsById}
-        playheadMs={playheadMs}
-        isPlaying={isPlaying}
-        onPlayheadChange={setPlayheadMs}
-        onPlayingChange={setIsPlaying}
-      />
-
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
