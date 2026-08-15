@@ -6,12 +6,13 @@ import { VideoUploader } from '@ui/components/VideoUploader'
 import { Timeline } from '@ui/timeline/Timeline'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useTimeline } from '@ui/timeline/useTimeline'
-import { videoStorage } from '@ui/video/composition'
+import { videoStorage, projectUseCase } from '@ui/video/composition'
 
 export function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [assets, setAssets] = useState<VideoAsset[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, Blob>>({})
+  const [projectName, setProjectName] = useState('')
   const timelineState = useTimeline(projectId ?? '')
 
   const loadAssets = useCallback(async () => {
@@ -23,6 +24,14 @@ export function EditorPage() {
   useEffect(() => {
     void loadAssets()
   }, [loadAssets])
+
+  useEffect(() => {
+    if (!projectId) return
+    void projectUseCase.getAll().then((projects) => {
+      const project = projects.find((p) => p.id === projectId)
+      setProjectName(project?.name ?? projectId)
+    })
+  }, [projectId])
 
   const handleUploaded = useCallback(
     (results: VideoUploadResult[]) => {
@@ -92,7 +101,13 @@ export function EditorPage() {
 
       {assets.length > 0 && (
         <div className="min-w-0">
-          <Timeline state={timelineState} assets={assets} thumbnails={thumbnails} />
+          <Timeline
+            state={timelineState}
+            assets={assets}
+            thumbnails={thumbnails}
+            projectId={projectId}
+            projectName={projectName}
+          />
         </div>
       )}
     </div>

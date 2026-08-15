@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
+import { useExport } from '@ui/hooks/useExport'
 import { TimeRuler } from './TimeRuler'
 import { Track } from './Track'
 import type { useTimeline } from './useTimeline'
@@ -24,10 +25,12 @@ interface TimelineProps {
   state: ReturnType<typeof useTimeline>
   assets: VideoAsset[]
   thumbnails: Record<string, Blob>
+  projectId: string
+  projectName?: string
   onError?: (error: ArrangeError) => void
 }
 
-export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) {
+export function Timeline({ state, assets, thumbnails, projectId, projectName, onError }: TimelineProps) {
   const {
     timeline,
     error,
@@ -51,6 +54,16 @@ export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) 
   } = state
   const [isOverEmpty, setIsOverEmpty] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const {
+    exporting,
+    progress: exportProgress,
+    phaseLabel: exportPhaseLabel,
+    error: exportError,
+    completed: exportCompleted,
+    downloadedFileName,
+    exportProject,
+    abortExport,
+  } = useExport()
 
   const handleFitToScreen = useCallback(() => {
     if (!timeline) return
@@ -250,12 +263,48 @@ export function Timeline({ state, assets, thumbnails, onError }: TimelineProps) 
           >
             +
           </button>
+          <button
+            type="button"
+            onClick={() => void exportProject(projectId, projectName)}
+            disabled={exporting}
+            className="ml-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? `Exportando… ${exportProgress}%` : 'Exportar'}
+          </button>
+          {exporting && (
+            <button
+              type="button"
+              onClick={abortExport}
+              className="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-text-strong hover:bg-surface-hover sm:py-1"
+            >
+              Cancelar
+            </button>
+          )}
         </div>
       </div>
 
       {error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {ERROR_MESSAGES[error]}
+        </div>
+      )}
+
+      {exporting && exportPhaseLabel && (
+        <div role="status" className="rounded-lg bg-accent-bg px-3 py-2 text-sm text-text-strong">
+          {exportPhaseLabel} ({exportProgress}%)
+        </div>
+      )}
+
+      {exportError && (
+        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
+          {exportError}
+        </div>
+      )}
+
+      {exportCompleted && (
+        <div role="status" className="rounded-lg bg-success-bg px-3 py-2 text-sm text-success">
+          Descarga iniciada{downloadedFileName ? `: ${downloadedFileName}` : ''}. Revisa las descargas de tu
+          navegador; el video ya está listo para usarse cuando termine de guardarse.
         </div>
       )}
 
