@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
+import { findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -28,9 +28,22 @@ interface TimelineProps {
   projectId: string
   projectName?: string
   onError?: (error: ArrangeError) => void
+  /** Mientras se generan subtítulos: hasta qué punto del timeline (ms) ya se transcribió. */
+  subtitlesProgressUntilMs?: number | null
+  /** Rango (ms, tiempo de timeline) del segmento de subtítulo activo, para resaltarlo. */
+  activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
 }
 
-export function Timeline({ state, assets, thumbnails, projectId, projectName, onError }: TimelineProps) {
+export function Timeline({
+  state,
+  assets,
+  thumbnails,
+  projectId,
+  projectName,
+  onError,
+  subtitlesProgressUntilMs,
+  activeSubtitleRangeMs,
+}: TimelineProps) {
   const {
     timeline,
     error,
@@ -40,6 +53,7 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
     moveClip,
     resizeClip,
     splitClip,
+    deleteClip,
     undo,
     redo,
     canUndo,
@@ -186,16 +200,22 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
       }
 
       if (event.key.toLowerCase() === 's' && selectedClipId && timeline) {
-        const clip = timeline.tracks.flatMap((track) => track.clips).find((c) => c.id === selectedClipId)
+        const clip = findClipById(timeline, selectedClipId)
         if (clip && playheadMs > clip.offsetMs && playheadMs < clip.offsetMs + clip.durationMs) {
           void splitClip(selectedClipId, playheadMs)
         }
+        return
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedClipId) {
+        event.preventDefault()
+        void deleteClip(selectedClipId)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, splitClip, selectedClipId, playheadMs, timeline])
+  }, [undo, redo, splitClip, deleteClip, selectedClipId, playheadMs, timeline])
 
   if (!timeline) {
     if (error) {
@@ -210,9 +230,7 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
 
   const tracks = timeline.tracks.length > 0 ? timeline.tracks : [{ id: '__placeholder__', clips: [] }]
 
-  const selectedClip = selectedClipId
-    ? timeline.tracks.flatMap((track) => track.clips).find((clip) => clip.id === selectedClipId)
-    : null
+  const selectedClip = selectedClipId ? findClipById(timeline, selectedClipId) : null
   const canCut = !!selectedClip && playheadMs > selectedClip.offsetMs && playheadMs < selectedClip.offsetMs + selectedClip.durationMs
 
   const containerWidthPx = scrollContainerRef.current?.clientWidth ?? 600
@@ -268,6 +286,19 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
               ↷
             </button>
           </div>
+          {selectedClip && (
+            <div className="ml-2 flex items-center gap-1 border-l border-border pl-2">
+              <button
+                type="button"
+                onClick={() => void deleteClip(selectedClip.id)}
+                aria-label="Eliminar clip seleccionado"
+                title="Eliminar clip seleccionado (Supr)"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-danger hover:bg-danger-bg"
+              >
+                🗑
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
           <button
@@ -367,41 +398,60 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
             <div className="absolute -left-1.5 -top-0 h-3 w-3 rotate-45 bg-danger" />
           </div>
 
-          <div className="flex flex-col gap-2 pt-2">
-            {tracks.map((track) =>
-              track.id === '__placeholder__' ? (
-                <div
-                  key={track.id}
-                  onDragOver={(event) => {
-                    event.preventDefault()
-                    setIsOverEmpty(true)
-                  }}
-                  onDragLeave={() => setIsOverEmpty(false)}
-                  onDrop={handleEmptyDrop}
-                  className={`flex h-20 items-center justify-center rounded-lg border border-dashed text-sm transition-colors ${
-                    isOverEmpty
-                      ? 'border-accent-border bg-accent-bg text-text-strong'
-                      : 'border-border text-text-muted'
-                  }`}
-                >
-                  Arrastra un video aquí para empezar
-                </div>
-              ) : (
-                <Track
-                  key={track.id}
-                  track={track}
-                  timeline={timeline}
-                  assets={assetsById}
-                  thumbnails={thumbnails}
-                  pxPerSec={pxPerSec}
-                  playheadMs={playheadMs}
-                  selectedClipId={selectedClipId}
-                  onDropAsset={handleDropAsset}
-                  onMoveClip={handleMoveClip}
-                  onResizeClip={handleResizeClip}
-                  onSelectClip={handleSelectClip}
-                />
-              ),
+          <div className="relative">
+            <div className="flex flex-col gap-2 pt-2">
+              {tracks.map((track) =>
+                track.id === '__placeholder__' ? (
+                  <div
+                    key={track.id}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setIsOverEmpty(true)
+                    }}
+                    onDragLeave={() => setIsOverEmpty(false)}
+                    onDrop={handleEmptyDrop}
+                    className={`flex h-20 items-center justify-center rounded-lg border border-dashed text-sm transition-colors ${
+                      isOverEmpty
+                        ? 'border-accent-border bg-accent-bg text-text-strong'
+                        : 'border-border text-text-muted'
+                    }`}
+                  >
+                    Arrastra un video aquí para empezar
+                  </div>
+                ) : (
+                  <Track
+                    key={track.id}
+                    track={track}
+                    timeline={timeline}
+                    assets={assetsById}
+                    thumbnails={thumbnails}
+                    pxPerSec={pxPerSec}
+                    playheadMs={playheadMs}
+                    selectedClipId={selectedClipId}
+                    onDropAsset={handleDropAsset}
+                    onMoveClip={handleMoveClip}
+                    onResizeClip={handleResizeClip}
+                    onSelectClip={handleSelectClip}
+                  />
+                ),
+              )}
+            </div>
+
+            {subtitlesProgressUntilMs != null && (
+              <div
+                className="pointer-events-none absolute top-2 bottom-0 right-0 z-10 bg-bg/70 transition-[left] duration-300 ease-linear"
+                style={{ left: (subtitlesProgressUntilMs / 1000) * pxPerSec }}
+              />
+            )}
+
+            {activeSubtitleRangeMs && (
+              <div
+                className="pointer-events-none absolute top-2 bottom-0 z-10 rounded bg-accent/25 ring-2 ring-accent transition-[left,width] duration-200 ease-out"
+                style={{
+                  left: (activeSubtitleRangeMs.startMs / 1000) * pxPerSec,
+                  width: ((activeSubtitleRangeMs.endMs - activeSubtitleRangeMs.startMs) / 1000) * pxPerSec,
+                }}
+              />
             )}
           </div>
         </div>

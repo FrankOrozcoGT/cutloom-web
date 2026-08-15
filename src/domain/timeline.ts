@@ -90,6 +90,11 @@ export function getTimelineDurationMs(timeline: Timeline): number {
   return Math.max(0, ...timeline.tracks.flatMap((track) => track.clips.map(clipEnd)))
 }
 
+/** Busca un clip por id en cualquier pista del timeline. */
+export function findClipById(timeline: Timeline, clipId: string): Clip | null {
+  return timeline.tracks.flatMap((track) => track.clips).find((clip) => clip.id === clipId) ?? null
+}
+
 /** Clip que sigue inmediatamente después de currentClipId en la línea de tiempo unificada, para precargarlo. */
 export function findNextClip(timeline: Timeline, currentClipId: string): Clip | null {
   const current = timeline.tracks.flatMap((track) => track.clips).find((c) => c.id === currentClipId)
@@ -331,6 +336,21 @@ export function splitClip(
       ? { ...track, clips: track.clips.flatMap((c) => (c.id === clipId ? [segment1, segment2] : [c])) }
       : track,
   )
+
+  return ok({ ...timeline, tracks: updatedTracks })
+}
+
+/** Quita el clip seleccionado del timeline, dejando un hueco en su lugar (no recorre el resto hacia atrás). */
+export function deleteClip(timeline: Timeline, clipId: string): Result<Timeline, ClipNotFoundError> {
+  const hasClip = timeline.tracks.some((track) => track.clips.some((clip) => clip.id === clipId))
+  if (!hasClip) {
+    return err('CLIP_NOT_FOUND')
+  }
+
+  const updatedTracks = timeline.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.filter((clip) => clip.id !== clipId),
+  }))
 
   return ok({ ...timeline, tracks: updatedTracks })
 }

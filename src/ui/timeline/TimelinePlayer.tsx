@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { getTimelineDurationMs, type Timeline } from '@domain/timeline'
+import type { SubtitleSegment } from '@domain/subtitles'
 import type { VideoAsset } from '@domain/video'
 import { usePlaybackEngine } from './usePlaybackEngine'
 
@@ -9,6 +11,17 @@ interface TimelinePlayerProps {
   isPlaying: boolean
   onPlayheadChange: (ms: number) => void
   onPlayingChange: (isPlaying: boolean) => void
+  /** Segmentos de subtítulos ya en tiempo de timeline (no requieren remapeo por clip). */
+  segments?: SubtitleSegment[]
+  /** Notifica qué segmento quedó bajo el playhead, para resaltarlo en el listado de edición. */
+  onActiveSegmentChange?: (segmentId: string | null) => void
+  /** Click explícito del usuario sobre el subtítulo superpuesto: abrir/enfocar el listado de edición. */
+  onSegmentClick?: (segmentId: string) => void
+}
+
+function findActiveSegment(playheadMs: number, segments: SubtitleSegment[] | undefined): SubtitleSegment | null {
+  if (!segments) return null
+  return segments.find((s) => playheadMs >= s.startMs && playheadMs < s.endMs) ?? null
 }
 
 /**
@@ -25,6 +38,9 @@ export function TimelinePlayer({
   isPlaying,
   onPlayheadChange,
   onPlayingChange,
+  segments,
+  onActiveSegmentChange,
+  onSegmentClick,
 }: TimelinePlayerProps) {
   const { videoRefA, videoRefB, activeIsA, bufferA, bufferB, hasContent } = usePlaybackEngine({
     timeline,
@@ -37,12 +53,14 @@ export function TimelinePlayer({
 
   const durationMs = getTimelineDurationMs(timeline)
   const isWithinTimelineRange = playheadMs >= 0 && playheadMs < durationMs
+  const activeSegment = findActiveSegment(playheadMs, segments)
+
+  useEffect(() => {
+    onActiveSegmentChange?.(activeSegment?.id ?? null)
+  }, [activeSegment?.id, onActiveSegmentChange])
 
   return (
-    <div
-      className="relative flex items-center justify-center overflow-hidden rounded-lg border border-border bg-bg"
-      style={{ height: 220 }}
-    >
+    <div className="relative flex aspect-video max-h-full w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
       {!hasContent && (
         <span className="text-sm text-text-muted">
           {isWithinTimelineRange ? '' : 'Sin contenido en esta posición'}
@@ -62,6 +80,17 @@ export function TimelinePlayer({
         className="absolute inset-0 h-full w-full object-contain"
         style={{ visibility: !activeIsA && hasContent ? 'visible' : 'hidden' }}
       />
+      {hasContent && activeSegment && (
+        <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={() => onSegmentClick?.(activeSegment.id)}
+            className="max-w-[90%] rounded bg-black/70 px-3 py-1 text-center text-sm text-white hover:bg-black/85"
+          >
+            {activeSegment.text}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

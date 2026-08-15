@@ -102,6 +102,20 @@ export function useTimeline(projectId: string) {
     [projectId, applyNewTimeline],
   )
 
+  const deleteClip = useCallback(
+    async (clipId: string) => {
+      const result = await arrangeUseCase.deleteClip(projectId, clipId)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setError(null)
+      setSelectedClipId((current) => (current === clipId ? null : current))
+      applyNewTimeline(result.value)
+    },
+    [projectId, applyNewTimeline],
+  )
+
   const undo = useCallback(async () => {
     setPast((prevPast) => {
       if (prevPast.length === 0 || !timeline) return prevPast
@@ -135,6 +149,7 @@ export function useTimeline(projectId: string) {
     moveClip,
     resizeClip,
     splitClip,
+    deleteClip,
     undo,
     redo,
     canUndo: past.length > 0,

@@ -3,6 +3,7 @@ import {
   createClip,
   createTimeline,
   createTrack,
+  deleteClip as deleteClipInDomain,
   findValidTrack,
   moveClip as moveClipInDomain,
   resizeClip as resizeClipInDomain,
@@ -175,6 +176,26 @@ export class ArrangeClipsUseCase {
     }
 
     return ok(splitResult.value)
+  }
+
+  async deleteClip(projectId: string, clipId: string): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+    const timeline = timelineResult.value
+
+    const deleteResult = deleteClipInDomain(timeline, clipId)
+    if (!deleteResult.ok) {
+      return err(deleteResult.error)
+    }
+
+    const saveResult = await this.storage.save(deleteResult.value)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(deleteResult.value)
   }
 
   async saveTimeline(timeline: Timeline): Promise<Result<Timeline, ArrangeError>> {
