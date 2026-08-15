@@ -1,9 +1,14 @@
-import { findActiveClip, getTimelineDurationMs, type Timeline } from '@domain/timeline'
-import type { VideoAsset } from '@domain/video'
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
 import type { CanvasPort, MediaMuxerPort, VideoDecoderPort, VideoStorage } from './ports'
-import type { ExportError, ExportOptions, ExportProgressListener, RenderSegment } from './exportTypes'
+import {
+  buildRenderSegments,
+  loadTimelineAndAssets,
+  type ExportError,
+  type ExportOptions,
+  type ExportProgressListener,
+  type RenderSegment,
+} from './exportTypes'
 
 export class ExportProjectUseCase {
   private readonly storage: TimelineStorage
@@ -43,13 +48,13 @@ export class ExportProjectUseCase {
 
     onProgress?.({ phase: 'loading', completedSegments: 0, totalSegments: 0 })
 
-    const loadResult = await this.loadTimelineAndAssets(projectId)
+    const loadResult = await loadTimelineAndAssets(this.storage, this.videoStorage, projectId)
     if (!loadResult.ok) {
-      return err(loadResult.error)
+      return err(loadResult.error === 'STORAGE_ERROR' ? 'STORAGE_ERROR' : 'EMPTY_TIMELINE')
     }
     const { timeline, assetsById } = loadResult.value
 
-    const segmentsResult = this.buildRenderSegments(timeline, assetsById)
+    const segmentsResult = buildRenderSegments(timeline, assetsById)
     if (!segmentsResult.ok) {
       return err(segmentsResult.error)
     }
@@ -59,91 +64,6 @@ export class ExportProjectUseCase {
     }
 
     return this.run(segmentsResult.value, options, onProgress, signal)
-  }
-
-  private async loadTimelineAndAssets(
-    projectId: string,
-  ): Promise<Result<{ timeline: Timeline; assetsById: Record<string, VideoAsset> }, ExportError>> {
-    const timelineResult = await this.storage.getByProject(projectId)
-    if (!timelineResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-    const timeline = timelineResult.value
-    if (!timeline || timeline.tracks.every((track) => track.clips.length === 0)) {
-      return err('EMPTY_TIMELINE')
-    }
-
-    const assets = await this.videoStorage.getByProject(projectId)
-    const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
-
-    return ok({ timeline, assetsById })
-  }
-
-  private buildRenderSegments(
-    timeline: Timeline,
-    assetsById: Record<string, VideoAsset>,
-  ): Result<RenderSegment[], ExportError> {
-    const durationMs = getTimelineDurationMs(timeline)
-    if (durationMs <= 0) {
-      return err('EMPTY_TIMELINE')
-    }
-
-    // Puntos donde puede cambiar el clip activo: el inicio y el fin de cada
-    // clip de cualquier pista. Basta evaluar findActiveClip en cada inicio de
-    // tramo para derivar los segmentos, sin muestrear el timeline ms a ms.
-    const boundaries = new Set<number>([0, durationMs])
-    for (const track of timeline.tracks) {
-      for (const clip of track.clips) {
-        boundaries.add(clip.offsetMs)
-        boundaries.add(clip.offsetMs + clip.durationMs)
-      }
-    }
-    const sortedBoundaries = [...boundaries].filter((ms) => ms >= 0 && ms < durationMs).sort((a, b) => a - b)
-
-    const segments: RenderSegment[] = []
-
-    for (const boundaryMs of sortedBoundaries) {
-      const nextBoundaryMs = sortedBoundaries.find((ms) => ms > boundaryMs) ?? durationMs
-      const active = findActiveClip(timeline, boundaryMs)
-
-      if (!active) {
-        // Hueco en el timeline (sin clip activo en este tramo): se genera un
-        // segmento "gap" que el compositor rellena con fondo negro, preservando
-        // la duración total de salida en vez de acortar el video exportado.
-        segments.push({
-          kind: 'gap',
-          outputStartMs: boundaryMs,
-          outputDurationMs: nextBoundaryMs - boundaryMs,
-        })
-        continue
-      }
-
-      const asset = assetsById[active.clip.assetId]
-      if (!asset) {
-        return err('MISSING_ASSET')
-      }
-
-      const clipEndMs = active.clip.offsetMs + active.clip.durationMs
-      const segmentEndMs = Math.min(clipEndMs, nextBoundaryMs, durationMs)
-      const outputDurationMs = segmentEndMs - boundaryMs
-
-      segments.push({
-        kind: 'clip',
-        clipId: active.clip.id,
-        assetId: active.clip.assetId,
-        asset,
-        sourceStartMs: active.sourceTimeMs,
-        sourceEndMs: active.sourceTimeMs + outputDurationMs,
-        outputStartMs: boundaryMs,
-        outputDurationMs,
-      })
-    }
-
-    if (segments.length === 0) {
-      return err('EMPTY_TIMELINE')
-    }
-
-    return ok(segments)
   }
 
   private validatePrerequisites(): ExportError | null {
