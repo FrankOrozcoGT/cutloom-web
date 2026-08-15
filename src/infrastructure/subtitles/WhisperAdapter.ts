@@ -109,31 +109,42 @@ export class WhisperAdapter implements WhisperTranscriberPort {
     let chunkStart = 0
     let chunkText = ''
 
+    // El tiempo retrocedió respecto al máximo visto: arrancó una nueva ventana
+    // de generate(), no un nuevo segmento dentro de la misma. Un umbral (no
+    // "cualquier retroceso") evita falsos positivos: el modelo a veces emite un
+    // timestamp menor por ruido dentro de la misma ventana, sin que haya
+    // cambiado de ventana real. Se evalúa tanto en on_chunk_start como en
+    // on_chunk_end: el streamer puede cerrar el último segmento de una ventana
+    // ya con tiempos de la siguiente, sin un on_chunk_start intermedio.
+    const advanceWindowIfTimeRegressed = (time: number) => {
+      if (maxTimeInWindow - time > WINDOW_ADVANCE_SECONDS / 2) {
+        windowOffsetSeconds += WINDOW_ADVANCE_SECONDS
+        maxTimeInWindow = 0
+        console.log(`WhisperAdapter: nueva ventana de audio, offset acumulado ${windowOffsetSeconds}s`)
+      }
+    }
+
     return new WhisperTextStreamer(transcriber.tokenizer as unknown as ConstructorParameters<typeof WhisperTextStreamer>[0], {
       skip_prompt: true,
       callback_function: (text: string) => {
         chunkText += text
       },
       on_chunk_start: (time: number) => {
-        // El tiempo retrocedió respecto al máximo visto: arrancó una nueva
-        // ventana de generate(), no un nuevo segmento dentro de la misma. Un
-        // umbral (no "cualquier retroceso") evita falsos positivos: el modelo
-        // a veces emite un timestamp de cierre menor por ruido dentro de la
-        // misma ventana, sin que haya cambiado de ventana real.
-        if (maxTimeInWindow - time > WINDOW_ADVANCE_SECONDS / 2) {
-          windowOffsetSeconds += WINDOW_ADVANCE_SECONDS
-          maxTimeInWindow = 0
-          console.log(`WhisperAdapter: nueva ventana de audio, offset acumulado ${windowOffsetSeconds}s`)
-        }
+        advanceWindowIfTimeRegressed(time)
         chunkStart = windowOffsetSeconds + time
         chunkText = ''
       },
       on_chunk_end: (time: number) => {
+        advanceWindowIfTimeRegressed(time)
         maxTimeInWindow = Math.max(maxTimeInWindow, time)
         const text = chunkText.trim()
         if (text) {
-          console.log(`WhisperAdapter: segmento [${chunkStart.toFixed(1)}s-${(windowOffsetSeconds + time).toFixed(1)}s] "${text.slice(0, 40)}"`)
-          onProgress({ text, start: chunkStart, end: windowOffsetSeconds + time })
+          // El inicio pudo medirse en la ventana anterior si el cierre llegó ya
+          // con tiempos de la nueva; el segmento nunca puede terminar antes de
+          // empezar.
+          const end = Math.max(windowOffsetSeconds + time, chunkStart)
+          console.log(`WhisperAdapter: segmento [${chunkStart.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
+          onProgress({ text, start: chunkStart, end })
         }
       },
     })
