@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import type { Subtitles } from '@domain/subtitles'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { SubtitlePanel } from '@ui/components/SubtitlePanel'
 import { SubtitleSegmentList } from '@ui/components/SubtitleSegmentList'
@@ -26,7 +27,26 @@ export function EditorPage() {
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SidebarTab>('videos')
-  const timelineState = useTimeline(projectId ?? '')
+
+  const subtitlesState = useSubtitles(projectId ?? '')
+
+  // useTimeline necesita leer/restaurar subtítulos para el historial combinado
+  // sin depender del objeto subtitlesState completo (cambia de identidad en
+  // cada render) — un ref siempre actualizado evita recrear el bridge y, con
+  // él, reiniciar el historial de undo/redo en cada re-render.
+  const subtitlesRef = useRef(subtitlesState)
+  subtitlesRef.current = subtitlesState
+  const subtitlesBridge = useMemo(
+    () => ({
+      get: () => subtitlesRef.current.subtitles,
+      restore: (subtitles: Subtitles | null) => {
+        void subtitlesRef.current.restore(subtitles)
+      },
+    }),
+    [],
+  )
+
+  const timelineState = useTimeline(projectId ?? '', subtitlesBridge)
 
   const loadAssets = useCallback(async () => {
     if (!projectId) return
@@ -60,17 +80,19 @@ export function EditorPage() {
     [loadAssets],
   )
 
-  const handleDelete = useCallback(async (id: string) => {
-    await videoStorage.delete(id)
-    setAssets((previous) => previous.filter((asset) => asset.id !== id))
-  }, [])
+  const handleDelete = useCallback(
+    async (id: string) => {
+      await videoStorage.delete(id)
+      await timelineState.removeClipsByAsset(id)
+      setAssets((previous) => previous.filter((asset) => asset.id !== id))
+    },
+    [timelineState],
+  )
 
   const assetsById = useMemo(
     () => Object.fromEntries(assets.map((asset) => [asset.id, asset])),
     [assets],
   )
-
-  const subtitlesState = useSubtitles(projectId ?? '')
 
   const handleGenerateSubtitles = useCallback(async () => {
     await subtitlesState.generate()

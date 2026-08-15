@@ -36,12 +36,19 @@ export function usePlaybackBuffers(
   const waitingBufferRef = useRef(waitingBuffer)
   waitingBufferRef.current = waitingBuffer
 
+  // Si activeClip/waitingClip referencian un asset que ya no está en el
+  // diccionario (se borró el VideoAsset original), el buffer correspondiente
+  // se limpia en vez de conservar la blob URL vieja — si no, el <video> sigue
+  // reproduciendo un asset borrado indefinidamente, sin que nada lo detenga.
   useEffect(() => {
     if (!activeClip) return
     const asset = assets[activeClip.assetId]
-    if (!asset) return
 
     setActiveBuffer((prev) => {
+      if (!asset) {
+        if (prev.url) URL.revokeObjectURL(prev.url)
+        return EMPTY_BUFFER
+      }
       if (prev.clipId === activeClip.id) return prev
       if (prev.url) URL.revokeObjectURL(prev.url)
       return { clipId: activeClip.id, url: URL.createObjectURL(asset.blob) }
@@ -51,9 +58,12 @@ export function usePlaybackBuffers(
   useEffect(() => {
     if (!waitingClip) return
     const asset = assets[waitingClip.assetId]
-    if (!asset) return
 
     setWaitingBuffer((prev) => {
+      if (!asset) {
+        if (prev.url) URL.revokeObjectURL(prev.url)
+        return EMPTY_BUFFER
+      }
       if (prev.clipId === waitingClip.id) return prev
       if (prev.url) URL.revokeObjectURL(prev.url)
       return { clipId: waitingClip.id, url: URL.createObjectURL(asset.blob) }

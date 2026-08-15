@@ -6,6 +6,7 @@ import {
   deleteClip as deleteClipInDomain,
   findValidTrack,
   moveClip as moveClipInDomain,
+  removeClipsByAsset,
   resizeClip as resizeClipInDomain,
   splitClip as splitClipInDomain,
   type Timeline,
@@ -196,6 +197,23 @@ export class ArrangeClipsUseCase {
     }
 
     return ok(deleteResult.value)
+  }
+
+  /** Quita del timeline los clips que referencian assetId, para cuando su VideoAsset se borra. */
+  async removeClipsByAsset(projectId: string, assetId: string): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+
+    const updatedTimeline = removeClipsByAsset(timelineResult.value, assetId)
+
+    const saveResult = await this.storage.save(updatedTimeline)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(updatedTimeline)
   }
 
   async saveTimeline(timeline: Timeline): Promise<Result<Timeline, ArrangeError>> {

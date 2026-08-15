@@ -87,6 +87,16 @@ export function usePlaybackEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClip?.id, activeBuffer, activeVideoRef, seekVersion])
 
+  // Si el timeline indica un clip activo pero su asset ya no existe (se borró
+  // el VideoAsset original mientras se reproducía), usePlaybackBuffers deja el
+  // buffer vacío — acá se detiene la reproducción en vez de seguir "sonando"
+  // sobre un <video> sin fuente.
+  useEffect(() => {
+    if (activeClip && activeBuffer.clipId === null && isPlaying) {
+      onPlayingChange(false)
+    }
+  }, [activeClip, activeBuffer.clipId, isPlaying, onPlayingChange])
+
   // Play/pause del video activo; el video en espera nunca reproduce sonido/avance.
   useEffect(() => {
     waitingVideoRef.current?.pause()

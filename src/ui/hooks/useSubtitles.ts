@@ -26,6 +26,8 @@ interface UseSubtitlesResult {
   editText: (segmentId: string, text: string) => Promise<void>
   editTiming: (segmentId: string, startMs: number, endMs: number) => Promise<void>
   importFile: (content: string, format: 'srt' | 'vtt') => Promise<void>
+  /** Restaura un snapshot (o lo limpia con null) sin pasar por las validaciones de edición — usado por undo/redo del timeline. */
+  restore: (subtitles: Subtitles | null) => Promise<void>
 }
 
 export function useSubtitles(projectId: string): UseSubtitlesResult {
@@ -53,6 +55,19 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     setSubtitles(next)
     await subtitlesStorage.save(next)
   }, [])
+
+  const restore = useCallback(
+    async (next: Subtitles | null) => {
+      setSubtitles(next)
+      setState(next ? 'success' : 'idle')
+      if (next) {
+        await subtitlesStorage.save(next)
+      } else {
+        await subtitlesStorage.deleteByProject(projectId)
+      }
+    },
+    [projectId],
+  )
 
   const generate = useCallback(async () => {
     setState('extracting_audio')
@@ -121,5 +136,6 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     editText,
     editTiming,
     importFile,
+    restore,
   }
 }

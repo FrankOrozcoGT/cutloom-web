@@ -355,6 +355,16 @@ export function deleteClip(timeline: Timeline, clipId: string): Result<Timeline,
   return ok({ ...timeline, tracks: updatedTracks })
 }
 
+/** Quita del timeline todos los clips que referencian assetId, para cuando su VideoAsset se borra. */
+export function removeClipsByAsset(timeline: Timeline, assetId: string): Timeline {
+  const updatedTracks = timeline.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.filter((clip) => clip.assetId !== assetId),
+  }))
+
+  return { ...timeline, tracks: updatedTracks }
+}
+
 const MIN_CLIP_DURATION_MS = 100
 
 /**
