@@ -6,6 +6,7 @@ import {
   findValidTrack,
   moveClip as moveClipInDomain,
   resizeClip as resizeClipInDomain,
+  splitClip as splitClipInDomain,
   type Timeline,
   type TrimEdge,
 } from '@domain/timeline'
@@ -20,6 +21,8 @@ export type ArrangeError =
   | 'CLIP_NOT_FOUND'
   | 'TRACK_NOT_FOUND'
   | 'TRIM_EXCEEDS_SOURCE'
+  | 'CUT_OUT_OF_BOUNDS'
+  | 'CUT_ZERO_LENGTH'
   | 'CORRUPTED_DATA'
   | 'STORAGE_ERROR'
 
@@ -148,6 +151,38 @@ export class ArrangeClipsUseCase {
     }
 
     return ok(resizeResult.value)
+  }
+
+  async splitClip(
+    projectId: string,
+    clipId: string,
+    cutPointMs: number,
+  ): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+    const timeline = timelineResult.value
+
+    const splitResult = splitClipInDomain(timeline, clipId, cutPointMs)
+    if (!splitResult.ok) {
+      return err(splitResult.error)
+    }
+
+    const saveResult = await this.storage.save(splitResult.value)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(splitResult.value)
+  }
+
+  async saveTimeline(timeline: Timeline): Promise<Result<Timeline, ArrangeError>> {
+    const saveResult = await this.storage.save(timeline)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+    return ok(timeline)
   }
 
   private appendOffset(timeline: Timeline, trackId?: string): number {
