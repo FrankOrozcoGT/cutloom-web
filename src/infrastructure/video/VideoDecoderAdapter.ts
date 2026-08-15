@@ -73,11 +73,16 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     const packetStats = await track.computePacketStats(100).catch(() => null)
     const averageFrameDuration = packetStats && packetStats.averagePacketRate > 0 ? 1 / packetStats.averagePacketRate : 1 / 30
 
+    let firstSampleTimestamp: number | null = null
+
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
         const frame = sample.toVideoFrame()
         const duration = sample.duration || averageFrameDuration
-        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - startSeconds)
+        if (firstSampleTimestamp === null) {
+          firstSampleTimestamp = sample.timestamp
+        }
+        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - firstSampleTimestamp)
         try {
           await onVideoFrame(frame, outputTimestampSeconds, duration)
         } finally {
@@ -117,11 +122,15 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     }
 
     const sink = new AudioSampleSink(track)
+    let firstSampleTimestamp: number | null = null
 
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
         const data = sample.toAudioData()
-        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - startSeconds)
+        if (firstSampleTimestamp === null) {
+          firstSampleTimestamp = sample.timestamp
+        }
+        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - firstSampleTimestamp)
         try {
           await onAudioSample(data, outputTimestampSeconds)
         } finally {
