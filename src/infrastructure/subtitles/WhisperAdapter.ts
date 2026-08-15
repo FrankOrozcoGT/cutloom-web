@@ -102,52 +102,49 @@ export class WhisperAdapter implements WhisperTranscriberPort {
    * Acumula el texto emitido entre on_chunk_start/on_chunk_end (delimitados por
    * los timestamps que Whisper intercala en el stream de tokens) y entrega un
    * segmento {text,start,end} completo apenas cierra, para progreso incremental.
+   *
+   * Cada ventana de chunk_length_s se transcribe con un generate() separado y
+   * sus timestamps son relativos al inicio de esa ventana. generate() llama
+   * streamer.end() al terminar, así que on_finalize es la señal exacta de
+   * cambio de ventana: el offset absoluto es windowIndex * WINDOW_ADVANCE_SECONDS
+   * (el mismo paso con que el pipeline solapa las ventanas).
    */
   private createStreamer(transcriber: AutomaticSpeechRecognitionPipeline, onProgress: WhisperProgressListener) {
-    let windowOffsetSeconds = 0
-    let maxTimeInWindow = 0
+    let windowIndex = 0
     let chunkStart = 0
     let chunkText = ''
 
-    // El tiempo retrocedió respecto al máximo visto: arrancó una nueva ventana
-    // de generate(), no un nuevo segmento dentro de la misma. Un umbral (no
-    // "cualquier retroceso") evita falsos positivos: el modelo a veces emite un
-    // timestamp menor por ruido dentro de la misma ventana, sin que haya
-    // cambiado de ventana real. Se evalúa tanto en on_chunk_start como en
-    // on_chunk_end: el streamer puede cerrar el último segmento de una ventana
-    // ya con tiempos de la siguiente, sin un on_chunk_start intermedio.
-    const advanceWindowIfTimeRegressed = (time: number) => {
-      if (maxTimeInWindow - time > WINDOW_ADVANCE_SECONDS / 2) {
-        windowOffsetSeconds += WINDOW_ADVANCE_SECONDS
-        maxTimeInWindow = 0
-        console.log(`WhisperAdapter: nueva ventana de audio, offset acumulado ${windowOffsetSeconds}s`)
-      }
-    }
-
-    return new WhisperTextStreamer(transcriber.tokenizer as unknown as ConstructorParameters<typeof WhisperTextStreamer>[0], {
+    const streamer = new WhisperTextStreamer(transcriber.tokenizer as unknown as ConstructorParameters<typeof WhisperTextStreamer>[0], {
       skip_prompt: true,
       callback_function: (text: string) => {
         chunkText += text
       },
       on_chunk_start: (time: number) => {
-        advanceWindowIfTimeRegressed(time)
-        chunkStart = windowOffsetSeconds + time
+        chunkStart = windowIndex * WINDOW_ADVANCE_SECONDS + time
         chunkText = ''
       },
       on_chunk_end: (time: number) => {
-        advanceWindowIfTimeRegressed(time)
-        maxTimeInWindow = Math.max(maxTimeInWindow, time)
         const text = chunkText.trim()
         if (text) {
-          // El inicio pudo medirse en la ventana anterior si el cierre llegó ya
-          // con tiempos de la nueva; el segmento nunca puede terminar antes de
-          // empezar.
-          const end = Math.max(windowOffsetSeconds + time, chunkStart)
+          // Ruido del modelo aparte, un segmento nunca termina antes de empezar.
+          const end = Math.max(windowIndex * WINDOW_ADVANCE_SECONDS + time, chunkStart)
           console.log(`WhisperAdapter: segmento [${chunkStart.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
           onProgress({ text, start: chunkStart, end })
         }
       },
+      on_finalize: () => {
+        windowIndex += 1
+        // Si la ventana quedó truncada a mitad de un segmento (sin timestamp de
+        // cierre), el streamer sigue esperando ese cierre e interpretaría el
+        // primer timestamp de la siguiente ventana como fin, invirtiendo el
+        // pareo start/end de ahí en adelante. Se descarta el segmento
+        // incompleto (el resultado final de result.chunks lo incluye con los
+        // tiempos correctos) y se re-sincroniza el estado.
+        chunkText = ''
+        streamer.waiting_for_timestamp = false
+      },
     })
+    return streamer
   }
 
   private async loadTranscriber(): Promise<AutomaticSpeechRecognitionPipeline> {
