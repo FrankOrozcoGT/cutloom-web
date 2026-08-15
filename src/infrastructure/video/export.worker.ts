@@ -2,6 +2,7 @@ import { ExportProjectUseCase } from '@application/video/ExportProjectUseCase'
 import type { ExportOptions, ExportProgressEvent } from '@application/video/exportTypes'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
+import { describeError } from '@infrastructure/errors'
 import { VideoDecoderAdapter } from './VideoDecoderAdapter'
 import { VideoEncoderAdapter } from './VideoEncoderAdapter'
 import { OffscreenCanvasCompositor } from './OffscreenCanvasCompositor'
@@ -27,13 +28,6 @@ function postError(message: string): void {
   console.error('export.worker:', message)
   const response: ExportWorkerResponse = { type: 'error', error: message }
   self.postMessage(response)
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}`
-  }
-  return String(error)
 }
 
 self.onerror = (event: string | Event) => {

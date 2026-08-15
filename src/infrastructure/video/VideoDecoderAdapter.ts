@@ -1,12 +1,28 @@
 import { ALL_FORMATS, AudioSampleSink, BlobSource, Input, VideoSampleSink } from 'mediabunny'
 import type { ClipRenderSegment } from '@application/video/exportTypes'
 import type { AudioSampleHandler, VideoDecoderPort, VideoFrameHandler } from '@application/video/ports'
+import { describeError } from '@infrastructure/errors'
 
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}`
+/**
+ * Remapea timestamps de samples decodificados (relativos al inicio real de la
+ * pista, que puede no ser 0) a la posición del timeline compuesto: el primer
+ * sample visto define el origen, y cada uno siguiente se ubica a partir de
+ * outputStartSeconds + su desplazamiento respecto a ese origen.
+ */
+class TimestampRemapper {
+  private readonly outputStartSeconds: number
+  private firstSampleTimestamp: number | null = null
+
+  constructor(outputStartSeconds: number) {
+    this.outputStartSeconds = outputStartSeconds
   }
-  return String(error)
+
+  toOutputSeconds(sampleTimestamp: number): number {
+    if (this.firstSampleTimestamp === null) {
+      this.firstSampleTimestamp = sampleTimestamp
+    }
+    return this.outputStartSeconds + Math.max(0, sampleTimestamp - this.firstSampleTimestamp)
+  }
 }
 
 export class VideoDecoderAdapter implements VideoDecoderPort {
@@ -73,16 +89,13 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     const packetStats = await track.computePacketStats(100).catch(() => null)
     const averageFrameDuration = packetStats && packetStats.averagePacketRate > 0 ? 1 / packetStats.averagePacketRate : 1 / 30
 
-    let firstSampleTimestamp: number | null = null
+    const remapper = new TimestampRemapper(outputStartSeconds)
 
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
         const frame = sample.toVideoFrame()
         const duration = sample.duration || averageFrameDuration
-        if (firstSampleTimestamp === null) {
-          firstSampleTimestamp = sample.timestamp
-        }
-        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - firstSampleTimestamp)
+        const outputTimestampSeconds = remapper.toOutputSeconds(sample.timestamp)
         try {
           await onVideoFrame(frame, outputTimestampSeconds, duration)
         } finally {
@@ -122,15 +135,12 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     }
 
     const sink = new AudioSampleSink(track)
-    let firstSampleTimestamp: number | null = null
+    const remapper = new TimestampRemapper(outputStartSeconds)
 
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
         const data = sample.toAudioData()
-        if (firstSampleTimestamp === null) {
-          firstSampleTimestamp = sample.timestamp
-        }
-        const outputTimestampSeconds = outputStartSeconds + Math.max(0, sample.timestamp - firstSampleTimestamp)
+        const outputTimestampSeconds = remapper.toOutputSeconds(sample.timestamp)
         try {
           await onAudioSample(data, outputTimestampSeconds)
         } finally {

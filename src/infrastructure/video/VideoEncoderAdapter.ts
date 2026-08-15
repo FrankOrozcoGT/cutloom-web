@@ -13,6 +13,7 @@ import {
 import { err, ok, type Result } from '@application/result'
 import type { ExportOptions } from '@application/video/exportTypes'
 import type { CanvasPort, EncodeError, MediaMuxerPort } from '@application/video/ports'
+import { describeError } from '@infrastructure/errors'
 import type { VideoFormat } from '@domain/video'
 
 const VIDEO_CODEC_BY_FORMAT: Record<VideoFormat, VideoCodec> = {
@@ -23,13 +24,6 @@ const VIDEO_CODEC_BY_FORMAT: Record<VideoFormat, VideoCodec> = {
 const AUDIO_CODEC_BY_FORMAT: Record<VideoFormat, AudioCodec> = {
   'video/mp4': 'aac',
   'video/webm': 'opus',
-}
-
-function describeError(error: unknown): string {
-  if (error instanceof Error) {
-    return `${error.name}: ${error.message}`
-  }
-  return String(error)
 }
 
 function classifyError(error: unknown): EncodeError {
