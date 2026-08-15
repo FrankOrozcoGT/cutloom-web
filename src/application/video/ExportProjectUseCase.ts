@@ -187,9 +187,24 @@ export class ExportProjectUseCase {
 
       if (segment.kind === 'gap') {
         this.composer.composeBlank(segment, { dimensions: { width: options.width, height: options.height } })
-        const result = await this.muxer.writeVideoFrame(segment.outputStartMs / 1000, segment.outputDurationMs / 1000)
-        if (!result.ok) {
-          writeError = result.error
+
+        // Un solo frame largo no alinea bien con el frameRate del track y algunos
+        // reproductores lo scrubbean mostrando el último frame visible antes del gap.
+        // Se generan frames negros a la cadencia de options.fps, igual que el video real.
+        const frameDurationSeconds = 1 / options.fps
+        const gapDurationSeconds = segment.outputDurationMs / 1000
+        const gapStartSeconds = segment.outputStartMs / 1000
+        const frameCount = Math.max(1, Math.round(gapDurationSeconds / frameDurationSeconds))
+
+        for (let i = 0; i < frameCount; i += 1) {
+          if (writeError || signal?.aborted) break
+          const frameTimestamp = gapStartSeconds + i * frameDurationSeconds
+          const remaining = gapDurationSeconds - i * frameDurationSeconds
+          const duration = Math.min(frameDurationSeconds, remaining)
+          const result = await this.muxer.writeVideoFrame(frameTimestamp, duration)
+          if (!result.ok) {
+            writeError = result.error
+          }
         }
       } else {
         await this.decoder.decodeSegment(
