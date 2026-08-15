@@ -1,18 +1,12 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import type { VideoAsset } from '@domain/video'
+import { formatDurationMs } from '@ui/format'
 
 interface VideoListItemProps {
   asset: VideoAsset
   thumbnail?: Blob
   onDelete?: (id: string) => void
   draggable?: boolean
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
 export function VideoListItem({ asset, thumbnail, onDelete, draggable }: VideoListItemProps) {
@@ -45,7 +39,7 @@ export function VideoListItem({ asset, thumbnail, onDelete, draggable }: VideoLi
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-text-strong">{asset.name}</span>
-        <span className="text-xs text-text-muted">{formatDuration(asset.durationMs)}</span>
+        <span className="text-xs text-text-muted">{formatDurationMs(asset.durationMs)}</span>
       </div>
       {onDelete && (
         <button
