@@ -35,36 +35,34 @@ interface SegmentTimingFieldsProps {
   segment: SubtitleSegment
   onSeek: (startMs: number) => void
   onEditTiming: (segmentId: string, startMs: number, endMs: number) => void
+  compact?: boolean
 }
 
-function SegmentTimingFields({ segment, onSeek, onEditTiming }: SegmentTimingFieldsProps) {
+/** Línea única de control: timestamp legible (click = seek) + inputs de edición en ms, en el mismo renglón. */
+function SegmentTimingFields({ segment, onSeek, onEditTiming, compact }: SegmentTimingFieldsProps) {
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => onSeek(segment.startMs)}
-        className="flex gap-2 text-left text-xs text-text-muted hover:text-text-strong"
-      >
-        <span>{formatDurationMs(segment.startMs)}</span>
-        <span>–</span>
-        <span>{formatDurationMs(segment.endMs)}</span>
+    <div className="flex items-center gap-2 text-xs text-text-muted">
+      <button type="button" onClick={() => onSeek(segment.startMs)} className="shrink-0 hover:text-text-strong">
+        {formatDurationMs(segment.startMs)}–{formatDurationMs(segment.endMs)}
       </button>
-      <div className="flex gap-2 text-xs text-text-muted">
-        <input
-          type="number"
-          value={segment.startMs}
-          onChange={(event) => onEditTiming(segment.id, Number(event.target.value), segment.endMs)}
-          className="w-20 rounded border border-border bg-transparent px-1"
-        />
-        <span>–</span>
-        <input
-          type="number"
-          value={segment.endMs}
-          onChange={(event) => onEditTiming(segment.id, segment.startMs, Number(event.target.value))}
-          className="w-20 rounded border border-border bg-transparent px-1"
-        />
-      </div>
-    </>
+      {!compact && (
+        <>
+          <input
+            type="number"
+            value={segment.startMs}
+            onChange={(event) => onEditTiming(segment.id, Number(event.target.value), segment.endMs)}
+            className="w-16 rounded border border-border bg-transparent px-1"
+          />
+          <span>–</span>
+          <input
+            type="number"
+            value={segment.endMs}
+            onChange={(event) => onEditTiming(segment.id, segment.startMs, Number(event.target.value))}
+            className="w-16 rounded border border-border bg-transparent px-1"
+          />
+        </>
+      )}
+    </div>
   )
 }
 
@@ -120,7 +118,7 @@ export function SubtitleSegmentList({ segments, activeSegmentId, onSeek, onEditT
                 isActive ? 'pointer-events-none border-transparent' : 'border-border hover:border-accent-border'
               }`}
             >
-              <SegmentTimingFields segment={segment} onSeek={onSeek} onEditTiming={onEditTiming} />
+              <SegmentTimingFields segment={segment} onSeek={onSeek} onEditTiming={onEditTiming} compact />
               <p className="line-clamp-2 text-sm text-text-strong">{segment.text}</p>
             </div>
           )
