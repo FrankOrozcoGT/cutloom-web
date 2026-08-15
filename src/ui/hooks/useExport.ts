@@ -79,6 +79,7 @@ export function useExport() {
   const [error, setError] = useState<string | null>(null)
   const [completed, setCompleted] = useState(false)
   const [downloadedFileName, setDownloadedFileName] = useState<string | null>(null)
+  const [aborting, setAborting] = useState(false)
   const workerRef = useRef<Worker | null>(null)
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export function useExport() {
       setError(null)
       setCompleted(false)
       setDownloadedFileName(null)
+      setAborting(false)
 
       worker.onmessage = (event: MessageEvent<ExportWorkerResponse>) => {
         const message = event.data
@@ -131,6 +133,7 @@ export function useExport() {
           setError(errorMessage(message.error, options))
           setExporting(false)
           setPhaseLabel('')
+          setAborting(false)
           worker.terminate()
           workerRef.current = null
           return
@@ -161,6 +164,7 @@ export function useExport() {
         setError('Ocurrió un error inesperado durante la exportación.')
         setExporting(false)
         setPhaseLabel('')
+        setAborting(false)
         worker.terminate()
         workerRef.current = null
       }
@@ -172,9 +176,21 @@ export function useExport() {
   )
 
   const abortExport = useCallback(() => {
+    if (!workerRef.current) return
+    setAborting(true)
     const message: ExportWorkerMessage = { type: 'abort' }
-    workerRef.current?.postMessage(message)
+    workerRef.current.postMessage(message)
   }, [])
 
-  return { exporting, progress, phaseLabel, error, completed, downloadedFileName, exportProject, abortExport }
+  return {
+    exporting,
+    progress,
+    phaseLabel,
+    error,
+    completed,
+    downloadedFileName,
+    aborting,
+    exportProject,
+    abortExport,
+  }
 }
