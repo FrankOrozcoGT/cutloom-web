@@ -184,6 +184,21 @@ export function Timeline({
     }
   }, [error, onError])
 
+  // Si el playhead salta a un punto fuera del área visible (p.ej. al hacer click
+  // en un segmento de subtítulo lejano), centra el scroll horizontal ahí en vez
+  // de dejar la línea roja fuera de vista.
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const playheadPx = (playheadMs / 1000) * pxPerSec
+    const isVisible = playheadPx >= container.scrollLeft && playheadPx <= container.scrollLeft + container.clientWidth
+
+    if (!isVisible) {
+      container.scrollLeft = Math.max(0, playheadPx - container.clientWidth / 2)
+    }
+  }, [playheadMs, pxPerSec])
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null
