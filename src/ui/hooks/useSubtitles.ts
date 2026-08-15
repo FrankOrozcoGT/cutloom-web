@@ -9,16 +9,17 @@ import {
   type SubtitleParseError,
   type Subtitles,
 } from '@domain/subtitles'
+import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
-import { subtitlesStorage } from '@ui/subtitles/composition'
+import { extractSubtitlesAudioUseCase, subtitlesStorage } from '@ui/subtitles/composition'
 
 export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'success' | 'error'
 
 interface UseSubtitlesResult {
   state: SubtitlesState
   subtitles: Subtitles | null
-  error: SubtitlesError | SubtitleParseError | null
+  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null
   language: LanguageCode
   setLanguage: (language: LanguageCode) => void
   /** Extremo (ms, tiempo de timeline) del último segmento ya transcrito durante 'transcribing'; null si no hay progreso aún. */
@@ -34,7 +35,7 @@ interface UseSubtitlesResult {
 export function useSubtitles(projectId: string): UseSubtitlesResult {
   const [state, setState] = useState<SubtitlesState>('idle')
   const [subtitles, setSubtitles] = useState<Subtitles | null>(null)
-  const [error, setError] = useState<SubtitlesError | SubtitleParseError | null>(null)
+  const [error, setError] = useState<SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null>(null)
   const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
   const [processedUntilMs, setProcessedUntilMs] = useState<number | null>(null)
   const workerRef = useRef<Worker | null>(null)
@@ -78,12 +79,22 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     [projectId],
   )
 
-  const generate = useCallback(() => {
-    return new Promise<void>((resolve) => {
-      setState('extracting_audio')
-      setError(null)
-      setProcessedUntilMs(null)
+  const generate = useCallback(async () => {
+    setState('extracting_audio')
+    setError(null)
+    setProcessedUntilMs(null)
 
+    // La extracción de audio depende de OfflineAudioContext (Web Audio API),
+    // que no existe dentro de un Web Worker — corre acá en el hilo principal.
+    // Solo la transcripción (Whisper, cómputo pesado) va al worker.
+    const extractResult = await extractSubtitlesAudioUseCase.execute(projectId)
+    if (!extractResult.ok) {
+      setError(extractResult.error)
+      setState('error')
+      return
+    }
+
+    await new Promise<void>((resolve) => {
       const worker = new Worker(new URL('@infrastructure/subtitles/subtitles.worker.ts', import.meta.url), {
         type: 'module',
       })
@@ -128,8 +139,9 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
         resolve()
       }
 
-      const request: SubtitlesWorkerRequest = { type: 'generate', projectId, language }
-      worker.postMessage(request)
+      const audio = extractResult.value
+      const request: SubtitlesWorkerRequest = { type: 'generate', projectId, language, audio }
+      worker.postMessage(request, [audio.buffer])
     })
   }, [projectId, language, persist])
 

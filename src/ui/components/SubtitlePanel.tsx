@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import type { LanguageCode, SubtitleParseError, Subtitles } from '@domain/subtitles'
+import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
 import { Button } from '@ui/components/Button'
@@ -14,7 +15,6 @@ const ERROR_MESSAGES: Record<string, string> = {
   MISSING_ASSET: 'Uno de los videos del timeline ya no está disponible.',
   NO_SPEECH: 'No se detectó voz en el audio del timeline. Puedes importar un archivo SRT/VTT manualmente.',
   UNSUPPORTED_API: 'Tu navegador no soporta las APIs necesarias para generar subtítulos (WebAssembly/WebCodecs).',
-  INSUFFICIENT_HARDWARE: 'Esta computadora no cuenta con memoria o procesador suficiente para generar subtítulos localmente. Puedes importar un archivo SRT/VTT manualmente.',
   UNKNOWN_ERROR: 'Ocurrió un error inesperado al generar los subtítulos.',
   PARSE_ERROR: 'El archivo importado no tiene un formato SRT/VTT válido.',
 }
@@ -34,7 +34,7 @@ interface SubtitlePanelProps {
   hasTimeline: boolean
   state: SubtitlesState
   subtitles: Subtitles | null
-  error: SubtitlesError | SubtitleParseError | null
+  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null
   language: LanguageCode
   setLanguage: (language: LanguageCode) => void
   generate: () => Promise<void>
