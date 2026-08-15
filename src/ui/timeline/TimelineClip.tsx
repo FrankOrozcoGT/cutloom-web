@@ -8,8 +8,10 @@ interface TimelineClipProps {
   thumbnail?: Blob
   pxPerSec: number
   hasConflict?: boolean
+  isSelected?: boolean
   onDragStart: (clipId: string) => void
   onTrimStart: (clipId: string, edge: TrimEdge) => void
+  onSelect?: (clipId: string) => void
 }
 
 function formatDuration(ms: number): string {
@@ -23,8 +25,10 @@ export function TimelineClip({
   thumbnail,
   pxPerSec,
   hasConflict,
+  isSelected,
   onDragStart,
   onTrimStart,
+  onSelect,
 }: TimelineClipProps) {
   const [thumbnailUrl, setThumbnailUrl] = useState('')
 
@@ -60,9 +64,10 @@ export function TimelineClip({
     <div
       draggable
       onDragStart={handleDragStart}
+      onClick={() => onSelect?.(clip.id)}
       style={{ left, width }}
       className={`group absolute top-1 flex h-16 flex-col overflow-hidden rounded-lg border bg-surface text-xs shadow-sm ${
-        hasConflict ? 'border-danger ring-2 ring-danger' : 'border-border'
+        hasConflict ? 'border-danger ring-2 ring-danger' : isSelected ? 'border-accent ring-2 ring-accent' : 'border-border'
       }`}
     >
       {thumbnailUrl && <img src={thumbnailUrl} alt="" className="h-8 w-full object-cover" draggable={false} />}

@@ -22,9 +22,11 @@ interface TrackProps {
   thumbnails: Record<string, Blob>
   pxPerSec: number
   playheadMs: number
+  selectedClipId?: string | null
   onDropAsset: (assetId: string, trackId: string, offsetPx: number) => void
   onMoveClip: (clipId: string, trackId: string, offsetPx: number) => void
   onResizeClip: (clipId: string, edge: TrimEdge, boundaryPx: number, sourceDurationMs: number) => void
+  onSelectClip?: (clipId: string) => void
 }
 
 export function Track({
@@ -34,9 +36,11 @@ export function Track({
   thumbnails,
   pxPerSec,
   playheadMs,
+  selectedClipId,
   onDropAsset,
   onMoveClip,
   onResizeClip,
+  onSelectClip,
 }: TrackProps) {
   const [isOver, setIsOver] = useState(false)
   const [snapLineMs, setSnapLineMs] = useState<number | null>(null)
@@ -177,8 +181,10 @@ export function Track({
             thumbnail={thumbnails[asset.id]}
             pxPerSec={pxPerSec}
             hasConflict={conflictIds.has(clip.id)}
+            isSelected={selectedClipId === clip.id}
             onDragStart={handleDragStart}
             onTrimStart={handleTrimStart}
+            onSelect={onSelectClip}
           />
         )
       })}
