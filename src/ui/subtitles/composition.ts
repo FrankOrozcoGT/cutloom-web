@@ -1,14 +1,6 @@
-import { GenerateSubtitlesUseCase } from '@application/subtitles/GenerateSubtitlesUseCase'
-import { AudioExtractionAdapter } from '@infrastructure/video/AudioExtractionAdapter'
-import { WhisperAdapter } from '@infrastructure/subtitles/WhisperAdapter'
 import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubtitlesAdapter'
-import { timelineStorage } from '@ui/timeline/composition'
-import { videoStorage } from '@ui/video/composition'
 
+// GenerateSubtitlesUseCase se instancia dentro de subtitles.worker.ts, no acá:
+// corre en un Web Worker para no bloquear el hilo principal (Whisper en WASM,
+// sin GPU, es cómputo síncrono pesado).
 export const subtitlesStorage = new IndexedDBSubtitlesAdapter()
-export const generateSubtitlesUseCase = new GenerateSubtitlesUseCase(
-  timelineStorage,
-  videoStorage,
-  new AudioExtractionAdapter(),
-  new WhisperAdapter(),
-)

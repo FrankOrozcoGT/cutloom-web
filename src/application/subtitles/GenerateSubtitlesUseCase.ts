@@ -11,7 +11,23 @@ export interface SubtitlesResult {
   device: 'webgpu' | 'wasm'
 }
 
-export type SubtitlesError = 'EMPTY_TIMELINE' | 'MISSING_ASSET' | 'NO_SPEECH' | 'UNSUPPORTED_API' | 'UNKNOWN_ERROR'
+export type SubtitlesError =
+  | 'EMPTY_TIMELINE'
+  | 'MISSING_ASSET'
+  | 'NO_SPEECH'
+  | 'UNSUPPORTED_API'
+  | 'INSUFFICIENT_HARDWARE'
+  | 'UNKNOWN_ERROR'
+
+/**
+ * Piso mínimo para correr Whisper (whisper-tiny) en WASM sin trabarse: memoria
+ * aproximada reportada por el navegador (navigator.deviceMemory, redondeada a
+ * la potencia de 2 más cercana — no es exacta) y núcleos lógicos disponibles.
+ * No aplica cuando el navegador no expone deviceMemory (Firefox/Safari): ahí
+ * no hay forma de chequear, se deja pasar.
+ */
+const MIN_DEVICE_MEMORY_GB = 2
+const MIN_HARDWARE_CONCURRENCY = 2
 
 export class GenerateSubtitlesUseCase {
   private readonly timelineStorage: TimelineStorage
@@ -36,6 +52,10 @@ export class GenerateSubtitlesUseCase {
     language: LanguageCode = DEFAULT_LANGUAGE,
     onProgress?: WhisperProgressListener,
   ): Promise<Result<SubtitlesResult, SubtitlesError>> {
+    if (!this.hasSufficientHardware()) {
+      return err('INSUFFICIENT_HARDWARE')
+    }
+
     const loadResult = await loadTimelineAndAssets(this.timelineStorage, this.videoStorage, projectId)
     if (!loadResult.ok) {
       return err(loadResult.error === 'STORAGE_ERROR' ? 'UNKNOWN_ERROR' : 'EMPTY_TIMELINE')
@@ -66,6 +86,22 @@ export class GenerateSubtitlesUseCase {
     const subtitles: Subtitles = { projectId, segments, language }
 
     return ok({ subtitles, device: transcribeResult.value.device })
+  }
+
+  private hasSufficientHardware(): boolean {
+    const nav = typeof navigator === 'undefined' ? undefined : (navigator as Navigator & { deviceMemory?: number })
+
+    const deviceMemory = nav?.deviceMemory
+    if (deviceMemory !== undefined && deviceMemory < MIN_DEVICE_MEMORY_GB) {
+      return false
+    }
+
+    const cores = nav?.hardwareConcurrency
+    if (cores !== undefined && cores < MIN_HARDWARE_CONCURRENCY) {
+      return false
+    }
+
+    return true
   }
 
   private mapAudioError(error: 'NO_AUDIO_TRACK' | 'UNSUPPORTED_API' | 'DECODE_FAILED'): SubtitlesError {

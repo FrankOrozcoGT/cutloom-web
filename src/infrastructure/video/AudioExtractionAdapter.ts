@@ -23,14 +23,20 @@ export class AudioExtractionAdapter implements AudioExtractorPort {
       return err('UNSUPPORTED_API')
     }
 
+    console.time('AudioExtractionAdapter: extract total')
+    console.log(`AudioExtractionAdapter: ${segments.length} segmentos a procesar`)
+
     try {
       const placedBuffers: PlacedBuffer[] = []
       let hasAudio = false
 
-      for (const segment of segments) {
+      for (const [index, segment] of segments.entries()) {
         if (segment.kind === 'gap') continue
 
+        console.time(`AudioExtractionAdapter: decodeSegment ${index}`)
         const buffer = await this.decodeSegment(segment)
+        console.timeEnd(`AudioExtractionAdapter: decodeSegment ${index}`)
+
         if (buffer) {
           hasAudio = true
           placedBuffers.push({ outputStartSeconds: segment.outputStartMs / 1000, buffer })
@@ -38,15 +44,20 @@ export class AudioExtractionAdapter implements AudioExtractorPort {
       }
 
       if (!hasAudio) {
+        console.timeEnd('AudioExtractionAdapter: extract total')
         return err('NO_AUDIO_TRACK')
       }
 
       const totalDurationMs = Math.max(
         ...segments.map((segment) => segment.outputStartMs + segment.outputDurationMs),
       )
+      console.time('AudioExtractionAdapter: mixToMono16k')
       const mono16k = await this.mixToMono16k(placedBuffers, totalDurationMs / 1000)
+      console.timeEnd('AudioExtractionAdapter: mixToMono16k')
+      console.timeEnd('AudioExtractionAdapter: extract total')
       return ok(mono16k)
     } catch (e) {
+      console.timeEnd('AudioExtractionAdapter: extract total')
       console.error('AudioExtractionAdapter: fallo al extraer audio', describeError(e))
       return err('DECODE_FAILED')
     }

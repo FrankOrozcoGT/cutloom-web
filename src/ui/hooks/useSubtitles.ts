@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_LANGUAGE,
   editSegmentText,
@@ -10,7 +10,8 @@ import {
   type Subtitles,
 } from '@domain/subtitles'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
-import { generateSubtitlesUseCase, subtitlesStorage } from '@ui/subtitles/composition'
+import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
+import { subtitlesStorage } from '@ui/subtitles/composition'
 
 export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'success' | 'error'
 
@@ -36,6 +37,14 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
   const [error, setError] = useState<SubtitlesError | SubtitleParseError | null>(null)
   const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
   const [processedUntilMs, setProcessedUntilMs] = useState<number | null>(null)
+  const workerRef = useRef<Worker | null>(null)
+
+  useEffect(() => {
+    return () => {
+      workerRef.current?.terminate()
+      workerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     setSubtitles(null)
@@ -69,24 +78,59 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     [projectId],
   )
 
-  const generate = useCallback(async () => {
-    setState('extracting_audio')
-    setError(null)
-    setProcessedUntilMs(null)
+  const generate = useCallback(() => {
+    return new Promise<void>((resolve) => {
+      setState('extracting_audio')
+      setError(null)
+      setProcessedUntilMs(null)
 
-    const result = await generateSubtitlesUseCase.execute(projectId, language, (rawSegment) => {
-      setState('transcribing')
-      setProcessedUntilMs(Math.round(rawSegment.end * 1000))
+      const worker = new Worker(new URL('@infrastructure/subtitles/subtitles.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      workerRef.current = worker
+
+      worker.onmessage = (event: MessageEvent<SubtitlesWorkerResponse>) => {
+        const message = event.data
+
+        if (message.type === 'progress') {
+          setState('transcribing')
+          setProcessedUntilMs(Math.round(message.segment.end * 1000))
+          return
+        }
+
+        if (message.type === 'error') {
+          console.error('Generación de subtítulos falló:', message.error)
+          setError(message.error as SubtitlesError)
+          setState('error')
+          setProcessedUntilMs(null)
+          worker.terminate()
+          workerRef.current = null
+          resolve()
+          return
+        }
+
+        void persist(message.result.subtitles).then(() => {
+          setState('success')
+          setProcessedUntilMs(null)
+          worker.terminate()
+          workerRef.current = null
+          resolve()
+        })
+      }
+
+      worker.onerror = (event) => {
+        console.error('Worker de subtítulos falló:', event.message)
+        setError('UNKNOWN_ERROR')
+        setState('error')
+        setProcessedUntilMs(null)
+        worker.terminate()
+        workerRef.current = null
+        resolve()
+      }
+
+      const request: SubtitlesWorkerRequest = { type: 'generate', projectId, language }
+      worker.postMessage(request)
     })
-
-    if (!result.ok) {
-      setError(result.error)
-      setState('error')
-      return
-    }
-    await persist(result.value.subtitles)
-    setState('success')
-    setProcessedUntilMs(null)
   }, [projectId, language, persist])
 
   const editText = useCallback(

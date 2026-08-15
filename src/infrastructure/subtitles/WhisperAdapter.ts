@@ -54,17 +54,24 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       return err('UNSUPPORTED_API')
     }
 
+    console.log(`WhisperAdapter: audio de entrada ${audio.length} samples (${(audio.length / 16000).toFixed(1)}s @ 16kHz)`)
+
     let transcriber: AutomaticSpeechRecognitionPipeline
+    console.time('WhisperAdapter: loadTranscriber')
     try {
       transcriber = await this.loadTranscriber()
     } catch (e) {
       console.error('WhisperAdapter: fallo al cargar el modelo', describeError(e))
       return err('MODEL_LOAD_FAILED')
+    } finally {
+      console.timeEnd('WhisperAdapter: loadTranscriber')
     }
+    console.log(`WhisperAdapter: device=${this.device}`)
 
     try {
       const streamer = onProgress ? this.createStreamer(transcriber, onProgress) : undefined
 
+      console.time('WhisperAdapter: transcribe total')
       const output = await transcriber(audio, {
         language: LANGUAGE_NAMES[options.language],
         task: 'transcribe',
@@ -73,6 +80,7 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         stride_length_s: STRIDE_LENGTH_SECONDS,
         streamer,
       })
+      console.timeEnd('WhisperAdapter: transcribe total')
 
       const result: AutomaticSpeechRecognitionOutput = Array.isArray(output) ? output[0] : output
       const segments = (result.chunks ?? []).map((chunk) => ({
@@ -80,9 +88,11 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         start: chunk.timestamp[0],
         end: chunk.timestamp[1],
       }))
+      console.log(`WhisperAdapter: ${segments.length} segmentos generados`)
 
       return ok({ segments, device: this.device })
     } catch (e) {
+      console.timeEnd('WhisperAdapter: transcribe total')
       console.error('WhisperAdapter: fallo al transcribir', describeError(e))
       return err('TRANSCRIPTION_FAILED')
     }
@@ -106,10 +116,14 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       },
       on_chunk_start: (time: number) => {
         // El tiempo retrocedió respecto al máximo visto: arrancó una nueva
-        // ventana de generate(), no un nuevo segmento dentro de la misma.
-        if (time < maxTimeInWindow) {
+        // ventana de generate(), no un nuevo segmento dentro de la misma. Un
+        // umbral (no "cualquier retroceso") evita falsos positivos: el modelo
+        // a veces emite un timestamp de cierre menor por ruido dentro de la
+        // misma ventana, sin que haya cambiado de ventana real.
+        if (maxTimeInWindow - time > WINDOW_ADVANCE_SECONDS / 2) {
           windowOffsetSeconds += WINDOW_ADVANCE_SECONDS
           maxTimeInWindow = 0
+          console.log(`WhisperAdapter: nueva ventana de audio, offset acumulado ${windowOffsetSeconds}s`)
         }
         chunkStart = windowOffsetSeconds + time
         chunkText = ''
@@ -118,6 +132,7 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         maxTimeInWindow = Math.max(maxTimeInWindow, time)
         const text = chunkText.trim()
         if (text) {
+          console.log(`WhisperAdapter: segmento [${chunkStart.toFixed(1)}s-${(windowOffsetSeconds + time).toFixed(1)}s] "${text.slice(0, 40)}"`)
           onProgress({ text, start: chunkStart, end: windowOffsetSeconds + time })
         }
       },
@@ -134,12 +149,22 @@ export class WhisperAdapter implements WhisperTranscriberPort {
   private async createTranscriber(): Promise<AutomaticSpeechRecognitionPipeline> {
     const useWebGpu = await hasWebGpu()
     this.device = useWebGpu ? 'webgpu' : 'wasm'
+    console.log(`WhisperAdapter: cargando modelo ${MODEL_ID} (device=${this.device})…`)
     return pipeline('automatic-speech-recognition', MODEL_ID, {
       device: this.device,
       // q8 en el decoder rompe la sesión de ONNX Runtime 1.25 (bug conocido de
       // transformers.js #1707: falta el scale de dequantización del decoder
       // merged). q4 evita el bug manteniendo una descarga liviana.
       dtype: useWebGpu ? 'fp32' : { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+      progress_callback: (progress: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => {
+        if (progress.status === 'progress' && progress.file) {
+          const pct = progress.progress?.toFixed(0) ?? '?'
+          const mb = progress.total ? (progress.total / 1024 / 1024).toFixed(1) : '?'
+          console.log(`WhisperAdapter: descargando ${progress.file} — ${pct}% de ${mb}MB`)
+        } else {
+          console.log(`WhisperAdapter: ${progress.status}${progress.file ? ` (${progress.file})` : ''}`)
+        }
+      },
     })
   }
 }

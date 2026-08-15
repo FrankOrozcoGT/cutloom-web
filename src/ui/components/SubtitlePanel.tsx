@@ -14,6 +14,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   MISSING_ASSET: 'Uno de los videos del timeline ya no está disponible.',
   NO_SPEECH: 'No se detectó voz en el audio del timeline. Puedes importar un archivo SRT/VTT manualmente.',
   UNSUPPORTED_API: 'Tu navegador no soporta las APIs necesarias para generar subtítulos (WebAssembly/WebCodecs).',
+  INSUFFICIENT_HARDWARE: 'Esta computadora no cuenta con memoria o procesador suficiente para generar subtítulos localmente. Puedes importar un archivo SRT/VTT manualmente.',
   UNKNOWN_ERROR: 'Ocurrió un error inesperado al generar los subtítulos.',
   PARSE_ERROR: 'El archivo importado no tiene un formato SRT/VTT válido.',
 }
