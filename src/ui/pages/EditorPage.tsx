@@ -94,9 +94,12 @@ export function EditorPage() {
     [assets],
   )
 
+  const [fitTrigger, setFitTrigger] = useState<number>()
+
   const handleGenerateSubtitles = useCallback(async () => {
-    await subtitlesState.generate()
     setActiveTab('subtitles')
+    setFitTrigger((previous) => (previous ?? 0) + 1)
+    await subtitlesState.generate()
   }, [subtitlesState])
 
   const handleToggleSegments = useCallback(() => {
@@ -213,6 +216,7 @@ export function EditorPage() {
             projectName={projectName}
             subtitlesProgressUntilMs={subtitlesProgressUntilMs}
             activeSubtitleRangeMs={activeSubtitleRangeMs}
+            autoFitSignal={fitTrigger}
           />
         </div>
       )}

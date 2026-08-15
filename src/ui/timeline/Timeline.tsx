@@ -32,6 +32,8 @@ interface TimelineProps {
   subtitlesProgressUntilMs?: number | null
   /** Rango (ms, tiempo de timeline) del segmento de subtítulo activo, para resaltarlo. */
   activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
+  /** Cualquier cambio de valor dispara "Ajustar" (fit to screen) — usado para ver el timeline completo al empezar a generar subtítulos. */
+  autoFitSignal?: unknown
 }
 
 export function Timeline({
@@ -43,6 +45,7 @@ export function Timeline({
   onError,
   subtitlesProgressUntilMs,
   activeSubtitleRangeMs,
+  autoFitSignal,
 }: TimelineProps) {
   const {
     timeline,
@@ -92,6 +95,14 @@ export function Timeline({
     const fitPxPerSec = (availableWidthPx / durationMs) * 1000
     setPxPerSec(Math.max(1, Math.floor(fitPxPerSec)))
   }, [timeline, setPxPerSec])
+
+  useEffect(() => {
+    if (autoFitSignal === undefined) return
+    handleFitToScreen()
+    // Solo debe dispararse cuando autoFitSignal cambia de valor, no en cada
+    // render donde handleFitToScreen se recrea (depende de timeline/pxPerSec).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFitSignal])
 
   // Ajusta pxPerSec manteniendo el playhead fijo en su misma posición en pantalla,
   // en vez de que el zoom recentre el scroll y se "pierda" el punto de edición.
