@@ -2,30 +2,36 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { SidebarProvider } from './SidebarContext'
 import { TopBar } from './TopBar'
+import { useSidebar } from './useSidebar'
 
 /**
- * Grid de 2x2: la topbar ocupa toda la fila superior, el sidebar toda la
- * columna izquierda debajo de ella. Al ser celdas de grid (no fixed/sticky
- * superpuestos), no compiten entre sí por espacio ni z-index — el ancho del
- * sidebar solo se define una vez, en su propia celda (ver Sidebar.tsx).
+ * El sidebar nunca es hijo de un grid/flex de layout — siempre se posiciona
+ * a sí mismo con fixed (overlay sobre todo en mobile, anclado bajo la
+ * topbar en desktop) y no reserva espacio en el flujo del documento. Eso
+ * evita que su ausencia visual en un breakpoint deje huecos o celdas
+ * vacías en el layout — un solo <nav>, sin duplicar el componente.
  *
- * En mobile el sidebar es fixed (overlay, fuera del flujo), pero grid-cols
- * con "auto" igual reserva espacio para su contenido — se ve como un hueco
- * en blanco a la izquierda. La columna vale 0 en mobile y solo pasa a "auto"
- * desde md:, que es donde el sidebar vuelve a ser una celda real del grid.
+ * <main> compensa el ancho del sidebar únicamente en desktop, con su
+ * propio margin-left (el único lugar donde se define ese ancho).
  */
+function AppLayoutContent() {
+  const { isOpen } = useSidebar()
+
+  return (
+    <div className="flex min-h-svh flex-col bg-bg">
+      <TopBar />
+      <Sidebar />
+      <main className={`overflow-auto ${isOpen ? 'md:ml-56' : 'md:ml-16'}`}>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+
 export function AppLayout() {
   return (
     <SidebarProvider>
-      <div className="grid min-h-svh grid-cols-[0_1fr] grid-rows-[auto_1fr] bg-bg md:grid-cols-[auto_1fr]">
-        <div className="col-span-2">
-          <TopBar />
-        </div>
-        <Sidebar />
-        <main className="overflow-auto">
-          <Outlet />
-        </main>
-      </div>
+      <AppLayoutContent />
     </SidebarProvider>
   )
 }
