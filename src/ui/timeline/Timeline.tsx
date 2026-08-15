@@ -61,6 +61,7 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
     error: exportError,
     completed: exportCompleted,
     downloadedFileName,
+    aborting: exportAborting,
     exportProject,
     abortExport,
   } = useExport()
@@ -77,6 +78,37 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
     const fitPxPerSec = (availableWidthPx / durationMs) * 1000
     setPxPerSec(Math.max(1, Math.floor(fitPxPerSec)))
   }, [timeline, setPxPerSec])
+
+  // Ajusta pxPerSec manteniendo el playhead fijo en su misma posición en pantalla,
+  // en vez de que el zoom recentre el scroll y se "pierda" el punto de edición.
+  const zoomTo = useCallback(
+    (nextPxPerSec: number) => {
+      const container = scrollContainerRef.current
+      if (!container) {
+        setPxPerSec(nextPxPerSec)
+        return
+      }
+
+      const playheadPxOnScreen = (playheadMs / 1000) * pxPerSec - container.scrollLeft
+
+      setPxPerSec(nextPxPerSec)
+      requestAnimationFrame(() => {
+        const nextPlayheadPx = (playheadMs / 1000) * nextPxPerSec
+        container.scrollLeft = Math.max(0, nextPlayheadPx - playheadPxOnScreen)
+      })
+    },
+    [playheadMs, pxPerSec, setPxPerSec],
+  )
+
+  const handleWheelZoom = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!(event.ctrlKey || event.metaKey)) return
+      event.preventDefault()
+      const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
+      zoomTo(Math.max(1, Math.round(pxPerSec * factor)))
+    },
+    [pxPerSec, zoomTo],
+  )
 
   const assetsById = useMemo(
     () => Object.fromEntries(assets.map((asset) => [asset.id, asset])),
@@ -248,8 +280,9 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
           </button>
           <button
             type="button"
-            onClick={() => setPxPerSec((value) => Math.max(1, Math.floor(value / 2)))}
+            onClick={() => zoomTo(Math.max(1, Math.floor(pxPerSec / 2)))}
             aria-label="Reducir zoom"
+            title="Reducir zoom (Ctrl/Cmd + scroll también funciona, centrado en el playhead)"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
             −
@@ -257,8 +290,9 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
           <span className="hidden sm:inline">Zoom</span>
           <button
             type="button"
-            onClick={() => setPxPerSec((value) => Math.max(value * 2, value + 1))}
+            onClick={() => zoomTo(Math.max(pxPerSec * 2, pxPerSec + 1))}
             aria-label="Aumentar zoom"
+            title="Aumentar zoom (Ctrl/Cmd + scroll también funciona, centrado en el playhead)"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
             +
@@ -275,9 +309,10 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
             <button
               type="button"
               onClick={abortExport}
-              className="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-text-strong hover:bg-surface-hover sm:py-1"
+              disabled={exportAborting}
+              className="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:py-1"
             >
-              Cancelar
+              {exportAborting ? 'Cancelando…' : 'Cancelar'}
             </button>
           )}
         </div>
@@ -291,7 +326,7 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
 
       {exporting && exportPhaseLabel && (
         <div role="status" className="rounded-lg bg-accent-bg px-3 py-2 text-sm text-text-strong">
-          {exportPhaseLabel} ({exportProgress}%)
+          {exportAborting ? 'Cancelando la exportación…' : `${exportPhaseLabel} (${exportProgress}%)`}
         </div>
       )}
 
@@ -308,7 +343,7 @@ export function Timeline({ state, assets, thumbnails, projectId, projectName, on
         </div>
       )}
 
-      <div ref={scrollContainerRef} className="overflow-x-auto pt-7">
+      <div ref={scrollContainerRef} onWheel={handleWheelZoom} className="overflow-x-auto pt-7">
         <div className="relative" style={{ width: contentWidthPx }}>
           {canCut && (
             <button
