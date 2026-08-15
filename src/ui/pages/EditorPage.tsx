@@ -1,18 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
+import { SubtitlePanel } from '@ui/components/SubtitlePanel'
+import { SubtitleSegmentList } from '@ui/components/SubtitleSegmentList'
+import { TabButton } from '@ui/components/TabButton'
 import { VideoListItem } from '@ui/components/VideoListItem'
 import { VideoUploader } from '@ui/components/VideoUploader'
 import { Timeline } from '@ui/timeline/Timeline'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useTimeline } from '@ui/timeline/useTimeline'
+import { useSubtitles } from '@ui/hooks/useSubtitles'
 import { videoStorage, projectUseCase } from '@ui/video/composition'
+
+type SidebarTab = 'videos' | 'subtitles'
+
+function videosTabLabel(assetCount: number): string {
+  return assetCount > 0 ? `Videos (${assetCount})` : 'Videos'
+}
 
 export function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [assets, setAssets] = useState<VideoAsset[]>([])
   const [thumbnails, setThumbnails] = useState<Record<string, Blob>>({})
   const [projectName, setProjectName] = useState('')
+  const [segmentsVisible, setSegmentsVisible] = useState(false)
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<SidebarTab>('videos')
   const timelineState = useTimeline(projectId ?? '')
 
   const loadAssets = useCallback(async () => {
@@ -57,14 +70,58 @@ export function EditorPage() {
     [assets],
   )
 
+  const subtitlesState = useSubtitles(projectId ?? '')
+
+  const handleGenerateSubtitles = useCallback(async () => {
+    await subtitlesState.generate()
+    setActiveTab('subtitles')
+  }, [subtitlesState])
+
+  const handleToggleSegments = useCallback(() => {
+    setSegmentsVisible((previous) => !previous)
+  }, [])
+
+  const handleSegmentClick = useCallback((segmentId: string) => {
+    setActiveSegmentId(segmentId)
+    setSegmentsVisible(true)
+    setActiveTab('subtitles')
+  }, [])
+
+  const handleSeek = useCallback(
+    (startMs: number) => {
+      timelineState.setPlayheadMs(startMs)
+    },
+    [timelineState],
+  )
+
+  const handleEditSegmentText = useCallback(
+    (segmentId: string, text: string) => {
+      void subtitlesState.editText(segmentId, text)
+    },
+    [subtitlesState],
+  )
+
+  const handleEditSegmentTiming = useCallback(
+    (segmentId: string, startMs: number, endMs: number) => {
+      void subtitlesState.editTiming(segmentId, startMs, endMs)
+    },
+    [subtitlesState],
+  )
+
   if (!projectId) {
     return null
   }
 
+  const subtitlesProgressUntilMs = subtitlesState.state === 'transcribing' ? subtitlesState.processedUntilMs : null
+  const activeSubtitleSegment = subtitlesState.subtitles?.segments.find((segment) => segment.id === activeSegmentId) ?? null
+  const activeSubtitleRangeMs = activeSubtitleSegment
+    ? { startMs: activeSubtitleSegment.startMs, endMs: activeSubtitleSegment.endMs }
+    : null
+
   return (
-    <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-6 overflow-x-hidden p-4 sm:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
+    <div className="mx-auto flex h-full max-w-[1600px] min-w-0 flex-col gap-4 overflow-y-auto p-4 sm:p-6">
+      <div className="flex min-h-0 flex-col gap-4 lg:flex-row lg:items-stretch">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
           {timelineState.timeline ? (
             <TimelinePlayer
               timeline={timelineState.timeline}
@@ -73,40 +130,79 @@ export function EditorPage() {
               isPlaying={timelineState.isPlaying}
               onPlayheadChange={timelineState.setPlayheadMs}
               onPlayingChange={timelineState.setIsPlaying}
+              segments={subtitlesState.subtitles?.segments}
+              onActiveSegmentChange={setActiveSegmentId}
+              onSegmentClick={handleSegmentClick}
             />
           ) : (
-            <div className="flex h-[220px] items-center justify-center rounded-lg border border-border bg-bg text-sm text-text-muted">
+            <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-border bg-bg text-sm text-text-muted">
               Cargando timeline…
             </div>
           )}
         </div>
 
-        <div className="flex flex-col gap-4 lg:w-80 lg:shrink-0">
-          <VideoUploader projectId={projectId} onUploaded={handleUploaded} />
-          {assets.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {assets.map((asset) => (
-                <VideoListItem
-                  key={asset.id}
-                  asset={asset}
-                  thumbnail={thumbnails[asset.id]}
-                  onDelete={handleDelete}
-                  draggable
-                />
-              ))}
-            </div>
-          )}
+        <div className="flex min-h-0 flex-col lg:w-80 lg:shrink-0">
+          <div className="flex shrink-0 gap-1 border-b border-border">
+            <TabButton label={videosTabLabel(assets.length)} isActive={activeTab === 'videos'} onClick={() => setActiveTab('videos')} />
+            <TabButton label="Subtítulos" isActive={activeTab === 'subtitles'} onClick={() => setActiveTab('subtitles')} />
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-3">
+            {activeTab === 'videos' && (
+              <>
+                <VideoUploader projectId={projectId} onUploaded={handleUploaded} />
+                {assets.map((asset) => (
+                  <VideoListItem
+                    key={asset.id}
+                    asset={asset}
+                    thumbnail={thumbnails[asset.id]}
+                    onDelete={handleDelete}
+                    draggable
+                  />
+                ))}
+              </>
+            )}
+
+            {activeTab === 'subtitles' && (
+              <SubtitlePanel
+                hasTimeline={!!timelineState.timeline}
+                state={subtitlesState.state}
+                subtitles={subtitlesState.subtitles}
+                error={subtitlesState.error}
+                language={subtitlesState.language}
+                setLanguage={subtitlesState.setLanguage}
+                generate={handleGenerateSubtitles}
+                importFile={subtitlesState.importFile}
+                segmentsVisible={segmentsVisible}
+                onToggleSegments={handleToggleSegments}
+              />
+            )}
+          </div>
         </div>
       </div>
 
       {assets.length > 0 && (
-        <div className="min-w-0">
+        <div className="min-w-0 shrink-0">
           <Timeline
             state={timelineState}
             assets={assets}
             thumbnails={thumbnails}
             projectId={projectId}
             projectName={projectName}
+            subtitlesProgressUntilMs={subtitlesProgressUntilMs}
+            activeSubtitleRangeMs={activeSubtitleRangeMs}
+          />
+        </div>
+      )}
+
+      {segmentsVisible && subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0 && (
+        <div className="min-w-0 shrink-0 rounded-lg border border-border bg-bg p-4">
+          <SubtitleSegmentList
+            segments={subtitlesState.subtitles.segments}
+            activeSegmentId={activeSegmentId}
+            onSeek={handleSeek}
+            onEditText={handleEditSegmentText}
+            onEditTiming={handleEditSegmentTiming}
           />
         </div>
       )}

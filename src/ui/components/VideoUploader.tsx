@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useState, type DragEvent, type KeyboardEvent } from 'react'
 import type { UploadError, VideoUploadResult } from '@domain/video'
-import { Button } from '@ui/components/Button'
 import { useVideoUpload, type UploadState } from '@ui/hooks/useVideoUpload'
 
 const ERROR_MESSAGES: Record<UploadError, string> = {
@@ -31,8 +30,18 @@ export function VideoUploader({ projectId, onUploaded }: VideoUploaderProps) {
   }, [state, results, onUploaded])
 
   const handleClick = useCallback(async () => {
+    if (isLoading) return
     await upload()
-  }, [upload])
+  }, [upload, isLoading])
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return
+      event.preventDefault()
+      void handleClick()
+    },
+    [handleClick],
+  )
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -54,18 +63,26 @@ export function VideoUploader({ projectId, onUploaded }: VideoUploaderProps) {
   )
 
   return (
-    <div
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`flex flex-col items-center gap-4 rounded-lg border border-dashed p-10 text-center transition-colors ${
-        isDragging ? 'border-accent-border bg-accent-bg' : 'border-border'
-      }`}
-    >
-      <p className="text-sm text-text-muted">Arrastra un video MP4 o WebM, o</p>
-      <Button onClick={handleClick} disabled={isLoading} className="w-auto">
-        {isLoading ? 'Subiendo…' : 'Subir video'}
-      </Button>
+    <div className="flex flex-col gap-2">
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => void handleClick()}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-disabled={isLoading}
+        className={`flex items-center gap-3 rounded-lg border border-dashed p-2 text-left transition-colors ${
+          isDragging ? 'border-accent-border bg-accent-bg' : 'border-border hover:bg-surface-hover'
+        } ${isLoading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+      >
+        <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-bg text-text-muted">+</div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm text-text-strong">{isLoading ? 'Subiendo…' : 'Subir video'}</span>
+          <span className="truncate text-xs text-text-muted">Arrastra aquí o haz click (MP4, WebM)</span>
+        </div>
+      </div>
       {state === 'error' && (
         <div role="alert" className="flex flex-col gap-1 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {errors.map((error, index) => (

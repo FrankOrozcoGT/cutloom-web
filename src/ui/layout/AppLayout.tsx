@@ -18,12 +18,14 @@ function AppLayoutContent() {
   const { isOpen } = useSidebar()
 
   return (
-    <div className="flex min-h-svh flex-col bg-bg">
+    <div className="flex h-svh flex-col overflow-hidden bg-bg">
       <TopBar />
-      <Sidebar />
-      <main className={`overflow-auto ${isOpen ? 'md:ml-56' : 'md:ml-16'}`}>
-        <Outlet />
-      </main>
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <main className={`min-h-0 flex-1 overflow-y-auto ${isOpen ? 'md:ml-56' : 'md:ml-16'}`}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   )
 }
