@@ -113,6 +113,7 @@ export class WhisperAdapter implements WhisperTranscriberPort {
     let windowIndex = 0
     let chunkStart = 0
     let chunkText = ''
+    let lastEmittedEnd = 0
 
     const streamer = new WhisperTextStreamer(transcriber.tokenizer as unknown as ConstructorParameters<typeof WhisperTextStreamer>[0], {
       skip_prompt: true,
@@ -125,12 +126,19 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       },
       on_chunk_end: (time: number) => {
         const text = chunkText.trim()
-        if (text) {
-          // Ruido del modelo aparte, un segmento nunca termina antes de empezar.
-          const end = Math.max(windowIndex * WINDOW_ADVANCE_SECONDS + time, chunkStart)
-          console.log(`WhisperAdapter: segmento [${chunkStart.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
-          onProgress({ text, start: chunkStart, end })
-        }
+        if (!text) return
+        // Ruido del modelo aparte, un segmento nunca termina antes de empezar.
+        const end = Math.max(windowIndex * WINDOW_ADVANCE_SECONDS + time, chunkStart)
+        // Las ventanas se solapan (30s de largo, 20s de avance) y el audio del
+        // borde se transcribe dos veces. Para que el progreso no retroceda se
+        // descartan los segmentos ya cubiertos por la ventana anterior y se
+        // recorta el inicio de los que crucen el borde. El resultado final no
+        // se ve afectado: _decode_asr hace su propio recorte de strides.
+        if (end <= lastEmittedEnd) return
+        const start = Math.max(chunkStart, lastEmittedEnd)
+        lastEmittedEnd = end
+        console.log(`WhisperAdapter: segmento [${start.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
+        onProgress({ text, start, end })
       },
       on_finalize: () => {
         windowIndex += 1
