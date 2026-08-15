@@ -29,6 +29,7 @@ export type TrackFullError = 'TRACK_FULL'
 export type ClipNotFoundError = 'CLIP_NOT_FOUND'
 export type TrackNotFoundError = 'TRACK_NOT_FOUND'
 export type TrimError = 'TRIM_EXCEEDS_SOURCE'
+export type CutClipError = 'CUT_OUT_OF_BOUNDS' | 'CUT_ZERO_LENGTH'
 
 export type TrimEdge = 'start' | 'end'
 
@@ -275,6 +276,61 @@ export function moveClip(
     }
     return { ...track, clips: withoutClip }
   })
+
+  return ok({ ...timeline, tracks: updatedTracks })
+}
+
+/**
+ * Divide un clip en dos segmentos independientes en cutPointMs (absoluto en
+ * el timeline). El segmento 1 conserva sourceStartMs original; el segmento 2
+ * avanza sourceStartMs exactamente el delta cortado, para no perder frames.
+ */
+export function splitClip(
+  timeline: Timeline,
+  clipId: string,
+  cutPointMs: number,
+): Result<Timeline, ClipNotFoundError | CutClipError> {
+  let trackWithClip: Track | null = null
+  let clip: Clip | null = null
+  for (const track of timeline.tracks) {
+    const found = track.clips.find((c) => c.id === clipId)
+    if (found) {
+      trackWithClip = track
+      clip = found
+      break
+    }
+  }
+  if (!trackWithClip || !clip) {
+    return err('CLIP_NOT_FOUND')
+  }
+
+  if (!Number.isFinite(cutPointMs) || cutPointMs < 0) {
+    return err('CUT_OUT_OF_BOUNDS')
+  }
+
+  const end = clipEnd(clip)
+  if (cutPointMs === clip.offsetMs || cutPointMs === end) {
+    return err('CUT_ZERO_LENGTH')
+  }
+  if (cutPointMs < clip.offsetMs || cutPointMs > end) {
+    return err('CUT_OUT_OF_BOUNDS')
+  }
+
+  const deltaMs = cutPointMs - clip.offsetMs
+  const segment1: Clip = { ...clip, durationMs: deltaMs }
+  const segment2: Clip = {
+    id: crypto.randomUUID(),
+    assetId: clip.assetId,
+    offsetMs: cutPointMs,
+    durationMs: end - cutPointMs,
+    sourceStartMs: clip.sourceStartMs + deltaMs,
+  }
+
+  const updatedTracks = timeline.tracks.map((track) =>
+    track.id === trackWithClip!.id
+      ? { ...track, clips: track.clips.flatMap((c) => (c.id === clipId ? [segment1, segment2] : [c])) }
+      : track,
+  )
 
   return ok({ ...timeline, tracks: updatedTracks })
 }
