@@ -34,7 +34,7 @@ export interface WhisperTranscribeOptions {
 /** Progreso incremental de la transcripción: un segmento recién cerrado, listo para mostrarse. */
 export type WhisperProgressListener = (segment: WhisperRawSegment) => void
 
-export type WhisperError = 'UNSUPPORTED_API' | 'MODEL_LOAD_FAILED' | 'TRANSCRIPTION_FAILED'
+export type WhisperError = 'UNSUPPORTED_API' | 'INSUFFICIENT_HARDWARE' | 'MODEL_LOAD_FAILED' | 'TRANSCRIPTION_FAILED'
 
 export interface WhisperTranscriberPort {
   transcribe(

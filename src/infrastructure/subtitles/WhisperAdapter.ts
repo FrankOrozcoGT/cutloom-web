@@ -15,7 +15,7 @@ import type {
 } from '@application/subtitles/ports'
 import { describeError } from '@infrastructure/errors'
 
-const MODEL_ID = 'onnx-community/whisper-tiny'
+const MODEL_ID = 'onnx-community/whisper-base'
 const CHUNK_LENGTH_SECONDS = 30
 const STRIDE_LENGTH_SECONDS = 5
 // Cada ventana de audio de chunk_length_s se transcribe con una llamada de
@@ -40,6 +40,20 @@ async function hasWebGpu(): Promise<boolean> {
   }
 }
 
+// whisper-base (encoder fp32 + decoder fp16) pesa ~190MB de descarga y necesita
+// varias veces eso en RAM libre para activaciones/buffers durante la inferencia
+// en WASM. navigator.deviceMemory reporta en potencias de 2 (0.25, 0.5, 1, 2, 4,
+// 8…); 4GB es el primer nivel con margen cómodo. Chrome/Edge exponen la API;
+// Safari/Firefox no la soportan y devuelven undefined, en cuyo caso se deja
+// pasar (no se puede castigar a un usuario cuyo navegador no reporta el dato).
+const MIN_DEVICE_MEMORY_GB = 4
+
+function hasEnoughMemory(): boolean {
+  const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+  if (deviceMemory === undefined) return true
+  return deviceMemory >= MIN_DEVICE_MEMORY_GB
+}
+
 /** Transcribe audio localmente con Whisper (transformers.js), 100% en el navegador. */
 export class WhisperAdapter implements WhisperTranscriberPort {
   private transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | null = null
@@ -52,6 +66,9 @@ export class WhisperAdapter implements WhisperTranscriberPort {
   ): Promise<Result<WhisperOutput, WhisperError>> {
     if (typeof WebAssembly === 'undefined') {
       return err('UNSUPPORTED_API')
+    }
+    if (!hasEnoughMemory()) {
+      return err('INSUFFICIENT_HARDWARE')
     }
 
     console.log(`WhisperAdapter: audio de entrada ${audio.length} samples (${(audio.length / 16000).toFixed(1)}s @ 16kHz)`)
@@ -170,8 +187,8 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       device: this.device,
       // q8 en el decoder rompe la sesión de ONNX Runtime 1.25 (bug conocido de
       // transformers.js #1707: falta el scale de dequantización del decoder
-      // merged). q4 evita el bug manteniendo una descarga liviana.
-      dtype: useWebGpu ? 'fp32' : { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+      // merged). fp16 evita el bug y da mejor calidad que q4 con menor peso.
+      dtype: useWebGpu ? 'fp32' : { encoder_model: 'fp32', decoder_model_merged: 'fp16' },
       progress_callback: (progress: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => {
         if (progress.status === 'progress' && progress.file) {
           const pct = progress.progress?.toFixed(0) ?? '?'

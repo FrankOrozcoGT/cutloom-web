@@ -8,7 +8,7 @@ export interface SubtitlesResult {
   device: 'webgpu' | 'wasm'
 }
 
-export type SubtitlesError = 'NO_SPEECH' | 'UNSUPPORTED_API' | 'UNKNOWN_ERROR'
+export type SubtitlesError = 'NO_SPEECH' | 'UNSUPPORTED_API' | 'INSUFFICIENT_HARDWARE' | 'UNKNOWN_ERROR'
 
 /** Transcribe audio ya extraído (ver ExtractSubtitlesAudioUseCase) y lo mapea a segmentos de dominio. */
 export class GenerateSubtitlesUseCase {
@@ -40,8 +40,9 @@ export class GenerateSubtitlesUseCase {
     return ok({ subtitles, device: transcribeResult.value.device })
   }
 
-  private mapWhisperError(error: 'UNSUPPORTED_API' | 'MODEL_LOAD_FAILED' | 'TRANSCRIPTION_FAILED'): SubtitlesError {
+  private mapWhisperError(error: 'UNSUPPORTED_API' | 'INSUFFICIENT_HARDWARE' | 'MODEL_LOAD_FAILED' | 'TRANSCRIPTION_FAILED'): SubtitlesError {
     if (error === 'UNSUPPORTED_API') return 'UNSUPPORTED_API'
+    if (error === 'INSUFFICIENT_HARDWARE') return 'INSUFFICIENT_HARDWARE'
     return 'UNKNOWN_ERROR'
   }
 }
