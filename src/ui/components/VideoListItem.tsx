@@ -1,6 +1,7 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useState, type DragEvent } from 'react'
 import type { VideoAsset } from '@domain/video'
 import { formatDurationMs } from '@ui/format'
+import { useObjectUrl } from '@ui/hooks/useObjectUrl'
 
 interface VideoListItemProps {
   asset: VideoAsset
@@ -10,17 +11,9 @@ interface VideoListItemProps {
 }
 
 export function VideoListItem({ asset, thumbnail, onDelete, draggable }: VideoListItemProps) {
-  const [thumbnailUrl, setThumbnailUrl] = useState('')
-
-  useEffect(() => {
-    if (!thumbnail) {
-      setThumbnailUrl('')
-      return
-    }
-    const url = URL.createObjectURL(thumbnail)
-    setThumbnailUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [thumbnail])
+  const [isHovering, setIsHovering] = useState(false)
+  const thumbnailUrl = useObjectUrl(thumbnail)
+  const previewUrl = useObjectUrl(isHovering ? asset.blob : undefined)
 
   function handleDragStart(event: DragEvent<HTMLDivElement>) {
     event.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'asset', id: asset.id }))
@@ -30,11 +23,23 @@ export function VideoListItem({ asset, thumbnail, onDelete, draggable }: VideoLi
     <div
       draggable={draggable}
       onDragStart={draggable ? handleDragStart : undefined}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
       className="flex items-center gap-3 rounded-lg border border-border bg-surface p-2 transition-colors hover:bg-surface-hover"
     >
-      <div className="h-12 w-20 shrink-0 overflow-hidden rounded-md bg-bg">
+      <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-bg">
         {thumbnailUrl && (
           <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+        )}
+        {previewUrl && (
+          <video
+            src={previewUrl}
+            className="absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
