@@ -42,7 +42,7 @@ export function TimelinePlayer({
   onActiveSegmentChange,
   onSegmentClick,
 }: TimelinePlayerProps) {
-  const { videoRefA, videoRefB, activeIsA, bufferA, bufferB, hasContent } = usePlaybackEngine({
+  const { videoRefA, videoRefB, activeIsA, bufferA, bufferB, hasContent, isSeeking } = usePlaybackEngine({
     timeline,
     assets,
     playheadMs,
@@ -80,6 +80,11 @@ export function TimelinePlayer({
         className="absolute inset-0 h-full w-full object-contain"
         style={{ visibility: !activeIsA && hasContent ? 'visible' : 'hidden' }}
       />
+      {hasContent && isSeeking && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+        </div>
+      )}
       {hasContent && activeSegment && (
         <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
           <button
