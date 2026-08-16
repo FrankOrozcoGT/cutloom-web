@@ -1,6 +1,7 @@
-import { useEffect, useState, type DragEvent, type PointerEvent } from 'react'
+import type { DragEvent, PointerEvent } from 'react'
 import type { Clip, TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
+import { useObjectUrl } from '@ui/hooks/useObjectUrl'
 
 interface TimelineClipProps {
   clip: Clip
@@ -30,17 +31,7 @@ export function TimelineClip({
   onTrimStart,
   onSelect,
 }: TimelineClipProps) {
-  const [thumbnailUrl, setThumbnailUrl] = useState('')
-
-  useEffect(() => {
-    if (!thumbnail) {
-      setThumbnailUrl('')
-      return
-    }
-    const url = URL.createObjectURL(thumbnail)
-    setThumbnailUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [thumbnail])
+  const thumbnailUrl = useObjectUrl(thumbnail)
 
   const left = (clip.offsetMs / 1000) * pxPerSec
   const width = Math.max(24, (clip.durationMs / 1000) * pxPerSec)
