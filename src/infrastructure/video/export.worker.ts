@@ -2,6 +2,7 @@ import { ExportProjectUseCase } from '@application/video/ExportProjectUseCase'
 import type { ExportOptions, ExportProgressEvent } from '@application/video/exportTypes'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
+import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubtitlesAdapter'
 import { describeError } from '@infrastructure/errors'
 import { VideoDecoderAdapter } from './VideoDecoderAdapter'
 import { VideoEncoderAdapter } from './VideoEncoderAdapter'
@@ -49,6 +50,7 @@ try {
     new VideoDecoderAdapter(),
     new VideoEncoderAdapter(compositor),
     compositor,
+    new IndexedDBSubtitlesAdapter(),
   )
 } catch (e) {
   console.error('export.worker: fallo al inicializar el pipeline de export', describeError(e))

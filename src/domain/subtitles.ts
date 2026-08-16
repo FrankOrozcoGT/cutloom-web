@@ -51,6 +51,11 @@ export function mapWhisperSegments(rawSegments: WhisperRawSegment[]): SubtitleSe
   return segments
 }
 
+/** Segmento cuyo rango [startMs, endMs) cubre el timestamp dado, o null si no hay ninguno activo ahí. */
+export function findActiveSubtitle(segments: SubtitleSegment[], timeMs: number): SubtitleSegment | null {
+  return segments.find((segment) => timeMs >= segment.startMs && timeMs < segment.endMs) ?? null
+}
+
 export function editSegmentText(
   segments: SubtitleSegment[],
   segmentId: string,

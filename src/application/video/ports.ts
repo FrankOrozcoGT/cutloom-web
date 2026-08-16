@@ -2,6 +2,12 @@ import type { VideoAsset } from '@domain/video'
 import type { Result } from '@application/result'
 import type { ClipRenderSegment, ExportOptions, GapRenderSegment } from './exportTypes'
 
+export interface ComposeOptions {
+  dimensions: { width: number; height: number }
+  /** Texto del subtítulo activo en el timestamp de este frame, si hay alguno. */
+  subtitleText?: string
+}
+
 export type VideoPickerError = 'PICKER_FAILED'
 export type StorageError = 'STORAGE_FULL' | 'UNKNOWN_ERROR'
 export type ThumbnailError = 'THUMBNAIL_FAILED'
@@ -55,13 +61,9 @@ export interface VideoDecoderPort {
 }
 
 export interface CanvasPort {
-  compose(
-    frame: VideoFrame,
-    segment: ClipRenderSegment,
-    options: { dimensions: { width: number; height: number } },
-  ): void
+  compose(frame: VideoFrame, segment: ClipRenderSegment, options: ComposeOptions): void
   /** Rellena el canvas con fondo negro para tramos del timeline sin clip activo. */
-  composeBlank(segment: GapRenderSegment, options: { dimensions: { width: number; height: number } }): void
+  composeBlank(segment: GapRenderSegment, options: ComposeOptions): void
   getCanvas(): OffscreenCanvas
 }
 

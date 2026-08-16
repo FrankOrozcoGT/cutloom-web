@@ -31,12 +31,6 @@ export interface GapRenderSegment {
 
 export type RenderSegment = ClipRenderSegment | GapRenderSegment
 
-export interface Subtitle {
-  text: string
-  startMs: number
-  endMs: number
-}
-
 export type ExportPhase = 'loading' | 'decoding' | 'encoding' | 'muxing' | 'done'
 
 export interface ExportProgressEvent {

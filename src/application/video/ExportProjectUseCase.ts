@@ -1,5 +1,7 @@
+import { findActiveSubtitle, type SubtitleSegment } from '@domain/subtitles'
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
+import type { SubtitlesStoragePort } from '@application/subtitles/ports'
 import type { CanvasPort, MediaMuxerPort, VideoDecoderPort, VideoStorage } from './ports'
 import {
   buildRenderSegments,
@@ -16,6 +18,7 @@ export class ExportProjectUseCase {
   private readonly decoder: VideoDecoderPort
   private readonly muxer: MediaMuxerPort
   private readonly composer: CanvasPort
+  private readonly subtitlesStorage: SubtitlesStoragePort
 
   constructor(
     storage: TimelineStorage,
@@ -23,12 +26,14 @@ export class ExportProjectUseCase {
     decoder: VideoDecoderPort,
     muxer: MediaMuxerPort,
     composer: CanvasPort,
+    subtitlesStorage: SubtitlesStoragePort,
   ) {
     this.storage = storage
     this.videoStorage = videoStorage
     this.decoder = decoder
     this.muxer = muxer
     this.composer = composer
+    this.subtitlesStorage = subtitlesStorage
   }
 
   async execute(
@@ -63,7 +68,12 @@ export class ExportProjectUseCase {
       return err('ABORTED')
     }
 
-    return this.run(segmentsResult.value, options, onProgress, signal)
+    // Los subtítulos son opcionales: si no hay ninguno guardado, se exporta sin
+    // burn-in en vez de fallar toda la exportación por STORAGE_ERROR.
+    const subtitlesResult = await this.subtitlesStorage.getByProject(projectId)
+    const subtitleSegments = subtitlesResult.ok ? (subtitlesResult.value?.segments ?? []) : []
+
+    return this.run(segmentsResult.value, options, subtitleSegments, onProgress, signal)
   }
 
   private validatePrerequisites(): ExportError | null {
@@ -78,6 +88,7 @@ export class ExportProjectUseCase {
   private async run(
     segments: RenderSegment[],
     options: ExportOptions,
+    subtitleSegments: SubtitleSegment[],
     onProgress?: ExportProgressListener,
     signal?: AbortSignal,
   ): Promise<Result<Blob, ExportError>> {
@@ -106,8 +117,6 @@ export class ExportProjectUseCase {
       let writeError: ExportError | null = null
 
       if (segment.kind === 'gap') {
-        this.composer.composeBlank(segment, { dimensions: { width: options.width, height: options.height } })
-
         // Un solo frame largo no alinea bien con el frameRate del track y algunos
         // reproductores lo scrubbean mostrando el último frame visible antes del gap.
         // Se generan frames negros a la cadencia de options.fps, igual que el video real.
@@ -121,6 +130,11 @@ export class ExportProjectUseCase {
           const frameTimestamp = gapStartSeconds + i * frameDurationSeconds
           const remaining = gapDurationSeconds - i * frameDurationSeconds
           const duration = Math.min(frameDurationSeconds, remaining)
+          const activeSubtitle = findActiveSubtitle(subtitleSegments, frameTimestamp * 1000)
+          this.composer.composeBlank(segment, {
+            dimensions: { width: options.width, height: options.height },
+            subtitleText: activeSubtitle?.text,
+          })
           const result = await this.muxer.writeVideoFrame(frameTimestamp, duration)
           if (!result.ok) {
             writeError = result.error
@@ -131,7 +145,11 @@ export class ExportProjectUseCase {
           segment,
           async (frame, timestampSeconds, durationSeconds) => {
             if (writeError || signal?.aborted) return
-            this.composer.compose(frame, segment, { dimensions: { width: options.width, height: options.height } })
+            const activeSubtitle = findActiveSubtitle(subtitleSegments, timestampSeconds * 1000)
+            this.composer.compose(frame, segment, {
+              dimensions: { width: options.width, height: options.height },
+              subtitleText: activeSubtitle?.text,
+            })
             const result = await this.muxer.writeVideoFrame(timestampSeconds, durationSeconds)
             if (!result.ok) {
               writeError = result.error
