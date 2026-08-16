@@ -137,7 +137,7 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         if (end <= lastEmittedEnd) return
         const start = Math.max(chunkStart, lastEmittedEnd)
         lastEmittedEnd = end
-        console.log(`WhisperAdapter: segmento [${start.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
+        console.log(`WhisperAdapter: segmento win=${windowIndex} [${start.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
         onProgress({ text, start, end })
       },
       on_finalize: () => {
