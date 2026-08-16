@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Timeline } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import { computePlaybackSnapshot } from './playbackEngine'
@@ -14,18 +14,19 @@ interface UsePlaybackEngineArgs {
 }
 
 /**
- * Motor de reproducción del timeline compuesto. Reduce el estado a un único
- * snapshot derivado (computePlaybackSnapshot) y aplica sus consecuencias al
- * DOM en efectos con una sola responsabilidad cada uno:
- *  1. buffers    — qué asset carga en cada <video> (delegado a usePlaybackBuffers)
- *  2. seek       — reposicionar currentTime cuando el usuario mueve el playhead
- *  3. play/pause — arrancar/detener el <video> activo según isPlaying
- *  4. avance     — reportar el playhead hacia arriba, ya sea vía timeupdate
- *                  del <video> (dentro de un clip) o un reloj propio (huecos)
+ * Motor de reproducción del timeline compuesto. Reloj único: un
+ * requestAnimationFrame de pared avanza playheadMs mientras isPlaying es
+ * true, sin importar si el instante actual cae en un clip o en un hueco —
+ * los <video> nunca son la fuente de verdad del tiempo, solo la siguen.
  *
- * activeVideoRef siempre apunta al slot que se debe ver/escuchar; tras cruzar
- * el borde de un clip, los buffers hacen swap() y el mismo ref pasa a apuntar
- * al elemento que ya tenía el siguiente clip precargado — sin recrear <video>.
+ * El diseño anterior usaba dos relojes distintos (timeupdate del <video>
+ * dentro de un clip, un rAF propio en los huecos) que había que coser en
+ * cada transición clip↔hueco↔clip con swaps manuales de qué <video> es "el
+ * activo" — cada transición era un caso especial nuevo y cada uno arrastraba
+ * su propio bug (parpadeo al saltar entre subtítulos, reproducción trabada
+ * al cruzar un hueco). Con un solo reloj no hay nada que coser: cada frame
+ * simplemente pregunta "qué correspondería ahora" (computePlaybackSnapshot)
+ * y sincroniza el DOM a eso.
  */
 export function usePlaybackEngine({
   timeline,
@@ -42,50 +43,57 @@ export function usePlaybackEngine({
   const snapshot = computePlaybackSnapshot(timeline, playheadMs)
   const { activeClip, waitingClip, durationMs, mode } = snapshot
 
-  const { activeBuffer, waitingBuffer, swap } = usePlaybackBuffers(
-    assets,
-    activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null,
-    waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null,
-  )
+  // Qué slot pide qué clip, y cuál de los dos es "el activo" para efectos de
+  // reproducción, se deciden con el MISMO valor de rol (lastActiveIsA) dentro
+  // de este render — nunca se mezcla un rol con buffers pedidos bajo otro
+  // rol distinto. Antes se pedían los buffers con el rol viejo pero se
+  // exponía activeBuffer/activeVideoRef ya con el rol "corregido" de este
+  // mismo render: esos dos podían quedar desalineados un frame, así que
+  // activeBuffer.url terminaba siendo la URL que el OTRO slot estaba
+  // cargando/reemplazando ese instante — de ahí el ERR_FILE_NOT_FOUND al
+  // asignarla a un <video src>. El rol solo se corrige para el PRÓXIMO
+  // render, después de leer bufferA/bufferB ya resueltos con este rol.
+  const lastActiveIsA = activeIsA.current
+  const wantsA = lastActiveIsA
+    ? (activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null)
+    : (waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null)
+  const wantsB = lastActiveIsA
+    ? (waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null)
+    : (activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null)
 
-  const activeVideoRef = activeIsA.current ? videoRefA : videoRefB
-  const waitingVideoRef = activeIsA.current ? videoRefB : videoRefA
+  const { bufferA, bufferB } = usePlaybackBuffers(assets, wantsA, wantsB)
 
-  // Detecta seeks externos: cambios de playheadMs que NO vinieron del propio
-  // <video> reportando su avance normal. isInternalUpdateRef lo marca el propio
-  // handler de timeupdate/tick JUSTO ANTES de llamar onPlayheadChange, y este
-  // efecto lo consume y resetea — así solo hay un escritor de "qué originó el
-  // cambio", evitando la carrera de tener dos efectos leyendo/escribiendo el
-  // mismo valor de referencia en momentos distintos del ciclo de eventos.
-  const isInternalUpdateRef = useRef(false)
-  const [seekVersion, setSeekVersion] = useState(0)
-  useEffect(() => {
-    if (isInternalUpdateRef.current) {
-      isInternalUpdateRef.current = false
-      return
-    }
-    setSeekVersion((version) => version + 1)
-  }, [playheadMs])
+  const activeBuffer = lastActiveIsA ? bufferA : bufferB
+  const waitingBuffer = lastActiveIsA ? bufferB : bufferA
+  const activeVideoRef = lastActiveIsA ? videoRefA : videoRefB
+  const waitingVideoRef = lastActiveIsA ? videoRefB : videoRefA
 
-  // Prepara el buffer en espera en el punto de inicio de su clip, listo para
-  // un corte limpio quando se le haga swap a "activo".
+  // Recién acá se corrige el rol, para el próximo render: si el slot activo
+  // ya no tiene cargado activeClip pero el que estaba en espera sí, el rol
+  // cambia de cara al siguiente ciclo.
+  if (activeClip && activeBuffer.clipId !== activeClip.id && waitingBuffer.clipId === activeClip.id) {
+    activeIsA.current = !lastActiveIsA
+  }
+
+  // Precarga el buffer en espera en el punto de inicio de su clip, listo para
+  // un corte limpio cuando pase a ser el activo.
   useEffect(() => {
     const video = waitingVideoRef.current
     if (!video || !waitingClip || waitingBuffer.clipId !== waitingClip.id) return
     video.currentTime = waitingClip.sourceStartMs / 1000
   }, [waitingClip, waitingBuffer, waitingVideoRef])
 
-  // Seek: alinea currentTime del video activo con el punto del clip. Se dispara
-  // al cambiar de clip, al terminar de cargar su buffer, o ante un seek externo.
+  // Alinea currentTime del video activo con el punto del clip que le
+  // corresponde según el playhead. Única fuente de "dónde debe estar
+  // parado" el <video> — cubre seeks, cambios de clip y el avance normal.
   useEffect(() => {
     const video = activeVideoRef.current
     if (!video || !activeClip || activeBuffer.clipId !== activeClip.id) return
     const targetSeconds = activeClip.sourceTimeMs / 1000
-    if (Math.abs(video.currentTime - targetSeconds) > 0.5) {
+    if (Math.abs(video.currentTime - targetSeconds) > 0.2) {
       video.currentTime = targetSeconds
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClip?.id, activeBuffer, activeVideoRef, seekVersion])
+  }, [activeClip, activeBuffer, activeVideoRef, playheadMs])
 
   // Si el timeline indica un clip activo pero su asset ya no existe (se borró
   // el VideoAsset original mientras se reproducía), usePlaybackBuffers deja el
@@ -97,139 +105,63 @@ export function usePlaybackEngine({
     }
   }, [activeClip, activeBuffer.clipId, isPlaying, onPlayingChange])
 
-  // Play/pause del video activo; el video en espera nunca reproduce sonido/avance.
+  // Play/pause del video activo; el video en espera nunca reproduce sonido.
   useEffect(() => {
     waitingVideoRef.current?.pause()
     const video = activeVideoRef.current
     if (!video) return
     if (isPlaying && mode === 'clip') {
-      void video.play()
+      void video.play().catch(() => {})
     } else {
       video.pause()
     }
   }, [isPlaying, mode, activeVideoRef, waitingVideoRef])
 
-  // Avance del playhead mientras se reproduce un clip: sigue timeupdate del
-  // <video> real (fuente de verdad), no un timer propio — evita desincronía.
+  // Reloj de pared: única fuente de avance del playhead durante la
+  // reproducción, dentro o fuera de un clip. Se relee mode/durationMs en
+  // cada frame vía closures frescas (el efecto se re-crea en cada cambio de
+  // playheadMs), así que cruzar de un clip a un hueco o a otro clip no
+  // requiere ningún caso especial: el próximo frame simplemente ve el nuevo
+  // snapshot y sigue.
   useEffect(() => {
-    const video = activeVideoRef.current
-    if (!video || !activeClip) return
-
-    const { offsetMs, durationMs: clipDurationMs, sourceTimeMs } = activeClip
-    const clipSourceStartMs = sourceTimeMs - (playheadMs - offsetMs)
-    const clipEndMs = offsetMs + clipDurationMs
-    // El swap directo (sin pasar por modo 'gap') solo es válido si el siguiente
-    // clip empieza exactamente donde termina el actual — si hay hueco entre
-    // ambos, el efecto de avance en huecos se encarga de la transición.
-    const canSwapDirectly = waitingClip !== null && waitingClip.offsetMs === clipEndMs
-
-    function advanceToClipEnd() {
-      // El navegador no garantiza que currentTime llegue exactamente a
-      // video.duration — timeupdate puede dejar de dispararse con el playhead
-      // a una fracción de ms del final real. `ended` sí es confiable, así que
-      // se usa para forzar el cierre exacto en clipEndMs como red de seguridad.
-      if (canSwapDirectly) {
-        activeIsA.current = !activeIsA.current
-        swap()
-      }
-      isInternalUpdateRef.current = true
-      onPlayheadChange(clipEndMs >= durationMs ? durationMs : clipEndMs)
-      if (clipEndMs >= durationMs) {
-        onPlayingChange(false)
-      }
-    }
-
-    function handleTimeUpdate() {
-      const localMs = video!.currentTime * 1000 - clipSourceStartMs
-      const nextPlayheadMs = offsetMs + localMs
-
-      if (nextPlayheadMs >= durationMs) {
-        isInternalUpdateRef.current = true
-        onPlayheadChange(durationMs)
-        onPlayingChange(false)
-        return
-      }
-
-      if (nextPlayheadMs >= clipEndMs && canSwapDirectly) {
-        // Mutar el ref no dispara re-render por sí solo; swap() sí es setState
-        // y junto con onPlayheadChange(...) más abajo garantiza que el nuevo
-        // activeIsA.current se refleje en el próximo render.
-        activeIsA.current = !activeIsA.current
-        swap()
-      }
-
-      isInternalUpdateRef.current = true
-      onPlayheadChange(nextPlayheadMs)
-    }
-
-    video.addEventListener('timeupdate', handleTimeUpdate)
-    video.addEventListener('ended', advanceToClipEnd)
-    return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate)
-      video.removeEventListener('ended', advanceToClipEnd)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClip?.id, waitingClip?.id, durationMs, activeVideoRef, onPlayheadChange, onPlayingChange])
-
-  // Avance en huecos sin clip: reloj de pared (pantalla vacía), nunca salta el
-  // hueco — igual que un editor real, el tiempo transcurre aunque no haya imagen.
-  useEffect(() => {
-    if (!isPlaying || mode !== 'gap') return
-
-    // El clip que sigue al hueco siempre se precargó en el slot "waiting" (nunca
-    // hubo swap durante un hueco, porque no hay video activo del que escuchar
-    // 'ended'/'timeupdate'). Al cruzar su offset hay que promoverlo a "activo"
-    // explícitamente — si no, el snapshot lógico avanza pero el slot físico del
-    // <video> sigue siendo el del clip viejo, ya sin buffer válido.
-    const upcomingOffsetMs = waitingClip?.offsetMs ?? null
-    const upcomingClipId = waitingClip?.id ?? null
+    if (!isPlaying || mode === 'ended') return
 
     let rafId: number
     let lastTimestamp: number | null = null
+    // Acumula sobre el propio avance del reloj, no sobre el playheadMs
+    // capturado al montar el efecto — si no, cada frame recalcula
+    // "playheadMs inicial + delta de ESTE frame" en vez de sumar el tiempo
+    // transcurrido total, y el playhead reportado queda pegado cerca del
+    // valor inicial en vez de progresar.
+    let currentPlayheadMs = playheadMs
 
     function tick(timestamp: number) {
       if (lastTimestamp === null) lastTimestamp = timestamp
       const elapsedMs = timestamp - lastTimestamp
       lastTimestamp = timestamp
 
-      const nextPlayheadMs = playheadMs + elapsedMs
-      if (nextPlayheadMs >= durationMs) {
-        isInternalUpdateRef.current = true
-        onPlayheadChange(durationMs)
+      currentPlayheadMs = Math.min(currentPlayheadMs + elapsedMs, durationMs)
+      onPlayheadChange(currentPlayheadMs)
+      if (currentPlayheadMs >= durationMs) {
         onPlayingChange(false)
         return
       }
-
-      if (upcomingClipId !== null && upcomingOffsetMs !== null && nextPlayheadMs >= upcomingOffsetMs) {
-        activeIsA.current = !activeIsA.current
-        swap()
-      }
-
-      isInternalUpdateRef.current = true
-      onPlayheadChange(nextPlayheadMs)
       rafId = requestAnimationFrame(tick)
     }
 
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
-    // playheadMs se lee solo como valor inicial del tick; incluirlo reiniciaría el rAF en cada frame.
+    // Solo el primer valor de playheadMs importa (punto de partida del
+    // reloj): incluirlo en deps reiniciaría lastTimestamp en cada frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, mode, durationMs, waitingClip, onPlayheadChange, onPlayingChange])
-
-  // bufferA/bufferB se exponen ya resueltos al slot físico correspondiente
-  // (no activeBuffer/waitingBuffer + activeIsA por separado) para que el
-  // componente presentacional no tenga que re-derivar esa relación — un
-  // desfase de un frame ahí fue la causa de un ERR_FILE_NOT_FOUND real: el
-  // <video> quedaba apuntando a una blob URL que este hook ya había revocado.
-  const bufferA = activeIsA.current ? activeBuffer : waitingBuffer
-  const bufferB = activeIsA.current ? waitingBuffer : activeBuffer
+  }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
 
   return {
     videoRefA,
     videoRefB,
     bufferA,
     bufferB,
-    activeIsA: activeIsA.current,
+    activeIsA: lastActiveIsA,
     hasContent: mode === 'clip',
   }
 }

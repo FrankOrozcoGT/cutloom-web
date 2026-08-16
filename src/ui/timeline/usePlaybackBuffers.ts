@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { VideoAsset } from '@domain/video'
 
 export interface PlaybackBuffer {
@@ -13,79 +13,50 @@ interface ClipRef {
   assetId: string
 }
 
+function loadBuffer(prev: PlaybackBuffer, clip: ClipRef | null, assets: Record<string, VideoAsset>): PlaybackBuffer {
+  if (!clip) return prev
+  const asset = assets[clip.assetId]
+  if (!asset) {
+    if (prev.url) URL.revokeObjectURL(prev.url)
+    return EMPTY_BUFFER
+  }
+  if (prev.clipId === clip.id) return prev
+  if (prev.url) URL.revokeObjectURL(prev.url)
+  return { clipId: clip.id, url: URL.createObjectURL(asset.blob) }
+}
+
 /**
- * Gestiona los dos buffers (blob URLs) de video para el doble buffer de
- * reproducción. Responsabilidad única: qué asset carga en cada slot y
- * liberar los blob URLs viejos. No sabe nada de currentTime, play/pause
- * ni del timeline — solo mapea clip → URL de blob.
+ * Gestiona los dos buffers físicos (blob URLs) del doble buffer de
+ * reproducción. Cada slot (A/B) se limita a cargar el clip que le toca según
+ * `wantsA`/`wantsB` — no hay concepto de "activo/en espera" ni swap aquí:
+ * ese rol se deriva puro en usePlaybackEngine comparando qué slot ya tiene
+ * cargado el clip activo. Un slot puede pasar de servir el clip activo a
+ * precargar el siguiente (o viceversa) sin que sus datos se muevan de sitio.
  */
 export function usePlaybackBuffers(
   assets: Record<string, VideoAsset>,
-  activeClip: ClipRef | null,
-  waitingClip: ClipRef | null,
+  wantsA: ClipRef | null,
+  wantsB: ClipRef | null,
 ) {
-  const [activeBuffer, setActiveBuffer] = useState<PlaybackBuffer>(EMPTY_BUFFER)
-  const [waitingBuffer, setWaitingBuffer] = useState<PlaybackBuffer>(EMPTY_BUFFER)
-
-  // Espejo síncrono del estado, leído por swap() para no depender de closures
-  // capturados: swap() se llama desde un listener nativo del <video> ('ended'),
-  // fuera del ciclo de render de React, donde un re-render intermedio (p.ej.
-  // la precarga del siguiente clip) podía dejar la closure con valores viejos.
-  const activeBufferRef = useRef(activeBuffer)
-  activeBufferRef.current = activeBuffer
-  const waitingBufferRef = useRef(waitingBuffer)
-  waitingBufferRef.current = waitingBuffer
-
-  // Si activeClip/waitingClip referencian un asset que ya no está en el
-  // diccionario (se borró el VideoAsset original), el buffer correspondiente
-  // se limpia en vez de conservar la blob URL vieja — si no, el <video> sigue
-  // reproduciendo un asset borrado indefinidamente, sin que nada lo detenga.
-  useEffect(() => {
-    if (!activeClip) return
-    const asset = assets[activeClip.assetId]
-
-    setActiveBuffer((prev) => {
-      if (!asset) {
-        if (prev.url) URL.revokeObjectURL(prev.url)
-        return EMPTY_BUFFER
-      }
-      if (prev.clipId === activeClip.id) return prev
-      if (prev.url) URL.revokeObjectURL(prev.url)
-      return { clipId: activeClip.id, url: URL.createObjectURL(asset.blob) }
-    })
-  }, [activeClip, assets])
+  const [bufferA, setBufferA] = useState<PlaybackBuffer>(EMPTY_BUFFER)
+  const [bufferB, setBufferB] = useState<PlaybackBuffer>(EMPTY_BUFFER)
 
   useEffect(() => {
-    if (!waitingClip) return
-    const asset = assets[waitingClip.assetId]
+    setBufferA((prev) => loadBuffer(prev, wantsA, assets))
+  }, [wantsA, assets])
 
-    setWaitingBuffer((prev) => {
-      if (!asset) {
-        if (prev.url) URL.revokeObjectURL(prev.url)
-        return EMPTY_BUFFER
-      }
-      if (prev.clipId === waitingClip.id) return prev
-      if (prev.url) URL.revokeObjectURL(prev.url)
-      return { clipId: waitingClip.id, url: URL.createObjectURL(asset.blob) }
-    })
-  }, [waitingClip, assets])
+  useEffect(() => {
+    setBufferB((prev) => loadBuffer(prev, wantsB, assets))
+  }, [wantsB, assets])
 
   useEffect(() => {
     return () => {
-      if (activeBuffer.url) URL.revokeObjectURL(activeBuffer.url)
-      if (waitingBuffer.url) URL.revokeObjectURL(waitingBuffer.url)
+      if (bufferA.url) URL.revokeObjectURL(bufferA.url)
+      if (bufferB.url) URL.revokeObjectURL(bufferB.url)
     }
     // Solo debe limpiar al desmontar el componente, no en cada cambio de buffer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /** Intercambia cuál buffer es "activo" tras cruzar el límite de un clip. */
-  function swap() {
-    const nextActive = waitingBufferRef.current
-    const nextWaiting = activeBufferRef.current
-    setActiveBuffer(nextActive)
-    setWaitingBuffer(nextWaiting)
-  }
-
-  return { activeBuffer, waitingBuffer, swap }
+  return { bufferA, bufferB }
 }
