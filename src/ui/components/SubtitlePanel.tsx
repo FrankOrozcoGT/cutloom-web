@@ -27,6 +27,13 @@ function generateButtonLabel(state: SubtitlesState, hasSubtitles: boolean): stri
   return hasSubtitles ? 'Regenerar subtítulos' : 'Generar subtítulos'
 }
 
+function statusBannerLabel(state: SubtitlesState): string | null {
+  if (state === 'extracting_audio') return 'Separando el audio del video…'
+  if (state === 'transcribing') return 'Transcribiendo con Whisper…'
+  if (state === 'finalizing') return 'Finalizando…'
+  return null
+}
+
 function toggleSegmentsLabel(segmentsVisible: boolean, segmentCount: number): string {
   const action = segmentsVisible ? 'Ocultar' : 'Ver'
   return `${action} segmentos (${segmentCount})`
@@ -59,6 +66,7 @@ export function SubtitlePanel({
 }: SubtitlePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isBusy = state === 'extracting_audio' || state === 'transcribing' || state === 'finalizing'
+  const statusLabel = statusBannerLabel(state)
 
   const handleGenerate = useCallback(() => {
     void generate()
@@ -105,6 +113,12 @@ export function SubtitlePanel({
       <Button onClick={handleGenerate} disabled={isBusy} className="w-auto">
         {generateButtonLabel(state, !!subtitles)}
       </Button>
+
+      {statusLabel && (
+        <div role="status" className="rounded-lg bg-accent-bg px-3 py-2 text-sm text-text-strong">
+          {statusLabel}
+        </div>
+      )}
 
       {state === 'error' && error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
