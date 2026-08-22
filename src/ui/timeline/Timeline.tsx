@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
+import { canCutClip, findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -257,7 +257,7 @@ export function Timeline({
   const tracks = timeline.tracks.length > 0 ? timeline.tracks : [{ id: '__placeholder__', clips: [] }]
 
   const selectedClip = selectedClipId ? findClipById(timeline, selectedClipId) : null
-  const canCut = !!selectedClip && playheadMs > selectedClip.offsetMs && playheadMs < selectedClip.offsetMs + selectedClip.durationMs
+  const canCut = !!selectedClip && canCutClip(selectedClip, playheadMs)
 
   const containerWidthPx = scrollContainerRef.current?.clientWidth ?? 600
   const contentWidthPx = Math.max(
