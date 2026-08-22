@@ -129,22 +129,47 @@ export function usePlaybackEngine({
   // Mientras el <video> activo está resolviendo un seek grande (buscando el
   // keyframe, decodificando), el reloj de pared deja de acumular tiempo —
   // ver isSeekingRef arriba.
+  //
+  // 'seeked' por sí solo dispara apenas el navegador reposiciona el punto de
+  // lectura, pero no garantiza que haya frames futuros ya decodificados —
+  // arrancar el play ahí mismo puede frenar de nuevo un instante después
+  // (micro-freeze). Se espera además a readyState >= HAVE_FUTURE_DATA (nivel
+  // 3: el frame actual Y el siguiente ya están listos), el mismo colchón que
+  // un reproductor como YouTube exige antes de soltar el loading — con
+  // contenido local (Blob, sin red) esto se resuelve en milisegundos, pero
+  // sigue siendo la garantía correcta en vez de asumirla por el evento.
   useEffect(() => {
-    const video = activeVideoRef.current
-    if (!video) return
+    const videoElement = activeVideoRef.current
+    if (!videoElement) return
+    const video: HTMLVideoElement = videoElement
+
+    function hasEnoughBuffered(): boolean {
+      return video.readyState >= video.HAVE_FUTURE_DATA
+    }
+
+    function markReady() {
+      isSeekingRef.current = false
+      setIsSeeking(false)
+    }
+
     function handleSeeking() {
       isSeekingRef.current = true
       setIsSeeking(true)
     }
-    function handleSeeked() {
-      isSeekingRef.current = false
-      setIsSeeking(false)
+
+    function handleReadyStateCheck() {
+      if (hasEnoughBuffered()) markReady()
     }
+
     video.addEventListener('seeking', handleSeeking)
-    video.addEventListener('seeked', handleSeeked)
+    video.addEventListener('seeked', handleReadyStateCheck)
+    video.addEventListener('canplay', handleReadyStateCheck)
+    video.addEventListener('progress', handleReadyStateCheck)
     return () => {
       video.removeEventListener('seeking', handleSeeking)
-      video.removeEventListener('seeked', handleSeeked)
+      video.removeEventListener('seeked', handleReadyStateCheck)
+      video.removeEventListener('canplay', handleReadyStateCheck)
+      video.removeEventListener('progress', handleReadyStateCheck)
     }
   }, [activeVideoRef])
 
@@ -227,6 +252,12 @@ export function usePlaybackEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
 
+  // El clip activo cambió (ej. clic en un subtítulo) pero su buffer todavía
+  // no terminó de cargar la blob URL — el <video> no debe mostrar nada del
+  // clip anterior ni intentar reproducir sin fuente; se trata como loading,
+  // igual que un seek en curso, hasta que activeBuffer.clipId lo alcance.
+  const isBufferLoading = !!activeClip && activeBuffer.clipId !== activeClip.id
+
   return {
     videoRefA,
     videoRefB,
@@ -234,6 +265,6 @@ export function usePlaybackEngine({
     bufferB,
     activeIsA: lastActiveIsA,
     hasContent: mode === 'clip',
-    isSeeking,
+    isSeeking: isSeeking || isBufferLoading,
   }
 }
