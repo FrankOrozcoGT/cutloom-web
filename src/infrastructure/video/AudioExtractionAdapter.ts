@@ -1,7 +1,7 @@
 import { AudioSampleSink, ALL_FORMATS, BlobSource, Input } from 'mediabunny'
 import type { RenderSegment } from '@application/video/exportTypes'
 import { err, ok, type Result } from '@application/result'
-import type { AudioExtractError, AudioExtractorPort } from '@application/subtitles/ports'
+import type { AudioExtractError, AudioExtractorPort, AudioExtractProgressListener } from '@application/subtitles/ports'
 import { describeError } from '@infrastructure/errors'
 
 const TARGET_SAMPLE_RATE = 16000
@@ -18,7 +18,10 @@ interface PlacedBuffer {
  * clip activo) quedan en silencio para no correr los timestamps.
  */
 export class AudioExtractionAdapter implements AudioExtractorPort {
-  async extract(segments: RenderSegment[]): Promise<Result<Float32Array, AudioExtractError>> {
+  async extract(
+    segments: RenderSegment[],
+    onProgress?: AudioExtractProgressListener,
+  ): Promise<Result<Float32Array, AudioExtractError>> {
     if (typeof OfflineAudioContext === 'undefined') {
       return err('UNSUPPORTED_API')
     }
@@ -31,7 +34,10 @@ export class AudioExtractionAdapter implements AudioExtractorPort {
       let hasAudio = false
 
       for (const [index, segment] of segments.entries()) {
-        if (segment.kind === 'gap') continue
+        if (segment.kind === 'gap') {
+          onProgress?.(segment.outputStartMs + segment.outputDurationMs)
+          continue
+        }
 
         console.time(`AudioExtractionAdapter: decodeSegment ${index}`)
         const buffer = await this.decodeSegment(segment)
@@ -41,6 +47,7 @@ export class AudioExtractionAdapter implements AudioExtractorPort {
           hasAudio = true
           placedBuffers.push({ outputStartSeconds: segment.outputStartMs / 1000, buffer })
         }
+        onProgress?.(segment.outputStartMs + segment.outputDurationMs)
       }
 
       if (!hasAudio) {

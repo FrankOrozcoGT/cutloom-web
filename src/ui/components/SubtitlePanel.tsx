@@ -21,8 +21,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 }
 
 function generateButtonLabel(state: SubtitlesState, hasSubtitles: boolean): string {
-  if (state === 'extracting_audio') return 'Extrayendo audio…'
+  if (state === 'extracting_audio') return 'Separando audio…'
   if (state === 'transcribing') return 'Transcribiendo (Whisper)…'
+  if (state === 'finalizing') return 'Finalizando…'
   return hasSubtitles ? 'Regenerar subtítulos' : 'Generar subtítulos'
 }
 
@@ -57,7 +58,7 @@ export function SubtitlePanel({
   onToggleSegments,
 }: SubtitlePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const isBusy = state === 'extracting_audio' || state === 'transcribing'
+  const isBusy = state === 'extracting_audio' || state === 'transcribing' || state === 'finalizing'
 
   const handleGenerate = useCallback(() => {
     void generate()
