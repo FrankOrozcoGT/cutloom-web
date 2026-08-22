@@ -3,16 +3,24 @@ import type { VideoAsset } from '@domain/video'
 
 export interface PlaybackBuffer {
   clipId: string | null
+  assetId: string | null
   url: string
 }
 
-const EMPTY_BUFFER: PlaybackBuffer = { clipId: null, url: '' }
+const EMPTY_BUFFER: PlaybackBuffer = { clipId: null, assetId: null, url: '' }
 
 interface ClipRef {
   id: string
   assetId: string
 }
 
+// La blob URL depende únicamente de qué archivo es (assetId), no de qué clip
+// lo referencia — cortar un clip (splitClip) reemplaza su id por dos nuevos
+// aunque el archivo de video sea el mismo. Comparar por clipId forzaba
+// revocar y recrear la blob URL en cada corte, interrumpiendo el <video> que
+// la tenía en uso a mitad de reproducción (ERR_FILE_NOT_FOUND, cortes de
+// play/pause). clipId igual se guarda porque usePlaybackEngine lo necesita
+// para saber qué slot sirve a qué clip.
 function loadBuffer(prev: PlaybackBuffer, clip: ClipRef | null, assets: Record<string, VideoAsset>): PlaybackBuffer {
   if (!clip) return prev
   const asset = assets[clip.assetId]
@@ -20,9 +28,11 @@ function loadBuffer(prev: PlaybackBuffer, clip: ClipRef | null, assets: Record<s
     if (prev.url) URL.revokeObjectURL(prev.url)
     return EMPTY_BUFFER
   }
-  if (prev.clipId === clip.id) return prev
+  if (prev.assetId === clip.assetId) {
+    return prev.clipId === clip.id ? prev : { ...prev, clipId: clip.id }
+  }
   if (prev.url) URL.revokeObjectURL(prev.url)
-  return { clipId: clip.id, url: URL.createObjectURL(asset.blob) }
+  return { clipId: clip.id, assetId: clip.assetId, url: URL.createObjectURL(asset.blob) }
 }
 
 /**
