@@ -107,6 +107,11 @@ export function toSrt(segments: SubtitleSegment[]): string {
     .trim()
 }
 
+/** Solo el texto hablado, un segmento por línea — sin timing, para copiar/exportar como guion. */
+export function toPlainText(segments: SubtitleSegment[]): string {
+  return segments.map((segment) => segment.text).join('\n')
+}
+
 export function toVtt(segments: SubtitleSegment[]): string {
   const body = segments
     .map((segment) => {

@@ -1,5 +1,5 @@
-import { useCallback, useRef } from 'react'
-import type { LanguageCode, SubtitleParseError, Subtitles } from '@domain/subtitles'
+import { useCallback, useRef, useState } from 'react'
+import { toPlainText, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
@@ -67,10 +67,18 @@ export function SubtitlePanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isBusy = state === 'extracting_audio' || state === 'transcribing' || state === 'finalizing'
   const statusLabel = statusBannerLabel(state)
+  const [copied, setCopied] = useState(false)
 
   const handleGenerate = useCallback(() => {
     void generate()
   }, [generate])
+
+  const handleCopyScript = useCallback(async () => {
+    if (!subtitles) return
+    await navigator.clipboard.writeText(toPlainText(subtitles.segments))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [subtitles])
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click()
@@ -133,9 +141,14 @@ export function SubtitlePanel({
       <input ref={fileInputRef} type="file" accept=".srt,.vtt" className="hidden" onChange={(event) => void handleFileSelected(event)} />
 
       {subtitles && subtitles.segments.length > 0 && (
-        <Button variant="secondary" onClick={onToggleSegments} className="w-auto">
-          {toggleSegmentsLabel(segmentsVisible, subtitles.segments.length)}
-        </Button>
+        <>
+          <Button variant="secondary" onClick={onToggleSegments} className="w-auto">
+            {toggleSegmentsLabel(segmentsVisible, subtitles.segments.length)}
+          </Button>
+          <Button variant="secondary" onClick={() => void handleCopyScript()} className="w-auto">
+            {copied ? 'Copiado ✓' : 'Copiar guion'}
+          </Button>
+        </>
       )}
     </div>
   )
