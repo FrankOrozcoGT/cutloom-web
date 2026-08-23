@@ -5,7 +5,12 @@ import { AuthLayout } from '@ui/components/AuthLayout'
 import { Button } from '@ui/components/Button'
 
 export function GoogleCallbackPage() {
-  const { restoreSession } = useAuth()
+  // No dispara su propio restoreSession(): AuthProvider ya lo hace una
+  // única vez al montar la app. Si esta página llamara restoreSession()
+  // también, competiría con ese mismo mount por rotar el refresh token
+  // (single-use en el backend) y una de las dos llamadas recibiría un 401
+  // espurio. Solo espera a que isLoading termine.
+  const { isLoading, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -17,14 +22,15 @@ export function GoogleCallbackPage() {
       return
     }
 
-    restoreSession().then((result) => {
-      if (result) {
-        setError('No se pudo completar el inicio de sesión con Google.')
-        return
-      }
-      navigate('/editor', { replace: true })
-    })
-  }, [searchParams, restoreSession, navigate])
+    if (isLoading) return
+
+    if (!isAuthenticated) {
+      setError('No se pudo completar el inicio de sesión con Google.')
+      return
+    }
+
+    navigate('/projects', { replace: true })
+  }, [searchParams, isLoading, isAuthenticated, navigate])
 
   if (error) {
     return (
