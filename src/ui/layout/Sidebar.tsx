@@ -31,6 +31,13 @@ const EditorIcon = (
   </svg>
 )
 
+const BillingIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5 shrink-0">
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <path d="M2 10h20" />
+  </svg>
+)
+
 const BackIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5 shrink-0">
     <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -56,11 +63,12 @@ export function Sidebar() {
 
   const items: NavItem[] = projectId
     ? [
-        { to: '/', label: 'Mis proyectos', end: true, icon: BackIcon },
+        { to: '/projects', label: 'Mis proyectos', end: true, icon: BackIcon },
         { to: `/projects/${projectId}`, label: 'Editor', end: true, icon: EditorIcon },
       ]
     : [
-        { to: '/', label: 'Mis proyectos', end: true, icon: ProjectsIcon },
+        { to: '/projects', label: 'Mis proyectos', end: true, icon: ProjectsIcon },
+        { to: '/billing', label: 'Suscripción', icon: BillingIcon },
         { to: '/profile', label: 'Perfil', icon: ProfileIcon },
       ]
 

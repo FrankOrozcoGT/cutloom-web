@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Project } from '@domain/project'
 import { useAuth } from '@ui/auth/useAuth'
 import { LogoutButton } from '@ui/components/LogoutButton'
+import { CoffeeDonation } from '@ui/billing/CoffeeDonation'
 import { projectUseCase } from '@ui/video/composition'
 import { useSidebar } from './useSidebar'
 
@@ -12,6 +13,7 @@ export function TopBar() {
   const navigate = useNavigate()
   const { isOpen, toggle } = useSidebar()
   const [projects, setProjects] = useState<Project[]>([])
+  const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState(false)
 
   useEffect(() => {
     void projectUseCase.getAll().then(setProjects)
@@ -41,7 +43,7 @@ export function TopBar() {
             <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
           </svg>
         </button>
-        <Link to="/" className="text-sm font-semibold text-text-strong">
+        <Link to={isAuthenticated ? '/projects' : '/'} className="text-sm font-semibold text-text-strong">
           CutLoom
         </Link>
         {projectId && projects.length > 0 && (
@@ -59,19 +61,30 @@ export function TopBar() {
         )}
       </div>
 
-      {isAuthenticated ? (
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-text-strong">{user?.name ?? user?.email}</span>
-          <LogoutButton />
-        </div>
-      ) : (
-        <Link
-          to="/login"
-          className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-strong transition-colors hover:bg-surface-hover"
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setIsCoffeeModalOpen(true)}
+          className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-text-strong"
         >
-          Iniciar sesión
-        </Link>
-      )}
+          ☕ Invitar un café
+        </button>
+        {isAuthenticated ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-text-strong">{user?.name ?? user?.email}</span>
+            <LogoutButton />
+          </div>
+        ) : (
+          <Link
+            to="/login"
+            className="rounded-lg border border-border px-3 py-1.5 text-sm text-text-strong transition-colors hover:bg-surface-hover"
+          >
+            Iniciar sesión
+          </Link>
+        )}
+      </div>
+
+      {isCoffeeModalOpen && <CoffeeDonation onClose={() => setIsCoffeeModalOpen(false)} />}
     </header>
   )
 }
