@@ -28,7 +28,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const from = (location.state as { from?: string } | null)?.from ?? '/editor'
+  const from = (location.state as { from?: string } | null)?.from ?? '/projects'
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()

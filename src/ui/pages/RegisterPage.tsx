@@ -56,7 +56,7 @@ export function RegisterPage() {
       setError(errorMessage(result.code))
       return
     }
-    navigate('/editor', { replace: true })
+    navigate('/projects', { replace: true })
   }
 
   return (
