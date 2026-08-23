@@ -20,6 +20,17 @@ export class HttpClient {
   }
 
   async request(path: string, init: RequestInit = {}, isRetry = false): Promise<Response> {
+    // Si ya hay un refresh en vuelo (disparado por otra request o por el
+    // restore inicial de sesión), esperarlo ANTES de salir — así esta
+    // request usa el token nuevo en vez de salir con uno viejo/vacío,
+    // recibir su propio 401, y disparar un segundo refresh en carrera con
+    // el primero. El backend rota el refresh token en cada uso: dos POST
+    // /api/auth/refresh compitiendo pueden dejar al segundo con un 401
+    // legítimo aunque la sesión siga siendo válida.
+    if (this.refreshPromise && !isRetry && path !== '/api/auth/refresh') {
+      await this.refreshPromise
+    }
+
     const headers = new Headers(init.headers)
     if (this.accessToken && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${this.accessToken}`)
@@ -37,20 +48,31 @@ export class HttpClient {
 
     const refreshed = await this.refreshAccessToken()
     if (!refreshed) {
-      this.accessToken = null
       this.onSessionExpired?.()
       return response
     }
 
-    this.accessToken = refreshed.accessToken
     return this.request(path, init, true)
   }
 
-  private async refreshAccessToken(): Promise<RefreshResult> {
+  // Único punto de entrada para refrescar el access token. Tanto el 401
+  // automático de request() como cualquier código externo (ej. restaurar
+  // sesión al montar la app) deben pasar por acá — el backend rota el
+  // refresh token en cada uso, así que dos POST /api/auth/refresh en
+  // paralelo con la misma cookie hacen que el segundo reciba 401 legítimo
+  // aunque la sesión siga siendo válida. Setea this.accessToken acá mismo
+  // (no en el caller) para que cualquier request que esperó refreshPromise
+  // ya tenga el token nuevo disponible apenas la promesa resuelve.
+  async refreshAccessToken(): Promise<RefreshResult> {
     if (!this.refreshPromise) {
-      this.refreshPromise = this.doRefresh().finally(() => {
-        this.refreshPromise = null
-      })
+      this.refreshPromise = this.doRefresh()
+        .then((result) => {
+          this.accessToken = result?.accessToken ?? null
+          return result
+        })
+        .finally(() => {
+          this.refreshPromise = null
+        })
     }
     return this.refreshPromise
   }
