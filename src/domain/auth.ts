@@ -19,6 +19,19 @@ export interface AuthCredentials {
   password: string
 }
 
+export interface UserEntitlement {
+  feature: string
+  active: boolean
+  usageLimit: number | null
+  usageCount: number
+}
+
+export interface CurrentUser {
+  user: User
+  organizationId: string | null
+  entitlements: UserEntitlement[]
+}
+
 export type AuthErrorCode =
   | 'EMAIL_EXISTS'
   | 'EMAIL_EXISTS_GOOGLE'

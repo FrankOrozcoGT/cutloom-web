@@ -1,4 +1,4 @@
-import type { AuthErrorCode, AuthSession, User } from '@domain/auth'
+import type { AuthErrorCode, AuthSession, CurrentUser, User, UserEntitlement } from '@domain/auth'
 import { AuthError } from '@application/auth/errors'
 
 interface UserDto {
@@ -13,6 +13,19 @@ interface AuthSessionDto {
   user: UserDto
   accessToken: string
   isNewUser: boolean
+}
+
+interface UserEntitlementDto {
+  feature: string
+  active: boolean
+  usageLimit: number | null
+  usageCount: number
+}
+
+export interface CurrentUserDto {
+  user: UserDto
+  organizationId: string | null
+  entitlements: UserEntitlementDto[]
 }
 
 export function mapUser(dto: UserDto): User {
@@ -30,6 +43,23 @@ export function mapAuthSession(dto: AuthSessionDto): AuthSession {
     user: mapUser(dto.user),
     accessToken: dto.accessToken,
     isNewUser: dto.isNewUser,
+  }
+}
+
+export function mapUserEntitlement(dto: UserEntitlementDto): UserEntitlement {
+  return {
+    feature: dto.feature,
+    active: dto.active,
+    usageLimit: dto.usageLimit,
+    usageCount: dto.usageCount,
+  }
+}
+
+export function mapCurrentUser(dto: CurrentUserDto): CurrentUser {
+  return {
+    user: mapUser(dto.user),
+    organizationId: dto.organizationId,
+    entitlements: dto.entitlements.map(mapUserEntitlement),
   }
 }
 

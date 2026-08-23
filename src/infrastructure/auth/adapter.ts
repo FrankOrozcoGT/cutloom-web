@@ -1,9 +1,9 @@
-import type { AuthCredentials, AuthSession, User } from '@domain/auth'
+import type { AuthCredentials, AuthSession, CurrentUser } from '@domain/auth'
 import type { AuthApi } from '@application/auth/ports'
 import { AuthError } from '@application/auth/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
-import { mapAuthError, mapAuthSession, mapUser } from './mappers'
+import { mapAuthError, mapAuthSession, mapCurrentUser, type CurrentUserDto } from './mappers'
 
 export class AuthApiAdapter implements AuthApi {
   private readonly http: HttpClient
@@ -31,17 +31,7 @@ export class AuthApiAdapter implements AuthApi {
     return ok(undefined)
   }
 
-  async refreshToken(): Promise<Result<{ accessToken: string }, AuthError>> {
-    const response = await this.http.post('/api/auth/refresh')
-    if (!response.ok) {
-      const error = await this.parseError(response)
-      return err(error)
-    }
-    const body = (await response.json()) as { accessToken: string }
-    return ok(body)
-  }
-
-  async getCurrentUser(accessToken: string): Promise<Result<User, AuthError>> {
+  async getCurrentUser(accessToken: string): Promise<Result<CurrentUser, AuthError>> {
     const response = await this.http.get('/api/auth/me', {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
@@ -49,8 +39,8 @@ export class AuthApiAdapter implements AuthApi {
       const error = await this.parseError(response)
       return err(error)
     }
-    const body = (await response.json()) as { user: Parameters<typeof mapUser>[0] }
-    return ok(mapUser(body.user))
+    const body = (await response.json()) as CurrentUserDto
+    return ok(mapCurrentUser(body))
   }
 
   private async handleSessionResponse(response: Response): Promise<Result<AuthSession, AuthError>> {
