@@ -34,6 +34,7 @@ export function BillingPage() {
   const isPastDue = subscription?.status === 'past_due'
   const changeDisabled = isPastDue || (subscription?.cancelAtPeriodEnd ?? false)
   const hasActiveSubscription = !!subscription && subscription.status !== 'inactive'
+  const currentPlanName = plans.find((plan) => plan.id === subscription?.planId)?.name ?? 'Gratis'
 
   const handleSubscribe = useCallback(async (planId: string) => {
     setBusyPlanId(planId)
@@ -109,7 +110,7 @@ export function BillingPage() {
           <>
             <div className="mt-3 flex items-center gap-3">
               <p className="text-text-muted">
-                Plan actual: <span className="text-text-strong">{subscription?.planId ?? 'Gratis'}</span>
+                Plan actual: <span className="text-text-strong">{currentPlanName}</span>
               </p>
               {isPastDue && (
                 <span className="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">

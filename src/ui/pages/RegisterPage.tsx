@@ -38,6 +38,7 @@ export function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const returnTo = resolveReturnTo(searchParams.get('returnTo'))
+  console.log('[DEBUG returnTo] RegisterPage mount — raw param:', searchParams.get('returnTo'), '→ resuelto:', returnTo)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -59,6 +60,7 @@ export function RegisterPage() {
       setError(errorMessage(result.code))
       return
     }
+    console.log('[DEBUG returnTo] RegisterPage registro OK, navegando a:', returnTo)
     navigate(returnTo, { replace: true })
   }
 

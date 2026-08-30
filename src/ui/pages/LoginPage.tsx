@@ -28,6 +28,7 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const returnTo = resolveReturnTo(searchParams.get('returnTo'))
+  console.log('[DEBUG returnTo] LoginPage mount — raw param:', searchParams.get('returnTo'), '→ resuelto:', returnTo)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -39,6 +40,7 @@ export function LoginPage() {
       setError(errorMessage(result.code))
       return
     }
+    console.log('[DEBUG returnTo] LoginPage login OK, navegando a:', returnTo)
     navigate(returnTo, { replace: true })
   }
 
