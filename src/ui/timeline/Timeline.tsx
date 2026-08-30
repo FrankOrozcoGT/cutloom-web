@@ -436,6 +436,17 @@ export function Timeline({
               )}
             </div>
           )}
+          {removedSilences.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSilenceChipsVisible((visible) => !visible)}
+              title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+              aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong sm:h-8 sm:w-8"
+            >
+              {silenceChipsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleFitToScreen}
