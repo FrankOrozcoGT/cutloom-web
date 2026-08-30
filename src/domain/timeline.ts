@@ -450,31 +450,26 @@ export interface SilenceCut {
 
 const DEFAULT_SILENCE_THRESHOLD_DB = -40
 const DEFAULT_MIN_SILENCE_MS = 700
+/** Margen de silencio que se deja pegado a la voz en cada extremo, en vez de cortar justo al borde — evita micro-clips cuando dos voces están muy cerca. */
+const DEFAULT_PADDING_MS = 1000
 const RMS_WINDOW_MS = 20
 
 function dbToAmplitude(db: number): number {
   return 10 ** (db / 20)
 }
 
-/**
- * Detecta tramos de silencio real en el audio (RMS por ventana bajo un
- * umbral en dB, sostenido al menos minSilenceMs) — el mismo enfoque que usan
- * los editores reales (Descript, AutoCut, Premiere): analizar el volumen del
- * audio directamente, no depender de que exista una transcripción. audio es
- * mono a sampleRate (coherente con TARGET_SAMPLE_RATE de domain/shorts.ts,
- * que es lo que produce la extracción de audio del timeline).
- */
-export function detectSilenceCuts(
-  audio: Float32Array,
-  sampleRate: number,
-  options: { thresholdDb?: number; minSilenceMs?: number } = {},
-): SilenceCut[] {
-  const thresholdAmplitude = dbToAmplitude(options.thresholdDb ?? DEFAULT_SILENCE_THRESHOLD_DB)
-  const minSilenceMs = options.minSilenceMs ?? DEFAULT_MIN_SILENCE_MS
+function findRawSilences(audio: Float32Array, sampleRate: number, thresholdAmplitude: number, minSilenceMs: number): SilenceCut[] {
   const windowSize = Math.max(1, Math.round((RMS_WINDOW_MS / 1000) * sampleRate))
-
   const cuts: SilenceCut[] = []
   let silenceStartSample: number | null = null
+
+  const pushIfLongEnough = (startSample: number, endSample: number) => {
+    const startMs = (startSample / sampleRate) * 1000
+    const endMs = (endSample / sampleRate) * 1000
+    if (endMs - startMs >= minSilenceMs) {
+      cuts.push({ startMs, endMs })
+    }
+  }
 
   for (let start = 0; start < audio.length; start += windowSize) {
     const end = Math.min(start + windowSize, audio.length)
@@ -488,24 +483,59 @@ export function detectSilenceCuts(
     if (isSilent && silenceStartSample === null) {
       silenceStartSample = start
     } else if (!isSilent && silenceStartSample !== null) {
-      const startMs = (silenceStartSample / sampleRate) * 1000
-      const endMs = (start / sampleRate) * 1000
-      if (endMs - startMs >= minSilenceMs) {
-        cuts.push({ startMs, endMs })
-      }
+      pushIfLongEnough(silenceStartSample, start)
       silenceStartSample = null
     }
   }
 
   if (silenceStartSample !== null) {
-    const startMs = (silenceStartSample / sampleRate) * 1000
-    const endMs = (audio.length / sampleRate) * 1000
-    if (endMs - startMs >= minSilenceMs) {
-      cuts.push({ startMs, endMs })
-    }
+    pushIfLongEnough(silenceStartSample, audio.length)
   }
 
   return cuts
+}
+
+/**
+ * Detecta tramos de silencio real en el audio (RMS por ventana bajo un
+ * umbral en dB, sostenido al menos minSilenceMs) — el mismo enfoque que usan
+ * los editores reales (Descript, AutoCut, Premiere): analizar el volumen del
+ * audio directamente, no depender de que exista una transcripción. audio es
+ * mono a sampleRate (coherente con TARGET_SAMPLE_RATE de domain/shorts.ts,
+ * que es lo que produce la extracción de audio del timeline).
+ *
+ * Cada silencio detectado se acorta por paddingMs de cada lado antes de
+ * devolverlo — el corte deja ese margen de silencio pegado a la voz en vez de
+ * cortar justo al borde, para no dejar clips de voz microscópicos entre dos
+ * silencios muy próximos. Si el padding de dos silencios consecutivos se
+ * solaparía, se fusionan en un solo corte (sigue siendo solo el padding
+ * pedido, no el doble).
+ */
+export function detectSilenceCuts(
+  audio: Float32Array,
+  sampleRate: number,
+  options: { thresholdDb?: number; minSilenceMs?: number; paddingMs?: number } = {},
+): SilenceCut[] {
+  const thresholdAmplitude = dbToAmplitude(options.thresholdDb ?? DEFAULT_SILENCE_THRESHOLD_DB)
+  const minSilenceMs = options.minSilenceMs ?? DEFAULT_MIN_SILENCE_MS
+  const paddingMs = options.paddingMs ?? DEFAULT_PADDING_MS
+
+  const rawSilences = findRawSilences(audio, sampleRate, thresholdAmplitude, minSilenceMs)
+
+  const padded = rawSilences
+    .map((cut) => ({ startMs: cut.startMs + paddingMs, endMs: cut.endMs - paddingMs }))
+    .filter((cut) => cut.endMs > cut.startMs)
+
+  const merged: SilenceCut[] = []
+  for (const cut of padded) {
+    const last = merged[merged.length - 1]
+    if (last && cut.startMs <= last.endMs) {
+      last.endMs = Math.max(last.endMs, cut.endMs)
+    } else {
+      merged.push({ ...cut })
+    }
+  }
+
+  return merged
 }
 
 /** Quita el clip seleccionado del timeline, dejando un hueco en su lugar (no recorre el resto hacia atrás). */

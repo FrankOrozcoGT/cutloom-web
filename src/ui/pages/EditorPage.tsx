@@ -33,6 +33,8 @@ export function EditorPage() {
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
   const [removedSilences, setRemovedSilences] = useState<RemovedSegment[]>([])
   const [isDetectingSilence, setIsDetectingSilence] = useState(false)
+  const [silenceThresholdDb, setSilenceThresholdDb] = useState(-40)
+  const [silencePaddingMs, setSilencePaddingMs] = useState(1000)
 
   const { hasActiveFeature } = useAuth()
   const hasShortsAccess = hasActiveFeature('shorts_ai')
@@ -186,12 +188,15 @@ export function EditorPage() {
     setIsDetectingSilence(true)
     const audioResult = await extractSubtitlesAudioUseCase.execute(projectId)
     if (audioResult.ok) {
-      const cuts = detectSilenceCuts(audioResult.value, TARGET_SAMPLE_RATE).sort((a, b) => b.startMs - a.startMs)
+      const cuts = detectSilenceCuts(audioResult.value, TARGET_SAMPLE_RATE, {
+        thresholdDb: silenceThresholdDb,
+        paddingMs: silencePaddingMs,
+      }).sort((a, b) => b.startMs - a.startMs)
       const removed = await timelineState.removeSegments(cuts)
       setRemovedSilences((previous) => [...previous, ...[...removed].reverse()])
     }
     setIsDetectingSilence(false)
-  }, [projectId, timelineState])
+  }, [projectId, timelineState, silenceThresholdDb, silencePaddingMs])
 
   const handleRestoreSilence = useCallback(
     async (index: number) => {
@@ -298,6 +303,10 @@ export function EditorPage() {
             autoFitSignal={fitTrigger}
             isDetectingSilence={isDetectingSilence}
             onDetectSilence={() => void handleDetectSilence()}
+            silenceThresholdDb={silenceThresholdDb}
+            onSilenceThresholdDbChange={setSilenceThresholdDb}
+            silencePaddingMs={silencePaddingMs}
+            onSilencePaddingMsChange={setSilencePaddingMs}
             removedSilences={removedSilences}
             onRestoreSilence={(index) => void handleRestoreSilence(index)}
           />

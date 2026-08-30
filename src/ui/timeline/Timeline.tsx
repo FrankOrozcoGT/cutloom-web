@@ -38,6 +38,11 @@ interface TimelineProps {
   /** Cortes por silencio: gratis, analiza el volumen del audio del timeline y elimina cada hueco, cerrando el espacio (mismo mecanismo de datos que un corte real). No depende de subtítulos. */
   isDetectingSilence?: boolean
   onDetectSilence?: () => void
+  /** Umbral de silencio en dB (más negativo = más estricto, exige más silencio real) y padding en ms que se deja pegado a la voz en cada corte — configurables por el usuario, con default razonable. */
+  silenceThresholdDb?: number
+  onSilenceThresholdDbChange?: (value: number) => void
+  silencePaddingMs?: number
+  onSilencePaddingMsChange?: (value: number) => void
   /** Silencios ya quitados, cada uno reversible por separado con su propia X (no por el historial genérico de undo). */
   removedSilences?: RemovedSegment[]
   onRestoreSilence?: (index: number) => void
@@ -55,6 +60,10 @@ export function Timeline({
   autoFitSignal,
   isDetectingSilence = false,
   onDetectSilence,
+  silenceThresholdDb,
+  onSilenceThresholdDbChange,
+  silencePaddingMs,
+  onSilencePaddingMsChange,
   removedSilences = [],
   onRestoreSilence,
 }: TimelineProps) {
@@ -330,16 +339,49 @@ export function Timeline({
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
           {onDetectSilence && (
-            <button
-              type="button"
-              onClick={onDetectSilence}
-              disabled={isDetectingSilence}
-              aria-label="Detectar cortes por silencio"
-              title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
-            >
-              <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={onDetectSilence}
+                disabled={isDetectingSilence}
+                aria-label="Detectar cortes por silencio"
+                title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
+              >
+                <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
+              </button>
+              {silenceThresholdDb !== undefined && silencePaddingMs !== undefined && (
+                <details className="relative">
+                  <summary className="flex h-10 w-6 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8">
+                    ⋯
+                  </summary>
+                  <div className="absolute right-0 z-30 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-lg">
+                    <label className="flex flex-col gap-1 text-xs text-text-muted">
+                      Umbral de silencio ({silenceThresholdDb} dB)
+                      <input
+                        type="range"
+                        min={-60}
+                        max={-20}
+                        step={1}
+                        value={silenceThresholdDb}
+                        onChange={(event) => onSilenceThresholdDbChange?.(Number(event.target.value))}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1 text-xs text-text-muted">
+                      Margen junto a la voz ({(silencePaddingMs / 1000).toFixed(1)}s)
+                      <input
+                        type="range"
+                        min={0}
+                        max={2000}
+                        step={100}
+                        value={silencePaddingMs}
+                        onChange={(event) => onSilencePaddingMsChange?.(Number(event.target.value))}
+                      />
+                    </label>
+                  </div>
+                </details>
+              )}
+            </div>
           )}
           <button
             type="button"
