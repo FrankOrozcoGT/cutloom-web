@@ -53,6 +53,19 @@ export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge
   const pxToMs = useCallback((px: number) => Math.max(0, Math.round((px / pxPerSec) * 1000)), [pxPerSec])
   const msToPx = useCallback((ms: number) => (ms / 1000) * pxPerSec, [pxPerSec])
 
+  // Pausa la reproducción ante cualquier cambio de timeline (edición nueva,
+  // undo, redo, o cargar/cambiar de proyecto) — el reloj de pared de
+  // usePlaybackEngine no sabe recalcular en caliente qué corresponde ahora si
+  // la estructura cambió bajo el playhead (un corte puede acortar el
+  // timeline, mover offsets, hacer que el punto donde ibas ya no exista o
+  // corresponda a otro clip). En vez de sincronizar eso de forma segura, se
+  // pausa y el playhead queda como marcador de "dónde ibas" — el usuario
+  // retoma play manualmente si quiere. Pausar en el primer timeline cargado
+  // es un no-op (isPlaying ya arranca en false).
+  useEffect(() => {
+    setIsPlaying(false)
+  }, [timeline])
+
   // Registra timeline+subtítulos previos en el historial antes de aplicar el
   // nuevo timeline, para que undo/redo restauren ambos coherentes entre sí.
   // Cualquier cambio estructural del timeline invalida los subtítulos vigentes
