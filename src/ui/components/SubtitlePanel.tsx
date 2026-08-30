@@ -1,9 +1,15 @@
 import { useCallback, useRef } from 'react'
-import type { LanguageCode, SubtitleParseError, Subtitles } from '@domain/subtitles'
+import { toSrt, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
 import { Button } from '@ui/components/Button'
+
+function toFileName(projectName: string | undefined, projectId: string): string {
+  const base = projectName?.trim() || projectId
+  const sanitized = base.replace(/[/\\?%*:|"<>]/g, '-').trim()
+  return `${sanitized || projectId}.srt`
+}
 
 const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   es: 'Español',
@@ -42,6 +48,7 @@ interface SubtitlePanelProps {
   importFile: (content: string, format: 'srt' | 'vtt') => Promise<void>
   segmentsVisible: boolean
   onToggleSegments: () => void
+  projectName?: string
 }
 
 export function SubtitlePanel({
@@ -55,6 +62,7 @@ export function SubtitlePanel({
   importFile,
   segmentsVisible,
   onToggleSegments,
+  projectName,
 }: SubtitlePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isBusy = state === 'extracting_audio' || state === 'transcribing'
@@ -78,6 +86,19 @@ export function SubtitlePanel({
     },
     [importFile],
   )
+
+  const handleExport = useCallback(() => {
+    if (!subtitles || subtitles.segments.length === 0) return
+    const blob = new Blob([toSrt(subtitles.segments)], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = toFileName(projectName, subtitles.projectId)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [subtitles, projectName])
 
   if (!hasTimeline) {
     return null
@@ -116,6 +137,12 @@ export function SubtitlePanel({
       </Button>
 
       <input ref={fileInputRef} type="file" accept=".srt,.vtt" className="hidden" onChange={(event) => void handleFileSelected(event)} />
+
+      {subtitles && subtitles.segments.length > 0 && (
+        <Button variant="secondary" onClick={handleExport} className="w-auto">
+          Exportar SRT
+        </Button>
+      )}
 
       {subtitles && subtitles.segments.length > 0 && (
         <Button variant="secondary" onClick={onToggleSegments} className="w-auto">

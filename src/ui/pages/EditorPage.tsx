@@ -370,6 +370,7 @@ export function EditorPage() {
               importFile={subtitlesState.importFile}
               segmentsVisible={segmentsVisible}
               onToggleSegments={handleToggleSegments}
+              projectName={projectName}
             />
 
             <ImproveSubtitlesTool
