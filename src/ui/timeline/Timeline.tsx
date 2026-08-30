@@ -133,6 +133,7 @@ export function Timeline({
   const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false)
   const [silenceChipsVisible, setSilenceChipsVisible] = useState(true)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const silenceCarouselRef = useRef<HTMLDivElement>(null)
   const {
     exporting,
     progress: exportProgress,
@@ -271,6 +272,23 @@ export function Timeline({
       container.scrollLeft = Math.max(0, playheadPx - container.clientWidth / 2)
     }
   }, [playheadMs, pxPerSec])
+
+  // Recentra el carrusel de silencios en el chip más cercano al playhead
+  // cada vez que este avanza (reproducción, click en el timeline, click en
+  // otro chip) — el usuario también puede scrollearlo a mano en cualquier
+  // momento, este efecto solo corre cuando playheadMs cambia, no en cada
+  // render ni por el scroll manual en sí.
+  useEffect(() => {
+    const carousel = silenceCarouselRef.current
+    if (!carousel || removedSilences.length === 0) return
+
+    const closest = removedSilences.reduce((closest, chip) =>
+      Math.abs(chip.displayOffsetMs - playheadMs) < Math.abs(closest.displayOffsetMs - playheadMs) ? chip : closest,
+    )
+    const chipEl = carousel.querySelector<HTMLElement>(`[data-silence-offset-ms="${closest.displayOffsetMs}"]`)
+    chipEl?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playheadMs])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -514,10 +532,16 @@ export function Timeline({
       )}
 
       {removedSilences.length > 0 && silenceChipsVisible && (
-        <div className="flex flex-wrap gap-2">
+        // Carrusel de una sola línea (no crece a varias filas por más chips
+        // que haya): scrollea manualmente con la rueda/arrastre, y además se
+        // recentra solo en el chip más cercano al playhead cuando este avanza
+        // por reproducción o click en el timeline — así siempre queda visible
+        // el corte relevante sin que el usuario tenga que ir a buscarlo.
+        <div ref={silenceCarouselRef} className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
           {removedSilences.map((chip, index) => (
             <div
               key={chip.segment.clip.id}
+              data-silence-offset-ms={chip.displayOffsetMs}
               style={chipProximityStyle(chip.displayOffsetMs, playheadMs)}
               className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors"
             >
