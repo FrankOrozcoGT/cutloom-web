@@ -347,7 +347,8 @@ export function Timeline({
               className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 3 5 12l4 9M15 3l4 9-4 9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h2l2-7 3 14 3-11 2 4h2" />
+                <path strokeLinecap="round" d="M17 12h4" />
               </svg>
             </button>
           )}
