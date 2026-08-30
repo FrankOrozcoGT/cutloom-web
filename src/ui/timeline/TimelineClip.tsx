@@ -34,7 +34,7 @@ export function TimelineClip({
   const thumbnailUrl = useObjectUrl(thumbnail)
 
   const left = (clip.offsetMs / 1000) * pxPerSec
-  const width = Math.max(24, (clip.durationMs / 1000) * pxPerSec)
+  const width = Math.max(1, (clip.durationMs / 1000) * pxPerSec)
 
   function handleDragStart(event: DragEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect()
