@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import type { ImproveSubtitlesState } from '@ui/hooks/useShorts'
+import { BlockingLoader } from '@ui/components/BlockingLoader'
 import { Button } from '@ui/components/Button'
 import { PremiumNotice } from '@ui/billing/PremiumNotice'
 import { SHORTS_ERROR_MESSAGES } from '@ui/shorts/errorMessages'
@@ -42,6 +43,8 @@ export function ImproveSubtitlesTool({
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-3">
+      {isImproving && <BlockingLoader message="Mejorando subtítulos con IA…" />}
+
       <h4 className="flex items-center gap-2 text-sm font-medium text-text-strong">
         Mejorar subtítulos
         <span className="rounded-full bg-accent-bg px-2 py-0.5 text-xs font-normal text-accent">Premium</span>
