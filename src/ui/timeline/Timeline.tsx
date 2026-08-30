@@ -501,49 +501,32 @@ export function Timeline({
         </div>
       )}
 
-      {removedSilences.length > 0 && (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSilenceChipsVisible((visible) => !visible)}
-            title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
-            aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong"
-          >
-            {silenceChipsVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-          </button>
-          {silenceChipsVisible ? (
-            <div className="flex flex-nowrap gap-2 overflow-x-auto">
-              {removedSilences.map((chip, index) => (
-                <div
-                  key={chip.segment.clip.id}
-                  style={chipProximityStyle(chip.displayOffsetMs, playheadMs)}
-                  className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setPlayheadMs(chip.displayOffsetMs)}
-                    title="Ir a este punto del timeline"
-                    className="hover:text-text-strong"
-                  >
-                    {formatTimelineMs(chip.displayOffsetMs)} — silencio quitado ({formatTimelineMs(chip.segment.clip.durationMs)})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onRestoreSilence?.(index)}
-                    title="Revertir este corte"
-                    className="text-danger hover:underline"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+      {removedSilences.length > 0 && silenceChipsVisible && (
+        <div className="flex flex-nowrap gap-2 overflow-x-auto">
+          {removedSilences.map((chip, index) => (
+            <div
+              key={chip.segment.clip.id}
+              style={chipProximityStyle(chip.displayOffsetMs, playheadMs)}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors"
+            >
+              <button
+                type="button"
+                onClick={() => setPlayheadMs(chip.displayOffsetMs)}
+                title={`Ir al silencio quitado en ${formatTimelineMs(chip.displayOffsetMs)} (${formatTimelineMs(chip.segment.clip.durationMs)})`}
+                className="hover:text-text-strong"
+              >
+                {formatTimelineMs(chip.displayOffsetMs)} · {formatTimelineMs(chip.segment.clip.durationMs)}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRestoreSilence?.(index)}
+                title="Revertir este corte"
+                className="text-danger hover:underline"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
-          ) : (
-            <span className="text-xs text-text-muted">
-              {removedSilences.length} {removedSilences.length === 1 ? 'silencio quitado' : 'silencios quitados'}
-            </span>
-          )}
+          ))}
         </div>
       )}
 
