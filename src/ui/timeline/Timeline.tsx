@@ -5,6 +5,7 @@ import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
 import { formatTimelineMs } from '@ui/format'
+import { ConfirmDialog } from '@ui/components/ConfirmDialog'
 import { TimeRuler } from './TimeRuler'
 import { Track } from './Track'
 import type { useTimeline } from './useTimeline'
@@ -92,6 +93,7 @@ export function Timeline({
     setSelectedClipId,
   } = state
   const [isOverEmpty, setIsOverEmpty] = useState(false)
+  const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const {
     exporting,
@@ -342,11 +344,7 @@ export function Timeline({
             <div className="ml-2 flex items-center gap-1 border-l border-border pl-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (window.confirm('¿Eliminar todos los clips del timeline? Podés deshacerlo con Ctrl+Z.')) {
-                    void clearAllClips()
-                  }
-                }}
+                onClick={() => setIsClearAllConfirmOpen(true)}
                 title="Eliminar todos los clips del timeline"
                 className="rounded-lg border border-border px-2 py-1.5 text-xs text-danger hover:bg-danger-bg sm:py-1"
               >
@@ -503,6 +501,20 @@ export function Timeline({
           Descarga iniciada{downloadedFileName ? `: ${downloadedFileName}` : ''}. Revisa las descargas de tu
           navegador; el video ya está listo para usarse cuando termine de guardarse.
         </div>
+      )}
+
+      {isClearAllConfirmOpen && (
+        <ConfirmDialog
+          title="Vaciar timeline"
+          message="Se eliminarán todos los clips del timeline. Podés deshacerlo con Ctrl+Z."
+          confirmLabel="Vaciar"
+          danger
+          onConfirm={() => {
+            setIsClearAllConfirmOpen(false)
+            void clearAllClips()
+          }}
+          onCancel={() => setIsClearAllConfirmOpen(false)}
+        />
       )}
 
       <div ref={scrollContainerRef} onWheel={handleWheelZoom} className="overflow-x-auto pt-7">
