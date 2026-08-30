@@ -16,24 +16,16 @@ interface ImproveSubtitlesToolProps {
   hasSubtitles: boolean
   state: ImproveSubtitlesState
   error: ShortsErrorCode | null
-  improvedSubtitles: { startMs: number; endMs: number; original: string; corrected: string }[]
   onImprove: (userContext?: string) => void
-  onEdit: (index: number, corrected: string) => void
-  onRemove: (index: number) => void
-  onApproveAll: () => void
 }
 
-export function ImproveSubtitlesTool({
-  hasAccess,
-  hasSubtitles,
-  state,
-  error,
-  improvedSubtitles,
-  onImprove,
-  onEdit,
-  onRemove,
-  onApproveAll,
-}: ImproveSubtitlesToolProps) {
+/**
+ * El resultado de la mejora se aplica directo a los segmentos del timeline
+ * (ver EditorPage) en vez de mostrarse acá para aprobar uno por uno — el
+ * diff (tachado/nuevo) y el revertir puntual viven en SubtitleSegmentList,
+ * junto al resto de la edición de subtítulos.
+ */
+export function ImproveSubtitlesTool({ hasAccess, hasSubtitles, state, error, onImprove }: ImproveSubtitlesToolProps) {
   const isImproving = state === 'loading'
   const handleImprove = useCallback(() => onImprove(), [onImprove])
 
@@ -59,27 +51,6 @@ export function ImproveSubtitlesTool({
       {state === 'error' && error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {SHORTS_ERROR_MESSAGES[error]}
-        </div>
-      )}
-
-      {state === 'success' && improvedSubtitles.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {improvedSubtitles.map((item, index) => (
-            <div key={`${item.startMs}-${index}`} className="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
-              <span className="text-text-muted line-through">{item.original}</span>
-              <textarea
-                value={item.corrected}
-                onChange={(event) => onEdit(index, event.target.value)}
-                className="rounded-md border border-border bg-transparent p-1 text-text-strong outline-none"
-              />
-              <button type="button" onClick={() => onRemove(index)} className="self-start text-danger hover:underline">
-                Descartar
-              </button>
-            </div>
-          ))}
-          <Button variant="secondary" onClick={onApproveAll} className="w-auto">
-            Aprobar todos
-          </Button>
         </div>
       )}
     </div>

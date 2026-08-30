@@ -8,6 +8,9 @@ interface SubtitleSegmentListProps {
   onSeek: (startMs: number) => void
   onEditText: (segmentId: string, text: string) => void
   onEditTiming: (segmentId: string, startMs: number, endMs: number) => void
+  /** segmentId -> texto original, para los segmentos que la mejora de IA cambió y todavía no se revirtieron ni se les volvió a editar el texto a mano. */
+  pendingDiffs: Record<string, string>
+  onRevertSegment: (segmentId: string) => void
 }
 
 /** Cuánto se achica cada card por cada posición de distancia al segmento activo, hasta un piso de 0.7. */
@@ -29,6 +32,73 @@ function autoResize(event: ChangeEvent<HTMLTextAreaElement>): void {
 function resizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto'
   textarea.style.height = `${Math.min(textarea.scrollHeight, ACTIVE_TEXTAREA_MAX_HEIGHT_PX)}px`
+}
+
+type DiffOp = { kind: 'same' | 'removed' | 'added'; text: string }
+
+/**
+ * Diff palabra por palabra (LCS) entre el texto original y el corregido —
+ * alcanza para mostrar qué cambió una mejora de IA en una oración corta de
+ * subtítulo, sin traer una librería de diff completa para esto.
+ */
+function diffWords(original: string, corrected: string): DiffOp[] {
+  const a = original.split(/(\s+)/)
+  const b = corrected.split(/(\s+)/)
+  const lcs: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1])
+    }
+  }
+
+  const ops: DiffOp[] = []
+  let i = 0
+  let j = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      ops.push({ kind: 'same', text: a[i] })
+      i += 1
+      j += 1
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      ops.push({ kind: 'removed', text: a[i] })
+      i += 1
+    } else {
+      ops.push({ kind: 'added', text: b[j] })
+      j += 1
+    }
+  }
+  while (i < a.length) {
+    ops.push({ kind: 'removed', text: a[i] })
+    i += 1
+  }
+  while (j < b.length) {
+    ops.push({ kind: 'added', text: b[j] })
+    j += 1
+  }
+  return ops
+}
+
+function SegmentDiff({ original, corrected }: { original: string; corrected: string }) {
+  const ops = diffWords(original, corrected)
+  return (
+    <p className="text-sm">
+      {ops.map((op, index) => {
+        if (op.kind === 'same') return <span key={index}>{op.text}</span>
+        if (op.kind === 'removed') {
+          return (
+            <span key={index} className="text-danger line-through">
+              {op.text}
+            </span>
+          )
+        }
+        return (
+          <span key={index} className="text-success">
+            {op.text}
+          </span>
+        )
+      })}
+    </p>
+  )
 }
 
 interface SegmentTimingFieldsProps {
@@ -66,11 +136,20 @@ function SegmentTimingFields({ segment, onSeek, onEditTiming, compact }: Segment
   )
 }
 
-export function SubtitleSegmentList({ segments, activeSegmentId, onSeek, onEditText, onEditTiming }: SubtitleSegmentListProps) {
+export function SubtitleSegmentList({
+  segments,
+  activeSegmentId,
+  onSeek,
+  onEditText,
+  onEditTiming,
+  pendingDiffs,
+  onRevertSegment,
+}: SubtitleSegmentListProps) {
   const activeCardRef = useRef<HTMLDivElement>(null)
   const activeTextareaRef = useRef<HTMLTextAreaElement>(null)
   const activeIndex = segments.findIndex((segment) => segment.id === activeSegmentId)
   const activeSegment = activeIndex >= 0 ? segments[activeIndex] : null
+  const activeDiff = activeSegment ? pendingDiffs[activeSegment.id] : undefined
 
   useEffect(() => {
     activeCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -88,17 +167,30 @@ export function SubtitleSegmentList({ segments, activeSegmentId, onSeek, onEditT
       {activeSegment && (
         <div className="flex w-full flex-col gap-1 rounded-md border border-accent-border bg-accent-bg p-2 shadow-md">
           <SegmentTimingFields segment={activeSegment} onSeek={onSeek} onEditTiming={onEditTiming} />
-          <textarea
-            ref={activeTextareaRef}
-            value={activeSegment.text}
-            onChange={(event) => {
-              onEditText(activeSegment.id, event.target.value)
-              autoResize(event)
-            }}
-            rows={1}
-            style={{ maxHeight: ACTIVE_TEXTAREA_MAX_HEIGHT_PX }}
-            className="w-full resize-none overflow-y-auto rounded border border-border bg-transparent px-2 py-1 text-sm text-text-strong"
-          />
+          {activeDiff !== undefined ? (
+            <div className="flex flex-col gap-1">
+              <SegmentDiff original={activeDiff} corrected={activeSegment.text} />
+              <button
+                type="button"
+                onClick={() => onRevertSegment(activeSegment.id)}
+                className="self-start text-xs text-danger hover:underline"
+              >
+                Revertir a como estaba
+              </button>
+            </div>
+          ) : (
+            <textarea
+              ref={activeTextareaRef}
+              value={activeSegment.text}
+              onChange={(event) => {
+                onEditText(activeSegment.id, event.target.value)
+                autoResize(event)
+              }}
+              rows={1}
+              style={{ maxHeight: ACTIVE_TEXTAREA_MAX_HEIGHT_PX }}
+              className="w-full resize-none overflow-y-auto rounded border border-border bg-transparent px-2 py-1 text-sm text-text-strong"
+            />
+          )}
         </div>
       )}
 
@@ -107,6 +199,7 @@ export function SubtitleSegmentList({ segments, activeSegmentId, onSeek, onEditT
           const isActive = segment.id === activeSegmentId
           const distance = activeIndex >= 0 ? Math.abs(index - activeIndex) : 0
           const scale = isActive ? 1 : scaleForDistance(distance)
+          const diffOriginal = pendingDiffs[segment.id]
 
           return (
             <div
@@ -119,7 +212,13 @@ export function SubtitleSegmentList({ segments, activeSegmentId, onSeek, onEditT
               }`}
             >
               <SegmentTimingFields segment={segment} onSeek={onSeek} onEditTiming={onEditTiming} compact />
-              <p className="line-clamp-2 text-sm text-text-strong">{segment.text}</p>
+              {diffOriginal !== undefined ? (
+                <div className="line-clamp-2 text-sm">
+                  <SegmentDiff original={diffOriginal} corrected={segment.text} />
+                </div>
+              ) : (
+                <p className="line-clamp-2 text-sm text-text-strong">{segment.text}</p>
+              )}
             </div>
           )
         })}

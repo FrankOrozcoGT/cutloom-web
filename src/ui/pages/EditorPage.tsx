@@ -64,6 +64,11 @@ export function EditorPage() {
   const [isDetectingSilence, setIsDetectingSilence] = useState(false)
   const [silenceThresholdDb, setSilenceThresholdDb] = useState(-40)
   const [silencePaddingMs, setSilencePaddingMs] = useState(1000)
+  // Texto original de cada segmento mejorado por IA, en memoria (no
+  // persiste): mientras un segmento tenga entrada acá, la lista de
+  // segmentos muestra el diff (tachado en rojo + texto nuevo en verde) en
+  // vez del texto plano, y el usuario puede revertirlo puntualmente.
+  const [pendingSubtitleDiffs, setPendingSubtitleDiffs] = useState<Record<string, string>>({})
 
   const { hasActiveFeature } = useAuth()
   const hasShortsAccess = hasActiveFeature('shorts_ai')
@@ -223,17 +228,45 @@ export function EditorPage() {
     [projectId, subtitlesState.subtitles, shortsState],
   )
 
-  const handleApproveImprovedSubtitles = useCallback(() => {
+  // Al llegar la mejora de IA se aplica de una (todos los segmentos quedan
+  // aceptados por defecto, igual que los cortes de silencio) — el texto
+  // original de cada uno se guarda acá para poder mostrar el diff y
+  // revertirlo puntualmente. No corre de nuevo mientras improvedSubtitles no
+  // cambie de identidad (una sola vez por resultado de mejora).
+  const appliedImprovementRef = useRef<typeof shortsState.improvedSubtitles | null>(null)
+  useEffect(() => {
+    if (shortsState.improveState !== 'success') return
+    if (shortsState.improvedSubtitles.length === 0) return
+    if (appliedImprovementRef.current === shortsState.improvedSubtitles) return
+    appliedImprovementRef.current = shortsState.improvedSubtitles
     if (!subtitlesState.subtitles) return
+
+    const diffs: Record<string, string> = {}
     for (const improved of shortsState.improvedSubtitles) {
       const segment = subtitlesState.subtitles.segments.find(
         (s) => s.startMs === improved.startMs && s.endMs === improved.endMs,
       )
-      if (segment) {
+      if (segment && segment.text !== improved.corrected) {
+        diffs[segment.id] = segment.text
         void subtitlesState.editText(segment.id, improved.corrected)
       }
     }
-  }, [subtitlesState, shortsState.improvedSubtitles])
+    setPendingSubtitleDiffs((previous) => ({ ...previous, ...diffs }))
+  }, [shortsState.improveState, shortsState.improvedSubtitles, subtitlesState])
+
+  const handleRevertImprovedSegment = useCallback(
+    (segmentId: string) => {
+      const original = pendingSubtitleDiffs[segmentId]
+      if (original === undefined) return
+      void subtitlesState.editText(segmentId, original)
+      setPendingSubtitleDiffs((previous) => {
+        const next = { ...previous }
+        delete next[segmentId]
+        return next
+      })
+    },
+    [pendingSubtitleDiffs, subtitlesState],
+  )
 
   const handleCreateShorts = useCallback(
     (ideal?: string) => {
@@ -378,11 +411,7 @@ export function EditorPage() {
               hasSubtitles={!!subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0}
               state={shortsState.improveState}
               error={shortsState.improveError}
-              improvedSubtitles={shortsState.improvedSubtitles}
               onImprove={handleImproveSubtitles}
-              onEdit={shortsState.editImprovedSubtitle}
-              onRemove={shortsState.removeImprovedSubtitle}
-              onApproveAll={handleApproveImprovedSubtitles}
             />
           </CollapsibleSection>
 
@@ -431,6 +460,8 @@ export function EditorPage() {
             onSeek={handleSeek}
             onEditText={handleEditSegmentText}
             onEditTiming={handleEditSegmentTiming}
+            pendingDiffs={pendingSubtitleDiffs}
+            onRevertSegment={handleRevertImprovedSegment}
           />
         </div>
       )}

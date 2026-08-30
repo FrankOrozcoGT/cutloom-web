@@ -18,8 +18,6 @@ interface UseShortsResult {
   improvedSubtitles: ImprovedSubtitle[]
   improveSummary: string | null
   improveSubtitles: (projectId: string, segments: SubtitleSegment[], userContext?: string) => Promise<void>
-  editImprovedSubtitle: (index: number, corrected: string) => void
-  removeImprovedSubtitle: (index: number) => void
 
   createShortsState: CreateShortsState
   createShortsError: ShortsErrorCode | null
@@ -53,14 +51,6 @@ export function useShorts(): UseShortsResult {
     setImprovedSubtitles(result.value.correctedSubtitles)
     setImproveSummary(result.value.summary)
     setImproveState('success')
-  }, [])
-
-  const editImprovedSubtitle = useCallback((index: number, corrected: string) => {
-    setImprovedSubtitles((previous) => previous.map((item, i) => (i === index ? { ...item, corrected } : item)))
-  }, [])
-
-  const removeImprovedSubtitle = useCallback((index: number) => {
-    setImprovedSubtitles((previous) => previous.filter((_, i) => i !== index))
   }, [])
 
   const createShorts = useCallback(async (projectId: string, segments: SubtitleSegment[], ideal?: string) => {
@@ -106,8 +96,6 @@ export function useShorts(): UseShortsResult {
     improvedSubtitles,
     improveSummary,
     improveSubtitles,
-    editImprovedSubtitle,
-    removeImprovedSubtitle,
 
     createShortsState,
     createShortsError,
