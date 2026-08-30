@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
+import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -34,9 +34,12 @@ interface TimelineProps {
   activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
   /** Cualquier cambio de valor dispara "Ajustar" (fit to screen) — usado para ver el timeline completo al empezar a generar subtítulos. */
   autoFitSignal?: unknown
-  /** Cortes por silencio: gratis, aplica los cortes directamente sobre el timeline (mismo flujo que cortar con S/tijera — entra al historial de undo/redo). Requiere subtítulos generados para detectar los huecos entre segmentos. */
+  /** Cortes por silencio: gratis, elimina cada hueco del timeline y cierra el espacio (mismo mecanismo de datos que un corte real). Requiere subtítulos generados para detectar los huecos entre segmentos. */
   hasSubtitles?: boolean
   onDetectSilence?: () => void
+  /** Silencios ya quitados, cada uno reversible por separado con su propia X (no por el historial genérico de undo). */
+  removedSilences?: RemovedSegment[]
+  onRestoreSilence?: (index: number) => void
 }
 
 export function Timeline({
@@ -51,6 +54,8 @@ export function Timeline({
   autoFitSignal,
   hasSubtitles = false,
   onDetectSilence,
+  removedSilences = [],
+  onRestoreSilence,
 }: TimelineProps) {
   const {
     timeline,
@@ -397,6 +402,27 @@ export function Timeline({
       {error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {ERROR_MESSAGES[error]}
+        </div>
+      )}
+
+      {removedSilences.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {removedSilences.map((removed, index) => (
+            <div
+              key={removed.clip.id}
+              className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
+            >
+              <span>Silencio quitado ({(removed.clip.durationMs / 1000).toFixed(1)}s)</span>
+              <button
+                type="button"
+                onClick={() => onRestoreSilence?.(index)}
+                title="Revertir este corte"
+                className="text-danger hover:underline"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

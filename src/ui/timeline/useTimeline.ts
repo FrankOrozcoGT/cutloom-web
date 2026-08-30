@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Timeline, TrimEdge } from '@domain/timeline'
+import type { RemovedSegment, Timeline, TrimEdge } from '@domain/timeline'
 import type { Subtitles } from '@domain/subtitles'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { arrangeUseCase } from './composition'
@@ -133,6 +133,34 @@ export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge
     [projectId, applyNewTimeline],
   )
 
+  const removeSegments = useCallback(
+    async (cuts: { startMs: number; endMs: number }[]): Promise<RemovedSegment[]> => {
+      if (cuts.length === 0) return []
+      const result = await arrangeUseCase.removeSegments(projectId, cuts)
+      if (!result.ok) {
+        setError(result.error)
+        return []
+      }
+      setError(null)
+      applyNewTimeline(result.value.timeline)
+      return result.value.removed
+    },
+    [projectId, applyNewTimeline],
+  )
+
+  const reinsertSegment = useCallback(
+    async (removed: RemovedSegment) => {
+      const result = await arrangeUseCase.reinsertSegment(projectId, removed)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setError(null)
+      applyNewTimeline(result.value)
+    },
+    [projectId, applyNewTimeline],
+  )
+
   const deleteClip = useCallback(
     async (clipId: string) => {
       const result = await arrangeUseCase.deleteClip(projectId, clipId)
@@ -199,6 +227,8 @@ export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge
     moveClip,
     resizeClip,
     splitClip,
+    removeSegments,
+    reinsertSegment,
     deleteClip,
     removeClipsByAsset,
     undo,

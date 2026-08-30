@@ -340,6 +340,77 @@ export function splitClip(
   return ok({ ...timeline, tracks: updatedTracks })
 }
 
+/** Desplaza offsetMs por deltaMs en todos los clips que empiezan en o después de fromMs, en todas las pistas — el mismo recorrido que usan removeSegment y reinsertSegment para cerrar/abrir el hueco que dejan. */
+function shiftClipsFrom(timeline: Timeline, fromMs: number, deltaMs: number): Timeline {
+  const updatedTracks = timeline.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.map((clip) => (clip.offsetMs >= fromMs ? { ...clip, offsetMs: clip.offsetMs + deltaMs } : clip)),
+  }))
+  return { ...timeline, tracks: updatedTracks }
+}
+
+export interface RemovedSegment {
+  clip: Clip
+  trackId: string
+}
+
+/**
+ * Quita el tramo [startMs, endMs) del timeline y recorre hacia atrás todo lo
+ * que viene después, cerrando el hueco (a diferencia de deleteClip, que deja
+ * un hueco). Usa splitClip en ambos extremos para aislar el tramo exacto sin
+ * duplicar su lógica de partir un clip. Devuelve el clip quitado junto con su
+ * pista original — reinsertSegment lo usa para revertir exactamente este
+ * corte, sin afectar otros cortes aplicados después.
+ */
+export function removeSegment(
+  timeline: Timeline,
+  startMs: number,
+  endMs: number,
+): Result<{ timeline: Timeline; removed: RemovedSegment }, ClipNotFoundError | CutClipError> {
+  const active = findActiveClip(timeline, startMs)
+  if (!active) return err('CLIP_NOT_FOUND')
+
+  let working = timeline
+  if (startMs > active.clip.offsetMs) {
+    const splitStart = splitClip(working, active.clip.id, startMs)
+    if (!splitStart.ok) return splitStart
+    working = splitStart.value
+  }
+
+  const afterStart = findActiveClip(working, startMs)
+  if (!afterStart) return err('CLIP_NOT_FOUND')
+
+  const clipEndMs = afterStart.clip.offsetMs + afterStart.clip.durationMs
+  if (endMs < clipEndMs) {
+    const splitEnd = splitClip(working, afterStart.clip.id, endMs)
+    if (!splitEnd.ok) return splitEnd
+    working = splitEnd.value
+  }
+
+  const segment = findActiveClip(working, startMs)
+  if (!segment) return err('CLIP_NOT_FOUND')
+
+  const removed: RemovedSegment = { clip: segment.clip, trackId: segment.trackId }
+  const withoutSegment: Timeline = {
+    ...working,
+    tracks: working.tracks.map((track) =>
+      track.id === segment.trackId ? { ...track, clips: track.clips.filter((c) => c.id !== segment.clip.id) } : track,
+    ),
+  }
+
+  const closed = shiftClipsFrom(withoutSegment, endMs, -(endMs - startMs))
+  return ok({ timeline: closed, removed })
+}
+
+/** Revierte exactamente el corte producido por removeSegment: abre de nuevo el hueco y reinserta el clip quitado en su lugar original. */
+export function reinsertSegment(timeline: Timeline, removed: RemovedSegment): Timeline {
+  const opened = shiftClipsFrom(timeline, removed.clip.offsetMs, removed.clip.durationMs)
+  const updatedTracks = opened.tracks.map((track) =>
+    track.id === removed.trackId ? { ...track, clips: [...track.clips, removed.clip] } : track,
+  )
+  return { ...opened, tracks: updatedTracks }
+}
+
 /** Quita el clip seleccionado del timeline, dejando un hueco en su lugar (no recorre el resto hacia atrás). */
 export function deleteClip(timeline: Timeline, clipId: string): Result<Timeline, ClipNotFoundError> {
   const hasClip = timeline.tracks.some((track) => track.clips.some((clip) => clip.id === clipId))

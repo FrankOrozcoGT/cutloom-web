@@ -6,9 +6,12 @@ import {
   deleteClip as deleteClipInDomain,
   findValidTrack,
   moveClip as moveClipInDomain,
+  reinsertSegment as reinsertSegmentInDomain,
   removeClipsByAsset,
+  removeSegment as removeSegmentInDomain,
   resizeClip as resizeClipInDomain,
   splitClip as splitClipInDomain,
+  type RemovedSegment,
   type Timeline,
   type TrimEdge,
 } from '@domain/timeline'
@@ -177,6 +180,60 @@ export class ArrangeClipsUseCase {
     }
 
     return ok(splitResult.value)
+  }
+
+  /**
+   * Quita varios tramos [startMs, endMs) del timeline en una sola operación
+   * (p.ej. todos los silencios detectados de una vez), cerrando cada hueco
+   * antes de aplicar el siguiente corte. Persiste una sola vez al final para
+   * que todo el lote quede como un único paso de historial en useTimeline —
+   * deshacer con Ctrl+Z revierte los N cortes juntos, no de a uno. Devuelve
+   * cada segmento quitado por separado para poder revertir uno específico
+   * después con reinsertSegment.
+   */
+  async removeSegments(
+    projectId: string,
+    cuts: { startMs: number; endMs: number }[],
+  ): Promise<Result<{ timeline: Timeline; removed: RemovedSegment[] }, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+
+    let working = timelineResult.value
+    const removed: RemovedSegment[] = []
+    for (const cut of cuts) {
+      const removeResult = removeSegmentInDomain(working, cut.startMs, cut.endMs)
+      if (!removeResult.ok) {
+        return err(removeResult.error)
+      }
+      working = removeResult.value.timeline
+      removed.push(removeResult.value.removed)
+    }
+
+    const saveResult = await this.storage.save(working)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok({ timeline: working, removed })
+  }
+
+  /** Revierte exactamente el corte de removeSegment: reabre el hueco y reinserta el clip quitado. */
+  async reinsertSegment(projectId: string, removed: RemovedSegment): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+
+    const reinserted = reinsertSegmentInDomain(timelineResult.value, removed)
+
+    const saveResult = await this.storage.save(reinserted)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(reinserted)
   }
 
   async deleteClip(projectId: string, clipId: string): Promise<Result<Timeline, ArrangeError>> {

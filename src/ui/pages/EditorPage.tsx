@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { detectSilenceCuts } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
-import { findActiveClip } from '@domain/timeline'
+import type { RemovedSegment } from '@domain/timeline'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { CollapsibleSection } from '@ui/components/CollapsibleSection'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
@@ -30,6 +30,7 @@ export function EditorPage() {
   const [projectName, setProjectName] = useState('')
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
+  const [removedSilences, setRemovedSilences] = useState<RemovedSegment[]>([])
 
   const { hasActiveFeature } = useAuth()
   const hasShortsAccess = hasActiveFeature('shorts_ai')
@@ -166,28 +167,31 @@ export function EditorPage() {
     [projectId, subtitlesState.subtitles, shortsState],
   )
 
-  // Aplica los cortes por silencio directamente sobre el timeline (mismo
-  // splitClip que usa la tijera manual) en vez de solo mostrarlos aparte —
-  // así entran al historial de undo/redo y los clips quedan realmente
-  // cortados, listos para que el usuario elimine el tramo de silencio si
-  // quiere. Cada hueco se corta en sus dos extremos para aislarlo como su
-  // propio clip; se procesan en orden porque cada split muta el timeline
-  // (los offsets de cortes posteriores dependen de los anteriores).
+  // Elimina todos los huecos de silencio detectados como un solo paso de
+  // historial (removeSegments aplica los N cortes sobre el mismo timeline y
+  // persiste una sola vez) — un Ctrl+Z deshace el lote completo, no corte por
+  // corte. Se ordenan de atrás hacia adelante porque cada corte corre hacia
+  // atrás todo lo posterior al hueco; procesarlos en ese orden evita que un
+  // corte ya aplicado invalide el offset de los huecos que todavía faltan.
+  // Revertir un silencio puntual después (la X) es una acción nueva e
+  // independiente que entra a su propio paso de historial vía
+  // reinsertSegment — no hace falta deshacer el lote para eso.
   const handleDetectSilence = useCallback(async () => {
     if (!subtitlesState.subtitles) return
-    const cuts = detectSilenceCuts(subtitlesState.subtitles.segments, 700)
-
-    for (const cut of cuts) {
-      for (const cutPointMs of [cut.startMs, cut.endMs]) {
-        const timeline = timelineState.timeline
-        if (!timeline) return
-        const active = findActiveClip(timeline, cutPointMs)
-        if (!active) continue
-        if (cutPointMs <= active.clip.offsetMs || cutPointMs >= active.clip.offsetMs + active.clip.durationMs) continue
-        await timelineState.splitClip(active.clip.id, cutPointMs)
-      }
-    }
+    const cuts = detectSilenceCuts(subtitlesState.subtitles.segments, 700).sort((a, b) => b.startMs - a.startMs)
+    const removed = await timelineState.removeSegments(cuts)
+    setRemovedSilences((previous) => [...previous, ...[...removed].reverse()])
   }, [subtitlesState.subtitles, timelineState])
+
+  const handleRestoreSilence = useCallback(
+    async (index: number) => {
+      const removed = removedSilences[index]
+      if (!removed) return
+      await timelineState.reinsertSegment(removed)
+      setRemovedSilences((previous) => previous.filter((_, i) => i !== index))
+    },
+    [removedSilences, timelineState],
+  )
 
   if (!projectId) {
     return null
@@ -284,6 +288,8 @@ export function EditorPage() {
             autoFitSignal={fitTrigger}
             hasSubtitles={!!subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0}
             onDetectSilence={() => void handleDetectSilence()}
+            removedSilences={removedSilences}
+            onRestoreSilence={(index) => void handleRestoreSilence(index)}
           />
         </div>
       )}
