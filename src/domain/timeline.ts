@@ -361,6 +361,13 @@ export interface RemovedSegment {
  * duplicar su lógica de partir un clip. Devuelve el clip quitado junto con su
  * pista original — reinsertSegment lo usa para revertir exactamente este
  * corte, sin afectar otros cortes aplicados después.
+ *
+ * El rango pedido puede extenderse más allá del clip activo en startMs (p.ej.
+ * un hueco de silencio calculado sobre subtítulos que llega hasta un punto sin
+ * clip, o hasta la frontera con el siguiente). En ese caso solo se quita hasta
+ * el final real del clip — no hay nada más que cortar, y el desplazamiento
+ * usa el ancho realmente quitado, no el del rango pedido, para no descuadrar
+ * los offsets de lo que viene después.
  */
 export function removeSegment(
   timeline: Timeline,
@@ -381,8 +388,9 @@ export function removeSegment(
   if (!afterStart) return err('CLIP_NOT_FOUND')
 
   const clipEndMs = afterStart.clip.offsetMs + afterStart.clip.durationMs
-  if (endMs < clipEndMs) {
-    const splitEnd = splitClip(working, afterStart.clip.id, endMs)
+  const actualEndMs = Math.min(endMs, clipEndMs)
+  if (actualEndMs < clipEndMs) {
+    const splitEnd = splitClip(working, afterStart.clip.id, actualEndMs)
     if (!splitEnd.ok) return splitEnd
     working = splitEnd.value
   }
@@ -398,7 +406,7 @@ export function removeSegment(
     ),
   }
 
-  const closed = shiftClipsFrom(withoutSegment, endMs, -(endMs - startMs))
+  const closed = shiftClipsFrom(withoutSegment, actualEndMs, -(actualEndMs - startMs))
   return ok({ timeline: closed, removed })
 }
 

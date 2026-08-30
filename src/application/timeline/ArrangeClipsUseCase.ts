@@ -190,6 +190,11 @@ export class ArrangeClipsUseCase {
    * deshacer con Ctrl+Z revierte los N cortes juntos, no de a uno. Devuelve
    * cada segmento quitado por separado para poder revertir uno específico
    * después con reinsertSegment.
+   *
+   * Un hueco individual puede no corresponder a ningún clip (p.ej. cae en una
+   * zona vacía del timeline que ya no tiene video) — se salta ese hueco en vez
+   * de abortar el lote completo, para no perder los demás cortes válidos por
+   * uno solo que no aplica.
    */
   async removeSegments(
     projectId: string,
@@ -205,7 +210,7 @@ export class ArrangeClipsUseCase {
     for (const cut of cuts) {
       const removeResult = removeSegmentInDomain(working, cut.startMs, cut.endMs)
       if (!removeResult.ok) {
-        return err(removeResult.error)
+        continue
       }
       working = removeResult.value.timeline
       removed.push(removeResult.value.removed)
