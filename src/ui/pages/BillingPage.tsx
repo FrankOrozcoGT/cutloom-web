@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { Subscription } from '@domain/billing'
 import { useAuth } from '@ui/auth/useAuth'
 import { Button } from '@ui/components/Button'
@@ -15,6 +15,7 @@ function formatDate(iso: string): string {
 export function BillingPage() {
   const { isAuthenticated, organizationId } = useAuth()
   const { plans, plansLoaded } = usePlans()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -34,7 +35,7 @@ export function BillingPage() {
   const changeDisabled = isPastDue || (subscription?.cancelAtPeriodEnd ?? false)
   const hasActiveSubscription = !!subscription && subscription.status !== 'inactive'
 
-  const handleSubscribe = async (planId: string) => {
+  const handleSubscribe = useCallback(async (planId: string) => {
     setBusyPlanId(planId)
     setError(null)
     const result = await billingApi.createCheckout(planId)
@@ -44,7 +45,24 @@ export function BillingPage() {
       return
     }
     window.location.href = result.value.checkoutUrl
-  }
+  }, [])
+
+  // Si el usuario eligió un plan antes de loguearse/registrarse (link
+  // "Comenzar" desde una tarjeta específica), retomamos esa intención acá en
+  // vez de forzarlo a elegir el plan de nuevo — el flujo completo (elegir
+  // plan → login/registro → checkout) queda en un solo paso para el usuario.
+  useEffect(() => {
+    const pendingPlanId = searchParams.get('plan')
+    if (!pendingPlanId || !isAuthenticated || !plansLoaded || hasActiveSubscription) return
+    if (!plans.some((plan) => plan.id === pendingPlanId)) return
+
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous)
+      next.delete('plan')
+      return next
+    }, { replace: true })
+    void handleSubscribe(pendingPlanId)
+  }, [searchParams, isAuthenticated, plansLoaded, hasActiveSubscription, plans, handleSubscribe, setSearchParams])
 
   const handleChangePlan = async (planId: string) => {
     setBusyPlanId(planId)
@@ -119,8 +137,9 @@ export function BillingPage() {
           if (isCurrent) {
             footer = <span className="mt-2 text-sm text-text-muted">Plan actual</span>
           } else if (!isAuthenticated) {
+            const returnTo = encodeURIComponent(`/billing?plan=${plan.id}`)
             footer = (
-              <Link to="/register?returnTo=%2Fbilling">
+              <Link to={`/register?returnTo=${returnTo}`}>
                 <Button className="mt-2">Comenzar</Button>
               </Link>
             )
