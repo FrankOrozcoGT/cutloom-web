@@ -264,9 +264,14 @@ export function EditorPage() {
         thresholdDb: silenceThresholdDb,
         paddingMs: silencePaddingMs,
       }).sort((a, b) => b.startMs - a.startMs)
-      const removed = await timelineState.removeSegments(cuts)
-      const ascending = [...removed].reverse()
-      setRemovedSilences((previous) => {
+      // Se calcula acá y se pasa a removeSegments para que timeline + chips
+      // nuevos se apliquen como un solo paso de historial (applyNewTimeline
+      // restaura ambos juntos) — antes quedaban en dos setState separados y
+      // undo/redo los deshacía en pasos distintos, desincronizando timeline y
+      // pills.
+      await timelineState.removeSegments(cuts, (removed) => {
+        const ascending = [...removed].reverse()
+        const previous = removedSilencesRef.current
         // Los cortes nuevos vienen en coordenadas del timeline previo a este
         // lote — el mismo sistema en el que están los displayOffsetMs
         // anteriores: cada corte desplaza hacia la izquierda todo lo que
@@ -294,18 +299,20 @@ export function EditorPage() {
     async (index: number) => {
       const chip = removedSilences[index]
       if (!chip) return
-      await timelineState.reinsertSegment(chip.segment)
-      setRemovedSilences((previous) =>
-        previous
-          .filter((_, i) => i !== index)
-          // Reinsertar el silencio empuja hacia la derecha lo que quedó
-          // después de su posición — los chips posteriores se recorren.
-          .map((other) =>
-            other.displayOffsetMs >= chip.displayOffsetMs
-              ? { ...other, displayOffsetMs: other.displayOffsetMs + chip.segment.clip.durationMs }
-              : other,
-          ),
-      )
+      // Igual que en handleDetectSilence: los chips restantes se calculan acá
+      // y se pasan a reinsertSegment para que timeline + chips se apliquen
+      // como un solo paso de historial, no dos setState separados que
+      // undo/redo desincronizaría en pasos distintos.
+      const nextRemovedSilences = removedSilences
+        .filter((_, i) => i !== index)
+        // Reinsertar el silencio empuja hacia la derecha lo que quedó
+        // después de su posición — los chips posteriores se recorren.
+        .map((other) =>
+          other.displayOffsetMs >= chip.displayOffsetMs
+            ? { ...other, displayOffsetMs: other.displayOffsetMs + chip.segment.clip.durationMs }
+            : other,
+        )
+      await timelineState.reinsertSegment(chip.segment, chip.displayOffsetMs, nextRemovedSilences)
     },
     [removedSilences, timelineState],
   )

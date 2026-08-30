@@ -87,24 +87,29 @@ export function useTimeline(
   // los subtítulos vigentes (sus timestamps ya no corresponden al material
   // editado) — se limpian acá, no queda a cargo de cada acción individual.
   const applyNewTimeline = useCallback(
-    (nextTimeline: Timeline) => {
+    (nextTimeline: Timeline, nextRemovedSilences?: RemovedSilenceChip[]) => {
       const previousSubtitles = subtitlesBridge?.get() ?? null
       const previousSilences = removedSilencesBridge?.get() ?? []
 
-      setTimelineState((current) => {
-        if (current) {
-          const entry: HistoryEntry = { timeline: current, subtitles: previousSubtitles, removedSilences: previousSilences }
-          setPast((prev) => [...prev.slice(-(MAX_HISTORY - 1)), entry])
-        }
-        setFuture([])
-        return nextTimeline
-      })
+      if (timeline) {
+        const entry: HistoryEntry = { timeline, subtitles: previousSubtitles, removedSilences: previousSilences }
+        setPast((prev) => [...prev.slice(-(MAX_HISTORY - 1)), entry])
+      }
+      setFuture([])
+      setTimelineState(nextTimeline)
 
       if (previousSubtitles) {
         subtitlesBridge?.restore(null)
       }
+      // Si este cambio también trae chips de silencio nuevos (p.ej. detectar
+      // silencios), se restauran acá mismo — en el mismo paso que el timeline
+      // — para que timeline y chips queden como un solo escalón de historial,
+      // no dos independientes que undo/redo tendrían que deshacer por separado.
+      if (nextRemovedSilences) {
+        removedSilencesBridge?.restore(nextRemovedSilences)
+      }
     },
-    [subtitlesBridge, removedSilencesBridge],
+    [timeline, subtitlesBridge, removedSilencesBridge],
   )
 
   const addClip = useCallback(
@@ -163,7 +168,10 @@ export function useTimeline(
   )
 
   const removeSegments = useCallback(
-    async (cuts: { startMs: number; endMs: number }[]): Promise<RemovedSegment[]> => {
+    async (
+      cuts: { startMs: number; endMs: number }[],
+      computeNextRemovedSilences?: (removed: RemovedSegment[]) => RemovedSilenceChip[],
+    ): Promise<RemovedSegment[]> => {
       if (cuts.length === 0) return []
       const result = await arrangeUseCase.removeSegments(projectId, cuts)
       if (!result.ok) {
@@ -171,21 +179,22 @@ export function useTimeline(
         return []
       }
       setError(null)
-      applyNewTimeline(result.value.timeline)
+      const nextRemovedSilences = computeNextRemovedSilences?.(result.value.removed)
+      applyNewTimeline(result.value.timeline, nextRemovedSilences)
       return result.value.removed
     },
     [projectId, applyNewTimeline],
   )
 
   const reinsertSegment = useCallback(
-    async (removed: RemovedSegment) => {
-      const result = await arrangeUseCase.reinsertSegment(projectId, removed)
+    async (removed: RemovedSegment, atMs: number, nextRemovedSilences?: RemovedSilenceChip[]) => {
+      const result = await arrangeUseCase.reinsertSegment(projectId, removed, atMs)
       if (!result.ok) {
         setError(result.error)
         return
       }
       setError(null)
-      applyNewTimeline(result.value)
+      applyNewTimeline(result.value, nextRemovedSilences)
     },
     [projectId, applyNewTimeline],
   )
@@ -225,56 +234,51 @@ export function useTimeline(
     }
     setError(null)
     setSelectedClipId(null)
-    applyNewTimeline(result.value)
     // Vaciar deja el timeline sin silencios quitados que mostrar — los chips
-    // previos ya quedaron en la entrada de historial que pusheó
+    // previos quedan en la misma entrada de historial que empuja
     // applyNewTimeline, así que un undo los recupera.
-    removedSilencesBridge?.restore([])
-  }, [projectId, applyNewTimeline, removedSilencesBridge])
+    applyNewTimeline(result.value, [])
+  }, [projectId, applyNewTimeline])
 
+  // undo/redo leen `past`/`future`/`timeline` directamente del closure en vez
+  // de usar el patrón funcional setPast(prev => ...): ese patrón invitaba a
+  // meter side-effects (restore de bridges, setFuture, saveTimeline) DENTRO
+  // del updater, y React (sobre todo StrictMode) puede invocar un updater más
+  // de una vez para detectar impurezas — cada invocación extra repetía esos
+  // side-effects, vaciando los chips que la primera pasada ya había
+  // restaurado. Todo el trabajo real ahora corre una sola vez, fuera de
+  // cualquier updater; los updaters solo hacen el cálculo puro del array.
   const undo = useCallback(async () => {
-    setPast((prevPast) => {
-      if (prevPast.length === 0 || !timeline) return prevPast
-      const previous = prevPast[prevPast.length - 1]
-      setFuture((prevFuture) =>
-        [
-          ...prevFuture,
-          {
-            timeline,
-            subtitles: subtitlesBridge?.get() ?? null,
-            removedSilences: removedSilencesBridge?.get() ?? [],
-          },
-        ].slice(-MAX_HISTORY),
-      )
-      setTimelineState(previous.timeline)
-      subtitlesBridge?.restore(previous.subtitles)
-      removedSilencesBridge?.restore(previous.removedSilences)
-      void arrangeUseCase.saveTimeline(previous.timeline)
-      return prevPast.slice(0, -1)
-    })
-  }, [timeline, subtitlesBridge, removedSilencesBridge])
+    if (past.length === 0 || !timeline) return
+    const previous = past[past.length - 1]
+    const currentSilences = removedSilencesBridge?.get() ?? []
+    setFuture((prevFuture) =>
+      [...prevFuture, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedSilences: currentSilences }].slice(
+        -MAX_HISTORY,
+      ),
+    )
+    setPast((prevPast) => prevPast.slice(0, -1))
+    setTimelineState(previous.timeline)
+    subtitlesBridge?.restore(previous.subtitles)
+    removedSilencesBridge?.restore(previous.removedSilences)
+    void arrangeUseCase.saveTimeline(previous.timeline)
+  }, [timeline, past, subtitlesBridge, removedSilencesBridge])
 
   const redo = useCallback(async () => {
-    setFuture((prevFuture) => {
-      if (prevFuture.length === 0 || !timeline) return prevFuture
-      const next = prevFuture[prevFuture.length - 1]
-      setPast((prevPast) =>
-        [
-          ...prevPast,
-          {
-            timeline,
-            subtitles: subtitlesBridge?.get() ?? null,
-            removedSilences: removedSilencesBridge?.get() ?? [],
-          },
-        ].slice(-MAX_HISTORY),
-      )
-      setTimelineState(next.timeline)
-      subtitlesBridge?.restore(next.subtitles)
-      removedSilencesBridge?.restore(next.removedSilences)
-      void arrangeUseCase.saveTimeline(next.timeline)
-      return prevFuture.slice(0, -1)
-    })
-  }, [timeline, subtitlesBridge, removedSilencesBridge])
+    if (future.length === 0 || !timeline) return
+    const next = future[future.length - 1]
+    const currentSilences = removedSilencesBridge?.get() ?? []
+    setPast((prevPast) =>
+      [...prevPast, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedSilences: currentSilences }].slice(
+        -MAX_HISTORY,
+      ),
+    )
+    setFuture((prevFuture) => prevFuture.slice(0, -1))
+    setTimelineState(next.timeline)
+    subtitlesBridge?.restore(next.subtitles)
+    removedSilencesBridge?.restore(next.removedSilences)
+    void arrangeUseCase.saveTimeline(next.timeline)
+  }, [timeline, future, subtitlesBridge, removedSilencesBridge])
 
   return {
     timeline,
