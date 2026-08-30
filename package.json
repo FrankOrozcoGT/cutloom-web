@@ -17,6 +17,7 @@
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "@tailwindcss/vite": "^4.3.3",
+    "lucide-react": "^1.37.0",
     "mediabunny": "^1.54.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

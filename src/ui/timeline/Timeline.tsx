@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { AudioWaveform, Minus, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
 import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
@@ -288,16 +289,7 @@ export function Timeline({
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover sm:h-8 sm:w-8"
             aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
           >
-            {isPlaying ? (
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                <rect x="6" y="5" width="4" height="14" />
-                <rect x="14" y="5" width="4" height="14" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            )}
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </button>
           <span className="text-sm font-medium text-text-strong">Timeline</span>
           <div className="ml-2 flex items-center gap-1 border-l border-border pl-2">
@@ -309,7 +301,7 @@ export function Timeline({
               title="Deshacer (Ctrl+Z)"
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
-              ↶
+              <Undo2 className="h-4 w-4" />
             </button>
             <button
               type="button"
@@ -319,7 +311,7 @@ export function Timeline({
               title="Rehacer (Ctrl+Shift+Z)"
               className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
-              ↷
+              <Redo2 className="h-4 w-4" />
             </button>
           </div>
           {selectedClip && (
@@ -331,7 +323,7 @@ export function Timeline({
                 title="Eliminar clip seleccionado (Supr)"
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-danger hover:bg-danger-bg"
               >
-                🗑
+                <Trash2 className="h-4 w-4" />
               </button>
             </div>
           )}
@@ -346,10 +338,7 @@ export function Timeline({
               title={hasSubtitles ? 'Detectar cortes por silencio' : 'Detectar cortes por silencio (genera subtítulos primero)'}
               className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h2l2-7 3 14 3-11 2 4h2" />
-                <path strokeLinecap="round" d="M17 12h4" />
-              </svg>
+              <AudioWaveform className="h-4 w-4" />
             </button>
           )}
           <button
@@ -367,7 +356,7 @@ export function Timeline({
             title="Reducir zoom (Ctrl/Cmd + scroll también funciona, centrado en el playhead)"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
-            −
+            <Minus className="h-4 w-4" />
           </button>
           <span className="hidden sm:inline">Zoom</span>
           <button
@@ -377,7 +366,7 @@ export function Timeline({
             title="Aumentar zoom (Ctrl/Cmd + scroll también funciona, centrado en el playhead)"
             className="flex h-10 w-10 items-center justify-center rounded-lg border border-border hover:bg-surface-hover sm:h-8 sm:w-8"
           >
-            +
+            <Plus className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -420,7 +409,7 @@ export function Timeline({
                 title="Revertir este corte"
                 className="text-danger hover:underline"
               >
-                ✕
+                <X className="h-3 w-3" />
               </button>
             </div>
           ))}
@@ -457,7 +446,7 @@ export function Timeline({
               aria-label="Cortar clip"
               className="absolute -top-7 z-20 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border-2 border-accent bg-surface text-accent shadow-md transition-transform hover:scale-110 hover:bg-accent hover:text-white"
             >
-              ✂
+              <Scissors className="h-3 w-3" />
             </button>
           )}
 
