@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@ui/auth/useAuth'
 import { AuthLayout } from '@ui/components/AuthLayout'
 import { Button } from '@ui/components/Button'
+import { resolveReturnTo } from '@ui/auth/returnTo'
 
 export function GoogleCallbackPage() {
   // No dispara su propio restoreSession(): AuthProvider ya lo hace una
@@ -29,7 +30,8 @@ export function GoogleCallbackPage() {
       return
     }
 
-    navigate('/projects', { replace: true })
+    const returnTo = resolveReturnTo(searchParams.get('returnTo'))
+    navigate(returnTo, { replace: true })
   }, [searchParams, isLoading, isAuthenticated, navigate])
 
   if (error) {

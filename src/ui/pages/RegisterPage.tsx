@@ -1,12 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@ui/auth/useAuth'
 import { AuthLayout } from '@ui/components/AuthLayout'
 import { FormField } from '@ui/components/FormField'
 import { Button } from '@ui/components/Button'
 import { GoogleButton } from '@ui/components/GoogleButton'
+import { googleAuthUrl, resolveReturnTo } from '@ui/auth/returnTo'
 
-const GOOGLE_LOGIN_URL = `${import.meta.env.VITE_API_URL}/api/auth/google/start`
 const MIN_PASSWORD_LENGTH = 8
 
 function errorMessage(code: string): string {
@@ -31,10 +31,13 @@ function validateEmail(email: string): boolean {
 export function RegisterPage() {
   const { register } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const returnTo = resolveReturnTo(searchParams.get('returnTo'))
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -56,7 +59,7 @@ export function RegisterPage() {
       setError(errorMessage(result.code))
       return
     }
-    navigate('/projects', { replace: true })
+    navigate(returnTo, { replace: true })
   }
 
   return (
@@ -98,11 +101,14 @@ export function RegisterPage() {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <GoogleButton href={GOOGLE_LOGIN_URL} />
+      <GoogleButton href={googleAuthUrl(returnTo)} />
 
       <p className="mt-6 text-center text-sm text-text-muted">
         ¿Ya tenés cuenta?{' '}
-        <Link to="/login" className="text-accent hover:text-accent-hover">
+        <Link
+          to={returnTo === '/projects' ? '/login' : `/login?returnTo=${encodeURIComponent(returnTo)}`}
+          className="text-accent hover:text-accent-hover"
+        >
           Iniciá sesión
         </Link>
       </p>

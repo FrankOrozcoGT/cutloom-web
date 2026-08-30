@@ -120,7 +120,7 @@ export function BillingPage() {
             footer = <span className="mt-2 text-sm text-text-muted">Plan actual</span>
           } else if (!isAuthenticated) {
             footer = (
-              <Link to="/register">
+              <Link to="/register?returnTo=%2Fbilling">
                 <Button className="mt-2">Comenzar</Button>
               </Link>
             )
