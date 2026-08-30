@@ -84,7 +84,7 @@ export function SubtitlePanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-bg p-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-text-strong">Subtítulos automáticos</h3>
         <select

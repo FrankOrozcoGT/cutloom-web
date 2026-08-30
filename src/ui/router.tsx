@@ -42,14 +42,7 @@ const router = createBrowserRouter([
       { path: '/projects', element: <ProjectsPage /> },
       { path: '/profile', element: <ProfilePage /> },
       { path: '/projects/:projectId', element: <EditorPage /> },
-      {
-        path: '/billing',
-        element: (
-          <ProtectedRoute>
-            <BillingPage />
-          </ProtectedRoute>
-        ),
-      },
+      { path: '/billing', element: <BillingPage /> },
       {
         path: '/billing/credits',
         element: (

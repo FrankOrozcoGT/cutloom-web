@@ -1,13 +1,6 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Plan } from '@domain/billing'
 import { useAuth } from '@ui/auth/useAuth'
 import { Button } from '@ui/components/Button'
-import { billingApi } from '@ui/billing/composition'
-
-function formatAmount(amountInCents: number, currency: string): string {
-  return new Intl.NumberFormat('es-GT', { style: 'currency', currency }).format(amountInCents / 100)
-}
 
 const FREE_FEATURES = [
   {
@@ -26,17 +19,6 @@ const FREE_FEATURES = [
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth()
-  const [plans, setPlans] = useState<Plan[]>([])
-  const [plansLoaded, setPlansLoaded] = useState(false)
-
-  useEffect(() => {
-    void billingApi.getPlans().then((result) => {
-      if (result.ok) {
-        setPlans(result.value)
-      }
-      setPlansLoaded(true)
-    })
-  }, [])
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-20 p-6 py-16">
@@ -70,42 +52,15 @@ export function LandingPage() {
         </div>
       </section>
 
-      {plansLoaded && (
-        <section className="flex flex-col gap-6">
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold text-text-strong">Planes premium</h2>
-            <p className="mt-1 text-text-muted">Para cuando necesitás más que lo gratuito.</p>
-          </div>
-          {plans.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {plans.map((plan) => (
-                <div key={plan.id} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-6">
-                  <h3 className="text-lg font-semibold text-text-strong">{plan.name}</h3>
-                  <p className="text-2xl font-bold text-text-strong">
-                    {formatAmount(plan.amountInCents, plan.currency)}
-                    <span className="text-sm font-normal text-text-muted"> / {plan.interval}</span>
-                  </p>
-                  <ul className="flex flex-col gap-1 text-sm text-text-muted">
-                    {plan.features.map((feature) => (
-                      <li key={feature.feature}>
-                        • {feature.feature}
-                        {feature.usageLimit !== null && ` (${feature.usageLimit}/mes)`}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to={isAuthenticated ? '/billing' : '/register'}>
-                    <Button className="mt-2">{isAuthenticated ? 'Suscribirme' : 'Comenzar'}</Button>
-                  </Link>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-text-muted">
-              Próximamente.
-            </div>
-          )}
-        </section>
-      )}
+      <section className="flex flex-col items-center gap-4 text-center">
+        <div>
+          <h2 className="text-2xl font-semibold text-text-strong">Planes premium</h2>
+          <p className="mt-1 text-text-muted">Para cuando necesitás más que lo gratuito.</p>
+        </div>
+        <Link to="/billing">
+          <Button className="w-fit px-6">Ver planes</Button>
+        </Link>
+      </section>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
+import type { SilenceCut } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -34,6 +35,11 @@ interface TimelineProps {
   activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
   /** Cualquier cambio de valor dispara "Ajustar" (fit to screen) — usado para ver el timeline completo al empezar a generar subtítulos. */
   autoFitSignal?: unknown
+  /** Cortes por silencio: gratis, requiere subtítulos generados para detectar los huecos entre segmentos. */
+  hasSubtitles?: boolean
+  silenceCuts?: SilenceCut[]
+  onDetectSilence?: () => void
+  onRemoveSilenceCut?: (index: number) => void
 }
 
 export function Timeline({
@@ -46,6 +52,10 @@ export function Timeline({
   subtitlesProgressUntilMs,
   activeSubtitleRangeMs,
   autoFitSignal,
+  hasSubtitles = false,
+  silenceCuts = [],
+  onDetectSilence,
+  onRemoveSilenceCut,
 }: TimelineProps) {
   const {
     timeline,
@@ -327,6 +337,20 @@ export function Timeline({
           )}
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
+          {onDetectSilence && (
+            <button
+              type="button"
+              onClick={onDetectSilence}
+              disabled={!hasSubtitles}
+              aria-label="Detectar cortes por silencio"
+              title={hasSubtitles ? 'Detectar cortes por silencio' : 'Detectar cortes por silencio (genera subtítulos primero)'}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 3 5 12l4 9M15 3l4 9-4 9" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleFitToScreen}
@@ -378,6 +402,21 @@ export function Timeline({
       {error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {ERROR_MESSAGES[error]}
+        </div>
+      )}
+
+      {silenceCuts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {silenceCuts.map((cut, index) => (
+            <div key={`${cut.startMs}-${index}`} className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted">
+              <button type="button" onClick={() => setPlayheadMs(cut.startMs)} className="hover:text-text-strong">
+                {(cut.startMs / 1000).toFixed(1)}s – {(cut.endMs / 1000).toFixed(1)}s
+              </button>
+              <button type="button" onClick={() => onRemoveSilenceCut?.(index)} className="text-danger hover:underline">
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
