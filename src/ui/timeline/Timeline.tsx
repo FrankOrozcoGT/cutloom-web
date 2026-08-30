@@ -67,14 +67,18 @@ export interface RemovedSilenceChip {
  * intenso; al alejarse vuelve al tono apagado normal. Así se ubica de un
  * vistazo qué cortes vienen y cuáles ya pasaron durante la reproducción.
  */
-const CHIP_PROXIMITY_WINDOW_MS = 30_000
+const CHIP_PROXIMITY_WINDOW_MS = 10_000
 // --color-text-muted y --color-accent de index.css, interpolados a mano para
 // no pisar los tokens con clases condicionales.
 const MUTED_RGB = [122, 115, 106] as const
 const ACCENT_RGB = [255, 107, 74] as const
 
 function chipProximityStyle(displayOffsetMs: number, playheadMs: number): CSSProperties {
-  const t = Math.max(0, 1 - Math.abs(displayOffsetMs - playheadMs) / CHIP_PROXIMITY_WINDOW_MS)
+  // Caída cuadrática: el tinte naranja se concentra cerca del playhead y los
+  // chips a medio camino ya se ven casi apagados — con caída lineal una
+  // ventana útil dejaba todo levemente naranja y parecía que no reaccionaba.
+  const linear = Math.max(0, 1 - Math.abs(displayOffsetMs - playheadMs) / CHIP_PROXIMITY_WINDOW_MS)
+  const t = linear * linear
   const [r, g, b] = MUTED_RGB.map((channel, i) => Math.round(channel + (ACCENT_RGB[i] - channel) * t))
   return {
     color: `rgb(${r} ${g} ${b})`,
