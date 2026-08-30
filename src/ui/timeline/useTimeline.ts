@@ -54,7 +54,8 @@ export function useTimeline(
     setTimelineState(result.value)
     setPast([])
     setFuture([])
-  }, [projectId])
+    onTimelineReplaced?.()
+  }, [projectId, onTimelineReplaced])
 
   useEffect(() => {
     void load()
@@ -232,10 +233,11 @@ export function useTimeline(
       )
       setTimelineState(previous.timeline)
       subtitlesBridge?.restore(previous.subtitles)
+      onTimelineReplaced?.()
       void arrangeUseCase.saveTimeline(previous.timeline)
       return prevPast.slice(0, -1)
     })
-  }, [timeline, subtitlesBridge])
+  }, [timeline, subtitlesBridge, onTimelineReplaced])
 
   const redo = useCallback(async () => {
     setFuture((prevFuture) => {
@@ -246,10 +248,11 @@ export function useTimeline(
       )
       setTimelineState(next.timeline)
       subtitlesBridge?.restore(next.subtitles)
+      onTimelineReplaced?.()
       void arrangeUseCase.saveTimeline(next.timeline)
       return prevFuture.slice(0, -1)
     })
-  }, [timeline, subtitlesBridge])
+  }, [timeline, subtitlesBridge, onTimelineReplaced])
 
   return {
     timeline,

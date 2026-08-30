@@ -58,7 +58,12 @@ export function EditorPage() {
     [],
   )
 
-  const timelineState = useTimeline(projectId ?? '', subtitlesBridge)
+  // Los chips de silencios quitados guardan offsets del timeline en el que se
+  // detectaron — si el timeline se reemplaza por completo (cargar proyecto,
+  // undo, redo, vaciar) ya no corresponden y hay que descartarlos.
+  const clearRemovedSilences = useCallback(() => setRemovedSilences([]), [])
+
+  const timelineState = useTimeline(projectId ?? '', subtitlesBridge, clearRemovedSilences)
 
   const loadAssets = useCallback(async () => {
     if (!projectId) return

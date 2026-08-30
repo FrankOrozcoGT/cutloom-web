@@ -4,6 +4,7 @@ import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
+import { formatTimelineMs } from '@ui/format'
 import { TimeRuler } from './TimeRuler'
 import { Track } from './Track'
 import type { useTimeline } from './useTimeline'
@@ -467,7 +468,7 @@ export function Timeline({
                 title="Ir a este punto del timeline"
                 className="hover:text-text-strong"
               >
-                {(removed.clip.offsetMs / 1000).toFixed(1)}s — silencio quitado ({(removed.clip.durationMs / 1000).toFixed(1)}s)
+                {formatTimelineMs(removed.clip.offsetMs)} — silencio quitado ({formatTimelineMs(removed.clip.durationMs)})
               </button>
               <button
                 type="button"
