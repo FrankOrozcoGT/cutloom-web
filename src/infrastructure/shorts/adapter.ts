@@ -22,11 +22,14 @@ export class ShortsApiAdapter implements ShortsBackendPort {
   }
 
   async improveSubtitles(
-    projectId: string,
+    _projectId: string,
     segments: SubtitleSegment[],
     userContext?: string,
   ): Promise<Result<ImproveResult, ShortsError>> {
-    const response = await this.http.post('/api/shorts/improve-subtitles', { projectId, segments, userContext })
+    const response = await this.http.post('/api/shorts/improve-subtitles', {
+      segments: segments.map((segment) => ({ start: segment.startMs, end: segment.endMs, text: segment.text })),
+      userContext,
+    })
     if (!response.ok) {
       return err(await this.parseError(response))
     }

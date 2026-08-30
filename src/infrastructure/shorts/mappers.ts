@@ -10,8 +10,8 @@ export interface DetectedCandidateDto {
 }
 
 export interface ImprovedSubtitleDto {
-  startMs: number
-  endMs: number
+  start: number
+  end: number
   original: string
   corrected: string
 }
@@ -48,7 +48,7 @@ export function mapDetectResult(dto: DetectResultDto): DetectResult {
 }
 
 export function mapImprovedSubtitle(dto: ImprovedSubtitleDto): ImprovedSubtitle {
-  return { startMs: dto.startMs, endMs: dto.endMs, original: dto.original, corrected: dto.corrected }
+  return { startMs: dto.start, endMs: dto.end, original: dto.original, corrected: dto.corrected }
 }
 
 export function mapImproveResult(dto: ImproveResultDto): ImproveResult {
