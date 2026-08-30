@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { AudioWaveform, Minus, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
+import { AudioWaveform, Eye, EyeOff, Minus, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
 import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
@@ -105,6 +105,7 @@ export function Timeline({
   } = state
   const [isOverEmpty, setIsOverEmpty] = useState(false)
   const [isClearAllConfirmOpen, setIsClearAllConfirmOpen] = useState(false)
+  const [silenceChipsVisible, setSilenceChipsVisible] = useState(true)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const {
     exporting,
@@ -468,30 +469,47 @@ export function Timeline({
       )}
 
       {removedSilences.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {removedSilences.map((chip, index) => (
-            <div
-              key={chip.segment.clip.id}
-              className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
-            >
-              <button
-                type="button"
-                onClick={() => setPlayheadMs(chip.displayOffsetMs)}
-                title="Ir a este punto del timeline"
-                className="hover:text-text-strong"
-              >
-                {formatTimelineMs(chip.displayOffsetMs)} — silencio quitado ({formatTimelineMs(chip.segment.clip.durationMs)})
-              </button>
-              <button
-                type="button"
-                onClick={() => onRestoreSilence?.(index)}
-                title="Revertir este corte"
-                className="text-danger hover:underline"
-              >
-                <X className="h-3 w-3" />
-              </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSilenceChipsVisible((visible) => !visible)}
+            title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+            aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong"
+          >
+            {silenceChipsVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </button>
+          {silenceChipsVisible ? (
+            <div className="flex flex-nowrap gap-2 overflow-x-auto">
+              {removedSilences.map((chip, index) => (
+                <div
+                  key={chip.segment.clip.id}
+                  className="flex shrink-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPlayheadMs(chip.displayOffsetMs)}
+                    title="Ir a este punto del timeline"
+                    className="hover:text-text-strong"
+                  >
+                    {formatTimelineMs(chip.displayOffsetMs)} — silencio quitado ({formatTimelineMs(chip.segment.clip.durationMs)})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRestoreSilence?.(index)}
+                    title="Revertir este corte"
+                    className="text-danger hover:underline"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            <span className="text-xs text-text-muted">
+              {removedSilences.length} {removedSilences.length === 1 ? 'silencio quitado' : 'silencios quitados'}
+            </span>
+          )}
         </div>
       )}
 
