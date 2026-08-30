@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { detectSilenceCuts, type DetectedCandidate, type ImprovedSubtitle, type ShortScore, type SilenceCut } from '@domain/shorts'
+import type { DetectedCandidate, ImprovedSubtitle, ShortScore } from '@domain/shorts'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import {
@@ -11,8 +11,6 @@ import {
 
 export type ImproveSubtitlesState = 'idle' | 'loading' | 'success' | 'error'
 export type CreateShortsState = 'idle' | 'extracting_audio' | 'detecting' | 'scoring' | 'success' | 'error'
-
-const MIN_SILENCE_GAP_MS = 700
 
 interface UseShortsResult {
   improveState: ImproveSubtitlesState
@@ -29,10 +27,6 @@ interface UseShortsResult {
   shorts: ShortScore[]
   warnings: string[]
   createShorts: (projectId: string, segments: SubtitleSegment[], ideal?: string) => Promise<void>
-
-  silenceCuts: SilenceCut[]
-  detectSilence: (segments: SubtitleSegment[], minGapMs?: number) => void
-  removeSilenceCut: (index: number) => void
 }
 
 export function useShorts(): UseShortsResult {
@@ -46,8 +40,6 @@ export function useShorts(): UseShortsResult {
   const [candidates, setCandidates] = useState<DetectedCandidate[]>([])
   const [shorts, setShorts] = useState<ShortScore[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
-
-  const [silenceCuts, setSilenceCuts] = useState<SilenceCut[]>([])
 
   const improveSubtitles = useCallback(async (projectId: string, segments: SubtitleSegment[], userContext?: string) => {
     setImproveState('loading')
@@ -108,14 +100,6 @@ export function useShorts(): UseShortsResult {
     setCreateShortsState('success')
   }, [])
 
-  const detectSilence = useCallback((segments: SubtitleSegment[], minGapMs: number = MIN_SILENCE_GAP_MS) => {
-    setSilenceCuts(detectSilenceCuts(segments, minGapMs))
-  }, [])
-
-  const removeSilenceCut = useCallback((index: number) => {
-    setSilenceCuts((previous) => previous.filter((_, i) => i !== index))
-  }, [])
-
   return {
     improveState,
     improveError,
@@ -131,9 +115,5 @@ export function useShorts(): UseShortsResult {
     shorts,
     warnings,
     createShorts,
-
-    silenceCuts,
-    detectSilence,
-    removeSilenceCut,
   }
 }

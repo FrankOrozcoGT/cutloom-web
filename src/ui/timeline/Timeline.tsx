@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { findClipById, getTimelineDurationMs, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
-import type { SilenceCut } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -35,11 +34,9 @@ interface TimelineProps {
   activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
   /** Cualquier cambio de valor dispara "Ajustar" (fit to screen) — usado para ver el timeline completo al empezar a generar subtítulos. */
   autoFitSignal?: unknown
-  /** Cortes por silencio: gratis, requiere subtítulos generados para detectar los huecos entre segmentos. */
+  /** Cortes por silencio: gratis, aplica los cortes directamente sobre el timeline (mismo flujo que cortar con S/tijera — entra al historial de undo/redo). Requiere subtítulos generados para detectar los huecos entre segmentos. */
   hasSubtitles?: boolean
-  silenceCuts?: SilenceCut[]
   onDetectSilence?: () => void
-  onRemoveSilenceCut?: (index: number) => void
 }
 
 export function Timeline({
@@ -53,9 +50,7 @@ export function Timeline({
   activeSubtitleRangeMs,
   autoFitSignal,
   hasSubtitles = false,
-  silenceCuts = [],
   onDetectSilence,
-  onRemoveSilenceCut,
 }: TimelineProps) {
   const {
     timeline,
@@ -402,21 +397,6 @@ export function Timeline({
       {error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {ERROR_MESSAGES[error]}
-        </div>
-      )}
-
-      {silenceCuts.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {silenceCuts.map((cut, index) => (
-            <div key={`${cut.startMs}-${index}`} className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted">
-              <button type="button" onClick={() => setPlayheadMs(cut.startMs)} className="hover:text-text-strong">
-                {(cut.startMs / 1000).toFixed(1)}s – {(cut.endMs / 1000).toFixed(1)}s
-              </button>
-              <button type="button" onClick={() => onRemoveSilenceCut?.(index)} className="text-danger hover:underline">
-                ✕
-              </button>
-            </div>
-          ))}
         </div>
       )}
 

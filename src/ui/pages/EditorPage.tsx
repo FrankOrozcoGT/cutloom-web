@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { detectSilenceCuts } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
+import { findActiveClip } from '@domain/timeline'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { CollapsibleSection } from '@ui/components/CollapsibleSection'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
@@ -164,10 +166,28 @@ export function EditorPage() {
     [projectId, subtitlesState.subtitles, shortsState],
   )
 
-  const handleDetectSilence = useCallback(() => {
+  // Aplica los cortes por silencio directamente sobre el timeline (mismo
+  // splitClip que usa la tijera manual) en vez de solo mostrarlos aparte —
+  // así entran al historial de undo/redo y los clips quedan realmente
+  // cortados, listos para que el usuario elimine el tramo de silencio si
+  // quiere. Cada hueco se corta en sus dos extremos para aislarlo como su
+  // propio clip; se procesan en orden porque cada split muta el timeline
+  // (los offsets de cortes posteriores dependen de los anteriores).
+  const handleDetectSilence = useCallback(async () => {
     if (!subtitlesState.subtitles) return
-    shortsState.detectSilence(subtitlesState.subtitles.segments)
-  }, [subtitlesState.subtitles, shortsState])
+    const cuts = detectSilenceCuts(subtitlesState.subtitles.segments, 700)
+
+    for (const cut of cuts) {
+      for (const cutPointMs of [cut.startMs, cut.endMs]) {
+        const timeline = timelineState.timeline
+        if (!timeline) return
+        const active = findActiveClip(timeline, cutPointMs)
+        if (!active) continue
+        if (cutPointMs <= active.clip.offsetMs || cutPointMs >= active.clip.offsetMs + active.clip.durationMs) continue
+        await timelineState.splitClip(active.clip.id, cutPointMs)
+      }
+    }
+  }, [subtitlesState.subtitles, timelineState])
 
   if (!projectId) {
     return null
@@ -263,9 +283,7 @@ export function EditorPage() {
             activeSubtitleRangeMs={activeSubtitleRangeMs}
             autoFitSignal={fitTrigger}
             hasSubtitles={!!subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0}
-            silenceCuts={shortsState.silenceCuts}
-            onDetectSilence={handleDetectSilence}
-            onRemoveSilenceCut={shortsState.removeSilenceCut}
+            onDetectSilence={() => void handleDetectSilence()}
           />
         </div>
       )}
