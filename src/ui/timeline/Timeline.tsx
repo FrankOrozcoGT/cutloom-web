@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { AudioWaveform, Eye, EyeOff, Minus, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
 import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
@@ -59,6 +59,28 @@ interface TimelineProps {
 export interface RemovedSilenceChip {
   segment: RemovedSegment
   displayOffsetMs: number
+}
+
+/**
+ * Ventana alrededor del playhead dentro de la cual un chip de silencio se
+ * tiñe de naranja — mientras más cerca está el corte del playhead, más
+ * intenso; al alejarse vuelve al tono apagado normal. Así se ubica de un
+ * vistazo qué cortes vienen y cuáles ya pasaron durante la reproducción.
+ */
+const CHIP_PROXIMITY_WINDOW_MS = 30_000
+// --color-text-muted y --color-accent de index.css, interpolados a mano para
+// no pisar los tokens con clases condicionales.
+const MUTED_RGB = [122, 115, 106] as const
+const ACCENT_RGB = [255, 107, 74] as const
+
+function chipProximityStyle(displayOffsetMs: number, playheadMs: number): CSSProperties {
+  const t = Math.max(0, 1 - Math.abs(displayOffsetMs - playheadMs) / CHIP_PROXIMITY_WINDOW_MS)
+  const [r, g, b] = MUTED_RGB.map((channel, i) => Math.round(channel + (ACCENT_RGB[i] - channel) * t))
+  return {
+    color: `rgb(${r} ${g} ${b})`,
+    borderColor: `rgb(${ACCENT_RGB.join(' ')} / ${(0.15 + 0.45 * t).toFixed(2)})`,
+    backgroundColor: `rgb(${ACCENT_RGB.join(' ')} / ${(0.14 * t).toFixed(2)})`,
+  }
 }
 
 export function Timeline({
@@ -484,7 +506,8 @@ export function Timeline({
               {removedSilences.map((chip, index) => (
                 <div
                   key={chip.segment.clip.id}
-                  className="flex shrink-0 items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
+                  style={chipProximityStyle(chip.displayOffsetMs, playheadMs)}
+                  className="flex shrink-0 items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors"
                 >
                   <button
                     type="button"
