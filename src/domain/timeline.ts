@@ -410,6 +410,30 @@ export function removeSegment(
   return ok({ timeline: closed, removed })
 }
 
+/**
+ * Aplica varios cortes [startMs, endMs) sobre el mismo timeline en memoria,
+ * uno tras otro (reusando removeSegment, sin duplicar su lógica), y devuelve
+ * el timeline final junto con cada segmento quitado. Pensado para que el
+ * caller haga un único applyNewTimeline con el resultado — todo el lote
+ * entra como un solo paso de historial, no uno por corte. Un corte que no
+ * encuentra clip activo (cae en una zona vacía del timeline) se saltea en
+ * vez de abortar el lote completo.
+ */
+export function removeSegments(
+  timeline: Timeline,
+  cuts: { startMs: number; endMs: number }[],
+): { timeline: Timeline; removed: RemovedSegment[] } {
+  let working = timeline
+  const removed: RemovedSegment[] = []
+  for (const cut of cuts) {
+    const result = removeSegment(working, cut.startMs, cut.endMs)
+    if (!result.ok) continue
+    working = result.value.timeline
+    removed.push(result.value.removed)
+  }
+  return { timeline: working, removed }
+}
+
 /** Revierte exactamente el corte producido por removeSegment: abre de nuevo el hueco y reinserta el clip quitado en su lugar original. */
 export function reinsertSegment(timeline: Timeline, removed: RemovedSegment): Timeline {
   const opened = shiftClipsFrom(timeline, removed.clip.offsetMs, removed.clip.durationMs)
@@ -417,6 +441,71 @@ export function reinsertSegment(timeline: Timeline, removed: RemovedSegment): Ti
     track.id === removed.trackId ? { ...track, clips: [...track.clips, removed.clip] } : track,
   )
   return { ...opened, tracks: updatedTracks }
+}
+
+export interface SilenceCut {
+  startMs: number
+  endMs: number
+}
+
+const DEFAULT_SILENCE_THRESHOLD_DB = -40
+const DEFAULT_MIN_SILENCE_MS = 700
+const RMS_WINDOW_MS = 20
+
+function dbToAmplitude(db: number): number {
+  return 10 ** (db / 20)
+}
+
+/**
+ * Detecta tramos de silencio real en el audio (RMS por ventana bajo un
+ * umbral en dB, sostenido al menos minSilenceMs) — el mismo enfoque que usan
+ * los editores reales (Descript, AutoCut, Premiere): analizar el volumen del
+ * audio directamente, no depender de que exista una transcripción. audio es
+ * mono a sampleRate (coherente con TARGET_SAMPLE_RATE de domain/shorts.ts,
+ * que es lo que produce la extracción de audio del timeline).
+ */
+export function detectSilenceCuts(
+  audio: Float32Array,
+  sampleRate: number,
+  options: { thresholdDb?: number; minSilenceMs?: number } = {},
+): SilenceCut[] {
+  const thresholdAmplitude = dbToAmplitude(options.thresholdDb ?? DEFAULT_SILENCE_THRESHOLD_DB)
+  const minSilenceMs = options.minSilenceMs ?? DEFAULT_MIN_SILENCE_MS
+  const windowSize = Math.max(1, Math.round((RMS_WINDOW_MS / 1000) * sampleRate))
+
+  const cuts: SilenceCut[] = []
+  let silenceStartSample: number | null = null
+
+  for (let start = 0; start < audio.length; start += windowSize) {
+    const end = Math.min(start + windowSize, audio.length)
+    let sumSquares = 0
+    for (let i = start; i < end; i += 1) {
+      sumSquares += audio[i] * audio[i]
+    }
+    const rms = Math.sqrt(sumSquares / (end - start))
+    const isSilent = rms < thresholdAmplitude
+
+    if (isSilent && silenceStartSample === null) {
+      silenceStartSample = start
+    } else if (!isSilent && silenceStartSample !== null) {
+      const startMs = (silenceStartSample / sampleRate) * 1000
+      const endMs = (start / sampleRate) * 1000
+      if (endMs - startMs >= minSilenceMs) {
+        cuts.push({ startMs, endMs })
+      }
+      silenceStartSample = null
+    }
+  }
+
+  if (silenceStartSample !== null) {
+    const startMs = (silenceStartSample / sampleRate) * 1000
+    const endMs = (audio.length / sampleRate) * 1000
+    if (endMs - startMs >= minSilenceMs) {
+      cuts.push({ startMs, endMs })
+    }
+  }
+
+  return cuts
 }
 
 /** Quita el clip seleccionado del timeline, dejando un hueco en su lugar (no recorre el resto hacia atrás). */

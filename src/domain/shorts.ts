@@ -1,5 +1,4 @@
 import { err, ok, type Result } from '@application/result'
-import type { SubtitleSegment } from '@domain/subtitles'
 
 /** Sample rate compartido con AudioExtractionAdapter — el audio del timeline ya se extrae mono a esta frecuencia. */
 export const TARGET_SAMPLE_RATE = 16000
@@ -41,25 +40,6 @@ export interface ScoreResult {
 export interface ImproveResult {
   summary: string
   correctedSubtitles: ImprovedSubtitle[]
-}
-
-export interface SilenceCut {
-  startMs: number
-  endMs: number
-}
-
-/** Detecta huecos de silencio entre segmentos de subtítulos consecutivos (>= minGapMs) como candidatos de corte. */
-export function detectSilenceCuts(segments: SubtitleSegment[], minGapMs: number): SilenceCut[] {
-  const sorted = [...segments].sort((a, b) => a.startMs - b.startMs)
-  const cuts: SilenceCut[] = []
-  for (let i = 0; i < sorted.length - 1; i += 1) {
-    const gapStart = sorted[i].endMs
-    const gapEnd = sorted[i + 1].startMs
-    if (gapEnd - gapStart >= minGapMs) {
-      cuts.push({ startMs: gapStart, endMs: gapEnd })
-    }
-  }
-  return cuts
 }
 
 export type SliceError = 'INVALID_RANGE' | 'OUT_OF_BOUNDS'

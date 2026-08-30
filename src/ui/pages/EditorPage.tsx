@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { detectSilenceCuts } from '@domain/shorts'
+import { TARGET_SAMPLE_RATE } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
-import type { RemovedSegment } from '@domain/timeline'
+import { detectSilenceCuts, type RemovedSegment } from '@domain/timeline'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { CollapsibleSection } from '@ui/components/CollapsibleSection'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
@@ -17,6 +17,7 @@ import { useTimeline } from '@ui/timeline/useTimeline'
 import { useAuth } from '@ui/auth/useAuth'
 import { useShorts } from '@ui/hooks/useShorts'
 import { useSubtitles } from '@ui/hooks/useSubtitles'
+import { extractSubtitlesAudioUseCase } from '@ui/shorts/composition'
 import { videoStorage, projectUseCase } from '@ui/video/composition'
 
 function videosSectionTitle(assetCount: number): string {
@@ -31,6 +32,7 @@ export function EditorPage() {
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
   const [removedSilences, setRemovedSilences] = useState<RemovedSegment[]>([])
+  const [isDetectingSilence, setIsDetectingSilence] = useState(false)
 
   const { hasActiveFeature } = useAuth()
   const hasShortsAccess = hasActiveFeature('shorts_ai')
@@ -167,21 +169,29 @@ export function EditorPage() {
     [projectId, subtitlesState.subtitles, shortsState],
   )
 
-  // Elimina todos los huecos de silencio detectados como un solo paso de
-  // historial (removeSegments aplica los N cortes sobre el mismo timeline y
-  // persiste una sola vez) — un Ctrl+Z deshace el lote completo, no corte por
-  // corte. Se ordenan de atrás hacia adelante porque cada corte corre hacia
-  // atrás todo lo posterior al hueco; procesarlos en ese orden evita que un
-  // corte ya aplicado invalide el offset de los huecos que todavía faltan.
-  // Revertir un silencio puntual después (la X) es una acción nueva e
-  // independiente que entra a su propio paso de historial vía
-  // reinsertSegment — no hace falta deshacer el lote para eso.
+  // Detecta silencio real analizando el volumen del audio del timeline (RMS
+  // por ventana bajo un umbral), igual que Descript/AutoCut/Premiere — no
+  // depende de que existan subtítulos, que eran solo un proxy indirecto e
+  // impreciso (Whisper puede fusionar pausas cortas dentro de un segmento, o
+  // no transcribir bien un tramo con ruido que no es silencio real).
+  //
+  // Todos los huecos detectados se eliminan como un solo paso de historial:
+  // removeSegments (dominio) resuelve el lote completo sobre el timeline en
+  // memoria y acá solo se aplica una vez con applyNewTimeline — un Ctrl+Z
+  // deshace los N cortes juntos, no de a uno. Revertir un silencio puntual
+  // después (la X) es una acción nueva e independiente con su propio paso de
+  // historial vía reinsertSegment — no hace falta deshacer el lote para eso.
   const handleDetectSilence = useCallback(async () => {
-    if (!subtitlesState.subtitles) return
-    const cuts = detectSilenceCuts(subtitlesState.subtitles.segments, 700).sort((a, b) => b.startMs - a.startMs)
-    const removed = await timelineState.removeSegments(cuts)
-    setRemovedSilences((previous) => [...previous, ...[...removed].reverse()])
-  }, [subtitlesState.subtitles, timelineState])
+    if (!projectId) return
+    setIsDetectingSilence(true)
+    const audioResult = await extractSubtitlesAudioUseCase.execute(projectId)
+    if (audioResult.ok) {
+      const cuts = detectSilenceCuts(audioResult.value, TARGET_SAMPLE_RATE).sort((a, b) => b.startMs - a.startMs)
+      const removed = await timelineState.removeSegments(cuts)
+      setRemovedSilences((previous) => [...previous, ...[...removed].reverse()])
+    }
+    setIsDetectingSilence(false)
+  }, [projectId, timelineState])
 
   const handleRestoreSilence = useCallback(
     async (index: number) => {
@@ -286,7 +296,7 @@ export function EditorPage() {
             subtitlesProgressUntilMs={subtitlesProgressUntilMs}
             activeSubtitleRangeMs={activeSubtitleRangeMs}
             autoFitSignal={fitTrigger}
-            hasSubtitles={!!subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0}
+            isDetectingSilence={isDetectingSilence}
             onDetectSilence={() => void handleDetectSilence()}
             removedSilences={removedSilences}
             onRestoreSilence={(index) => void handleRestoreSilence(index)}

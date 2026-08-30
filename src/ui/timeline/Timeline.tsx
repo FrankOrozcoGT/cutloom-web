@@ -35,8 +35,8 @@ interface TimelineProps {
   activeSubtitleRangeMs?: { startMs: number; endMs: number } | null
   /** Cualquier cambio de valor dispara "Ajustar" (fit to screen) — usado para ver el timeline completo al empezar a generar subtítulos. */
   autoFitSignal?: unknown
-  /** Cortes por silencio: gratis, elimina cada hueco del timeline y cierra el espacio (mismo mecanismo de datos que un corte real). Requiere subtítulos generados para detectar los huecos entre segmentos. */
-  hasSubtitles?: boolean
+  /** Cortes por silencio: gratis, analiza el volumen del audio del timeline y elimina cada hueco, cerrando el espacio (mismo mecanismo de datos que un corte real). No depende de subtítulos. */
+  isDetectingSilence?: boolean
   onDetectSilence?: () => void
   /** Silencios ya quitados, cada uno reversible por separado con su propia X (no por el historial genérico de undo). */
   removedSilences?: RemovedSegment[]
@@ -53,7 +53,7 @@ export function Timeline({
   subtitlesProgressUntilMs,
   activeSubtitleRangeMs,
   autoFitSignal,
-  hasSubtitles = false,
+  isDetectingSilence = false,
   onDetectSilence,
   removedSilences = [],
   onRestoreSilence,
@@ -333,12 +333,12 @@ export function Timeline({
             <button
               type="button"
               onClick={onDetectSilence}
-              disabled={!hasSubtitles}
+              disabled={isDetectingSilence}
               aria-label="Detectar cortes por silencio"
-              title={hasSubtitles ? 'Detectar cortes por silencio' : 'Detectar cortes por silencio (genera subtítulos primero)'}
+              title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
               className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
             >
-              <AudioWaveform className="h-4 w-4" />
+              <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
             </button>
           )}
           <button
@@ -402,7 +402,14 @@ export function Timeline({
               key={removed.clip.id}
               className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
             >
-              <span>Silencio quitado ({(removed.clip.durationMs / 1000).toFixed(1)}s)</span>
+              <button
+                type="button"
+                onClick={() => setPlayheadMs(removed.clip.offsetMs)}
+                title="Ir a este punto del timeline"
+                className="hover:text-text-strong"
+              >
+                {(removed.clip.offsetMs / 1000).toFixed(1)}s — silencio quitado ({(removed.clip.durationMs / 1000).toFixed(1)}s)
+              </button>
               <button
                 type="button"
                 onClick={() => onRestoreSilence?.(index)}

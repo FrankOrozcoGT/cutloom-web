@@ -8,7 +8,7 @@ import {
   moveClip as moveClipInDomain,
   reinsertSegment as reinsertSegmentInDomain,
   removeClipsByAsset,
-  removeSegment as removeSegmentInDomain,
+  removeSegments as removeSegmentsInDomain,
   resizeClip as resizeClipInDomain,
   splitClip as splitClipInDomain,
   type RemovedSegment,
@@ -184,17 +184,11 @@ export class ArrangeClipsUseCase {
 
   /**
    * Quita varios tramos [startMs, endMs) del timeline en una sola operación
-   * (p.ej. todos los silencios detectados de una vez), cerrando cada hueco
-   * antes de aplicar el siguiente corte. Persiste una sola vez al final para
-   * que todo el lote quede como un único paso de historial en useTimeline —
-   * deshacer con Ctrl+Z revierte los N cortes juntos, no de a uno. Devuelve
-   * cada segmento quitado por separado para poder revertir uno específico
-   * después con reinsertSegment.
-   *
-   * Un hueco individual puede no corresponder a ningún clip (p.ej. cae en una
-   * zona vacía del timeline que ya no tiene video) — se salta ese hueco en vez
-   * de abortar el lote completo, para no perder los demás cortes válidos por
-   * uno solo que no aplica.
+   * (p.ej. todos los silencios detectados de una vez) — removeSegments del
+   * dominio ya resuelve el lote completo sobre el timeline en memoria; acá
+   * solo se persiste el resultado final, igual que cualquier otra acción de
+   * este caso de uso. Deshacer con Ctrl+Z revierte los N cortes juntos, no de
+   * a uno, porque llega como un único cambio a useTimeline.
    */
   async removeSegments(
     projectId: string,
@@ -205,23 +199,14 @@ export class ArrangeClipsUseCase {
       return err(timelineResult.error)
     }
 
-    let working = timelineResult.value
-    const removed: RemovedSegment[] = []
-    for (const cut of cuts) {
-      const removeResult = removeSegmentInDomain(working, cut.startMs, cut.endMs)
-      if (!removeResult.ok) {
-        continue
-      }
-      working = removeResult.value.timeline
-      removed.push(removeResult.value.removed)
-    }
+    const result = removeSegmentsInDomain(timelineResult.value, cuts)
 
-    const saveResult = await this.storage.save(working)
+    const saveResult = await this.storage.save(result.timeline)
     if (!saveResult.ok) {
       return err('STORAGE_ERROR')
     }
 
-    return ok({ timeline: working, removed })
+    return ok(result)
   }
 
   /** Revierte exactamente el corte de removeSegment: reabre el hueco y reinserta el clip quitado. */
