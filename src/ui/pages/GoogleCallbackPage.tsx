@@ -5,6 +5,19 @@ import { AuthLayout } from '@ui/components/AuthLayout'
 import { Button } from '@ui/components/Button'
 import { resolveReturnTo } from '@ui/auth/returnTo'
 
+function errorMessage(code: string): string {
+  switch (code) {
+    case 'GOOGLE_AUTH_FAILED':
+      return 'No se pudo iniciar sesión con Google. Intentá de nuevo.'
+    case 'EMAIL_EXISTS_GOOGLE':
+      return 'Este email ya está registrado con Google. Iniciá sesión con Google.'
+    case 'EMAIL_EXISTS_LOCAL':
+      return 'Este email ya está registrado con contraseña. Iniciá sesión con tu contraseña.'
+    default:
+      return 'Ocurrió un error inesperado al iniciar sesión con Google.'
+  }
+}
+
 export function GoogleCallbackPage() {
   // No dispara su propio restoreSession(): AuthProvider ya lo hace una
   // única vez al montar la app. Si esta página llamara restoreSession()
@@ -19,14 +32,14 @@ export function GoogleCallbackPage() {
   useEffect(() => {
     const queryError = searchParams.get('error')
     if (queryError) {
-      setError('No se pudo iniciar sesión con Google.')
+      setError(errorMessage(queryError))
       return
     }
 
     if (isLoading) return
 
     if (!isAuthenticated) {
-      setError('No se pudo completar el inicio de sesión con Google.')
+      setError(errorMessage('UNEXPECTED_ERROR'))
       return
     }
 
@@ -35,12 +48,14 @@ export function GoogleCallbackPage() {
   }, [searchParams, isLoading, isAuthenticated, navigate])
 
   if (error) {
+    const returnTo = resolveReturnTo(searchParams.get('returnTo'))
+    const retryTarget = returnTo === '/projects' ? '/login' : `/login?returnTo=${encodeURIComponent(returnTo)}`
     return (
       <AuthLayout>
         <p role="alert" className="mb-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
           {error}
         </p>
-        <Button type="button" onClick={() => navigate('/login', { replace: true })}>
+        <Button type="button" onClick={() => navigate(retryTarget, { replace: true })}>
           Volver a intentar
         </Button>
       </AuthLayout>
