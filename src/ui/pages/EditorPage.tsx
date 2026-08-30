@@ -24,6 +24,33 @@ function videosSectionTitle(assetCount: number): string {
   return assetCount > 0 ? `Videos (${assetCount})` : 'Videos'
 }
 
+// Los chips de silencios quitados se persisten por proyecto en localStorage
+// para sobrevivir recargas — el corte en sí ya vive en el timeline guardado;
+// esto conserva solo el registro reversible (la X de cada chip).
+function removedSilencesKey(projectId: string): string {
+  return `cutloom:removed-silences:${projectId}`
+}
+
+function loadRemovedSilences(projectId: string): RemovedSilenceChip[] {
+  try {
+    const raw = localStorage.getItem(removedSilencesKey(projectId))
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((chip): chip is RemovedSilenceChip => {
+      const candidate = chip as RemovedSilenceChip | null
+      return (
+        !!candidate &&
+        Number.isFinite(candidate.displayOffsetMs) &&
+        !!candidate.segment?.clip &&
+        typeof candidate.segment.trackId === 'string'
+      )
+    })
+  } catch {
+    return []
+  }
+}
+
 export function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [assets, setAssets] = useState<VideoAsset[]>([])
@@ -31,7 +58,9 @@ export function EditorPage() {
   const [projectName, setProjectName] = useState('')
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
-  const [removedSilences, setRemovedSilences] = useState<RemovedSilenceChip[]>([])
+  const [removedSilences, setRemovedSilences] = useState<RemovedSilenceChip[]>(() =>
+    projectId ? loadRemovedSilences(projectId) : [],
+  )
   const [isDetectingSilence, setIsDetectingSilence] = useState(false)
   const [silenceThresholdDb, setSilenceThresholdDb] = useState(-40)
   const [silencePaddingMs, setSilencePaddingMs] = useState(1000)
@@ -58,12 +87,50 @@ export function EditorPage() {
     [],
   )
 
-  // Los chips de silencios quitados guardan offsets del timeline en el que se
-  // detectaron — si el timeline se reemplaza por completo (cargar proyecto,
-  // undo, redo, vaciar) ya no corresponden y hay que descartarlos.
-  const clearRemovedSilences = useCallback(() => setRemovedSilences([]), [])
+  // Los chips de silencios quitados viajan dentro del historial del timeline
+  // (sus offsets solo corresponden al timeline en el que se detectaron) — el
+  // bridge expone el estado actual y restaura snapshots en undo/redo/vaciar
+  // sin depender de la identidad de removedSilences en cada render.
+  const removedSilencesRef = useRef(removedSilences)
+  removedSilencesRef.current = removedSilences
+  const removedSilencesBridge = useMemo(
+    () => ({
+      get: () => removedSilencesRef.current,
+      restore: (chips: RemovedSilenceChip[]) => setRemovedSilences(chips),
+    }),
+    [],
+  )
 
-  const timelineState = useTimeline(projectId ?? '', subtitlesBridge, clearRemovedSilences)
+  const timelineState = useTimeline(projectId ?? '', subtitlesBridge, removedSilencesBridge)
+
+  // Al cambiar de proyecto sin desmontar la página se recargan los chips del
+  // proyecto entrante.
+  const previousProjectRef = useRef(projectId)
+  const skipNextSaveRef = useRef(false)
+  useEffect(() => {
+    if (previousProjectRef.current === projectId) return
+    previousProjectRef.current = projectId
+    // El efecto de guardado corre en este mismo commit con los chips del
+    // proyecto saliente — se salta una vez para no pisar la llave nueva.
+    skipNextSaveRef.current = true
+    setRemovedSilences(projectId ? loadRemovedSilences(projectId) : [])
+  }, [projectId])
+
+  // Guarda los chips en cada cambio — también cuando se limpian (undo, redo o
+  // vaciar el timeline), para que el registro persistido no resucite cortes
+  // que el usuario ya deshizo.
+  useEffect(() => {
+    if (!projectId) return
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false
+      return
+    }
+    try {
+      localStorage.setItem(removedSilencesKey(projectId), JSON.stringify(removedSilences))
+    } catch {
+      // localStorage lleno o no disponible — los chips siguen funcionando en memoria.
+    }
+  }, [projectId, removedSilences])
 
   const loadAssets = useCallback(async () => {
     if (!projectId) return

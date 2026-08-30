@@ -74,11 +74,11 @@ const MUTED_RGB = [122, 115, 106] as const
 const ACCENT_RGB = [255, 107, 74] as const
 
 function chipProximityStyle(displayOffsetMs: number, playheadMs: number): CSSProperties {
-  // Caída cuadrática: el tinte naranja se concentra cerca del playhead y los
-  // chips a medio camino ya se ven casi apagados — con caída lineal una
-  // ventana útil dejaba todo levemente naranja y parecía que no reaccionaba.
+  // Raíz cuadrada: suaviza la caída sin apagar el tinte — con la caída
+  // cuadrática los chips a medio camino ya se veían apagados y no se notaba
+  // dónde estaba el playhead.
   const linear = Math.max(0, 1 - Math.abs(displayOffsetMs - playheadMs) / CHIP_PROXIMITY_WINDOW_MS)
-  const t = linear * linear
+  const t = Math.sqrt(linear)
   const [r, g, b] = MUTED_RGB.map((channel, i) => Math.round(channel + (ACCENT_RGB[i] - channel) * t))
   return {
     color: `rgb(${r} ${g} ${b})`,
@@ -392,64 +392,72 @@ export function Timeline({
           )}
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
-          {onDetectSilence && (
+          {(onDetectSilence || removedSilences.length > 0) && (
             <div className="flex items-center">
-              <button
-                type="button"
-                onClick={onDetectSilence}
-                disabled={isDetectingSilence}
-                aria-label="Detectar cortes por silencio"
-                title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
-                className="flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
-              >
-                <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
-              </button>
-              {silenceThresholdDb !== undefined && silencePaddingMs !== undefined && (
-                <details className="relative">
-                  <summary
-                    title="Opciones de detección de silencio"
-                    className="flex h-10 w-6 cursor-pointer list-none items-center justify-center rounded-r-lg border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8"
+              {onDetectSilence && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onDetectSilence}
+                    disabled={isDetectingSilence}
+                    aria-label="Detectar cortes por silencio"
+                    title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
+                    className="flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
                   >
-                    ⋯
-                  </summary>
-                  <div className="absolute right-0 z-30 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-lg">
-                    <label className="flex flex-col gap-1 text-xs text-text-muted">
-                      Umbral de silencio ({silenceThresholdDb} dB)
-                      <input
-                        type="range"
-                        min={-60}
-                        max={-20}
-                        step={1}
-                        value={silenceThresholdDb}
-                        onChange={(event) => onSilenceThresholdDbChange?.(Number(event.target.value))}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-xs text-text-muted">
-                      Margen junto a la voz ({(silencePaddingMs / 1000).toFixed(1)}s)
-                      <input
-                        type="range"
-                        min={0}
-                        max={2000}
-                        step={100}
-                        value={silencePaddingMs}
-                        onChange={(event) => onSilencePaddingMsChange?.(Number(event.target.value))}
-                      />
-                    </label>
-                  </div>
-                </details>
+                    <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
+                  </button>
+                  {silenceThresholdDb !== undefined && silencePaddingMs !== undefined && (
+                    <details className="relative">
+                      <summary
+                        title="Opciones de detección de silencio"
+                        className={`flex h-10 w-6 cursor-pointer list-none items-center justify-center border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8 ${
+                          removedSilences.length > 0 ? 'border-r-0' : 'rounded-r-lg'
+                        }`}
+                      >
+                        ⋯
+                      </summary>
+                      <div className="absolute right-0 z-30 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-lg">
+                        <label className="flex flex-col gap-1 text-xs text-text-muted">
+                          Umbral de silencio ({silenceThresholdDb} dB)
+                          <input
+                            type="range"
+                            min={-60}
+                            max={-20}
+                            step={1}
+                            value={silenceThresholdDb}
+                            onChange={(event) => onSilenceThresholdDbChange?.(Number(event.target.value))}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs text-text-muted">
+                          Margen junto a la voz ({(silencePaddingMs / 1000).toFixed(1)}s)
+                          <input
+                            type="range"
+                            min={0}
+                            max={2000}
+                            step={100}
+                            value={silencePaddingMs}
+                            onChange={(event) => onSilencePaddingMsChange?.(Number(event.target.value))}
+                          />
+                        </label>
+                      </div>
+                    </details>
+                  )}
+                </>
+              )}
+              {removedSilences.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSilenceChipsVisible((visible) => !visible)}
+                  title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+                  aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+                  className={`flex h-10 w-10 items-center justify-center border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong sm:h-8 sm:w-8 ${
+                    onDetectSilence ? 'rounded-r-lg' : 'rounded-lg'
+                  }`}
+                >
+                  {silenceChipsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </button>
               )}
             </div>
-          )}
-          {removedSilences.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSilenceChipsVisible((visible) => !visible)}
-              title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
-              aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong sm:h-8 sm:w-8"
-            >
-              {silenceChipsVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            </button>
           )}
           <button
             type="button"
@@ -506,7 +514,7 @@ export function Timeline({
       )}
 
       {removedSilences.length > 0 && silenceChipsVisible && (
-        <div className="flex flex-nowrap gap-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-2">
           {removedSilences.map((chip, index) => (
             <div
               key={chip.segment.clip.id}
