@@ -357,20 +357,23 @@ export function Timeline({
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
           {onDetectSilence && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center">
               <button
                 type="button"
                 onClick={onDetectSilence}
                 disabled={isDetectingSilence}
                 aria-label="Detectar cortes por silencio"
                 title={isDetectingSilence ? 'Analizando audio…' : 'Detectar cortes por silencio'}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
+                className="flex h-10 w-10 items-center justify-center rounded-l-lg border border-r-0 border-border text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8"
               >
                 <AudioWaveform className={`h-4 w-4 ${isDetectingSilence ? 'animate-pulse' : ''}`} />
               </button>
               {silenceThresholdDb !== undefined && silencePaddingMs !== undefined && (
                 <details className="relative">
-                  <summary className="flex h-10 w-6 cursor-pointer list-none items-center justify-center rounded-lg border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8">
+                  <summary
+                    title="Opciones de detección de silencio"
+                    className="flex h-10 w-6 cursor-pointer list-none items-center justify-center rounded-r-lg border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8"
+                  >
                     ⋯
                   </summary>
                   <div className="absolute right-0 z-30 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-lg">
