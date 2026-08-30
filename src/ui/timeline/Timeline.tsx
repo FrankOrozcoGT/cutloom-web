@@ -77,6 +77,7 @@ export function Timeline({
     resizeClip,
     splitClip,
     deleteClip,
+    clearAllClips,
     undo,
     redo,
     canUndo,
@@ -333,6 +334,22 @@ export function Timeline({
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-danger hover:bg-danger-bg"
               >
                 <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {timeline.tracks.some((track) => track.clips.length > 0) && (
+            <div className="ml-2 flex items-center gap-1 border-l border-border pl-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('¿Eliminar todos los clips del timeline? Podés deshacerlo con Ctrl+Z.')) {
+                    void clearAllClips()
+                  }
+                }}
+                title="Eliminar todos los clips del timeline"
+                className="rounded-lg border border-border px-2 py-1.5 text-xs text-danger hover:bg-danger-bg sm:py-1"
+              >
+                Vaciar timeline
               </button>
             </div>
           )}

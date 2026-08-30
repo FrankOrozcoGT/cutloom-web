@@ -1,5 +1,6 @@
 import {
   addClipToTrack,
+  clearAllClips,
   createClip,
   createTimeline,
   createTrack,
@@ -254,6 +255,23 @@ export class ArrangeClipsUseCase {
     }
 
     const updatedTimeline = removeClipsByAsset(timelineResult.value, assetId)
+
+    const saveResult = await this.storage.save(updatedTimeline)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(updatedTimeline)
+  }
+
+  /** Vacía todos los clips del timeline, manteniendo la estructura de pistas. */
+  async clearAllClips(projectId: string): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+
+    const updatedTimeline = clearAllClips(timelineResult.value)
 
     const saveResult = await this.storage.save(updatedTimeline)
     if (!saveResult.ok) {

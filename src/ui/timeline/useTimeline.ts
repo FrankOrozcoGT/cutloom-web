@@ -24,7 +24,17 @@ interface SubtitlesBridge {
  * inline (p.ej. `projectId ?? ''`); solo se compara por valor acá adentro,
  * así que un valor primitivo estable alcanza — no hace falta memoizarlo afuera.
  */
-export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge) {
+export function useTimeline(
+  projectId: string,
+  subtitlesBridge?: SubtitlesBridge,
+  /**
+   * Se llama cuando el timeline se reemplaza por completo fuera de una edición
+   * puntual (cargar proyecto, undo, redo, vaciar): el caller debe descartar
+   * estado derivado de la estructura anterior (p.ej. chips de silencios
+   * quitados, cuyos offsets ya no corresponden al timeline restaurado).
+   */
+  onTimelineReplaced?: () => void,
+) {
   const [timeline, setTimelineState] = useState<Timeline | null>(null)
   const [past, setPast] = useState<HistoryEntry[]>([])
   const [future, setFuture] = useState<HistoryEntry[]>([])
@@ -201,6 +211,18 @@ export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge
     [projectId, applyNewTimeline],
   )
 
+  const clearAllClips = useCallback(async () => {
+    const result = await arrangeUseCase.clearAllClips(projectId)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError(null)
+    setSelectedClipId(null)
+    applyNewTimeline(result.value)
+    onTimelineReplaced?.()
+  }, [projectId, applyNewTimeline, onTimelineReplaced])
+
   const undo = useCallback(async () => {
     setPast((prevPast) => {
       if (prevPast.length === 0 || !timeline) return prevPast
@@ -244,6 +266,7 @@ export function useTimeline(projectId: string, subtitlesBridge?: SubtitlesBridge
     reinsertSegment,
     deleteClip,
     removeClipsByAsset,
+    clearAllClips,
     undo,
     redo,
     canUndo: past.length > 0,

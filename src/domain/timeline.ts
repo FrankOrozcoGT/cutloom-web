@@ -563,6 +563,11 @@ export function removeClipsByAsset(timeline: Timeline, assetId: string): Timelin
   return { ...timeline, tracks: updatedTracks }
 }
 
+/** Vacía todos los clips de todas las pistas, manteniendo la estructura de pistas existente. */
+export function clearAllClips(timeline: Timeline): Timeline {
+  return { ...timeline, tracks: timeline.tracks.map((track) => ({ ...track, clips: [] })) }
+}
+
 const MIN_CLIP_DURATION_MS = 100
 
 /**
