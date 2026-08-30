@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { TARGET_SAMPLE_RATE } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
-import { detectSilenceCuts, type RemovedSegment } from '@domain/timeline'
+import { detectSilenceCuts } from '@domain/timeline'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { CollapsibleSection } from '@ui/components/CollapsibleSection'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
@@ -11,7 +11,7 @@ import { SubtitlePanel } from '@ui/components/SubtitlePanel'
 import { SubtitleSegmentList } from '@ui/components/SubtitleSegmentList'
 import { VideoListItem } from '@ui/components/VideoListItem'
 import { VideoUploader } from '@ui/components/VideoUploader'
-import { Timeline } from '@ui/timeline/Timeline'
+import { Timeline, type RemovedSilenceChip } from '@ui/timeline/Timeline'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useTimeline } from '@ui/timeline/useTimeline'
 import { useAuth } from '@ui/auth/useAuth'
@@ -31,7 +31,7 @@ export function EditorPage() {
   const [projectName, setProjectName] = useState('')
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
-  const [removedSilences, setRemovedSilences] = useState<RemovedSegment[]>([])
+  const [removedSilences, setRemovedSilences] = useState<RemovedSilenceChip[]>([])
   const [isDetectingSilence, setIsDetectingSilence] = useState(false)
   const [silenceThresholdDb, setSilenceThresholdDb] = useState(-40)
   const [silencePaddingMs, setSilencePaddingMs] = useState(1000)
@@ -198,17 +198,47 @@ export function EditorPage() {
         paddingMs: silencePaddingMs,
       }).sort((a, b) => b.startMs - a.startMs)
       const removed = await timelineState.removeSegments(cuts)
-      setRemovedSilences((previous) => [...previous, ...[...removed].reverse()])
+      const ascending = [...removed].reverse()
+      setRemovedSilences((previous) => {
+        // Los cortes nuevos vienen en coordenadas del timeline previo a este
+        // lote — el mismo sistema en el que están los displayOffsetMs
+        // anteriores: cada corte desplaza hacia la izquierda todo lo que
+        // quedó después de él.
+        const shifted = previous.map((chip) => {
+          const shiftMs = ascending
+            .filter((r) => r.clip.offsetMs <= chip.displayOffsetMs)
+            .reduce((total, r) => total + r.clip.durationMs, 0)
+          return shiftMs > 0 ? { ...chip, displayOffsetMs: chip.displayOffsetMs - shiftMs } : chip
+        })
+        // Y dentro del lote, cada corte queda desplazado por los anteriores.
+        let removedBeforeMs = 0
+        const newChips = ascending.map((r) => {
+          const chip: RemovedSilenceChip = { segment: r, displayOffsetMs: r.clip.offsetMs - removedBeforeMs }
+          removedBeforeMs += r.clip.durationMs
+          return chip
+        })
+        return [...shifted, ...newChips].sort((a, b) => a.displayOffsetMs - b.displayOffsetMs)
+      })
     }
     setIsDetectingSilence(false)
   }, [projectId, timelineState, silenceThresholdDb, silencePaddingMs])
 
   const handleRestoreSilence = useCallback(
     async (index: number) => {
-      const removed = removedSilences[index]
-      if (!removed) return
-      await timelineState.reinsertSegment(removed)
-      setRemovedSilences((previous) => previous.filter((_, i) => i !== index))
+      const chip = removedSilences[index]
+      if (!chip) return
+      await timelineState.reinsertSegment(chip.segment)
+      setRemovedSilences((previous) =>
+        previous
+          .filter((_, i) => i !== index)
+          // Reinsertar el silencio empuja hacia la derecha lo que quedó
+          // después de su posición — los chips posteriores se recorren.
+          .map((other) =>
+            other.displayOffsetMs >= chip.displayOffsetMs
+              ? { ...other, displayOffsetMs: other.displayOffsetMs + chip.segment.clip.durationMs }
+              : other,
+          ),
+      )
     },
     [removedSilences, timelineState],
   )

@@ -46,8 +46,19 @@ interface TimelineProps {
   silencePaddingMs?: number
   onSilencePaddingMsChange?: (value: number) => void
   /** Silencios ya quitados, cada uno reversible por separado con su propia X (no por el historial genérico de undo). */
-  removedSilences?: RemovedSegment[]
+  removedSilences?: RemovedSilenceChip[]
   onRestoreSilence?: (index: number) => void
+}
+
+/**
+ * Un silencio quitado con su posición traducida a las coordenadas del
+ * timeline YA cortado (displayOffsetMs) — segment.clip.offsetMs guarda la
+ * posición en el timeline original, que es la que reinsertSegment necesita
+ * para revertir, pero no la que coincide con lo que el usuario ve ahora.
+ */
+export interface RemovedSilenceChip {
+  segment: RemovedSegment
+  displayOffsetMs: number
 }
 
 export function Timeline({
@@ -458,18 +469,18 @@ export function Timeline({
 
       {removedSilences.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {removedSilences.map((removed, index) => (
+          {removedSilences.map((chip, index) => (
             <div
-              key={removed.clip.id}
+              key={chip.segment.clip.id}
               className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs text-text-muted"
             >
               <button
                 type="button"
-                onClick={() => setPlayheadMs(removed.clip.offsetMs)}
+                onClick={() => setPlayheadMs(chip.displayOffsetMs)}
                 title="Ir a este punto del timeline"
                 className="hover:text-text-strong"
               >
-                {formatTimelineMs(removed.clip.offsetMs)} — silencio quitado ({formatTimelineMs(removed.clip.durationMs)})
+                {formatTimelineMs(chip.displayOffsetMs)} — silencio quitado ({formatTimelineMs(chip.segment.clip.durationMs)})
               </button>
               <button
                 type="button"
