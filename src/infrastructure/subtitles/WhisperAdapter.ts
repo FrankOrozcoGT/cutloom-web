@@ -71,24 +71,17 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       return err('INSUFFICIENT_HARDWARE')
     }
 
-    console.log(`WhisperAdapter: audio de entrada ${audio.length} samples (${(audio.length / 16000).toFixed(1)}s @ 16kHz)`)
-
     let transcriber: AutomaticSpeechRecognitionPipeline
-    console.time('WhisperAdapter: loadTranscriber')
     try {
       transcriber = await this.loadTranscriber()
     } catch (e) {
       console.error('WhisperAdapter: fallo al cargar el modelo', describeError(e))
       return err('MODEL_LOAD_FAILED')
-    } finally {
-      console.timeEnd('WhisperAdapter: loadTranscriber')
     }
-    console.log(`WhisperAdapter: device=${this.device}`)
 
     try {
       const streamer = onProgress ? this.createStreamer(transcriber, onProgress) : undefined
 
-      console.time('WhisperAdapter: transcribe total')
       const output = await transcriber(audio, {
         language: LANGUAGE_NAMES[options.language],
         task: 'transcribe',
@@ -97,7 +90,6 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         stride_length_s: STRIDE_LENGTH_SECONDS,
         streamer,
       })
-      console.timeEnd('WhisperAdapter: transcribe total')
 
       const result: AutomaticSpeechRecognitionOutput = Array.isArray(output) ? output[0] : output
       const segments = (result.chunks ?? []).map((chunk) => ({
@@ -105,11 +97,9 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         start: chunk.timestamp[0],
         end: chunk.timestamp[1],
       }))
-      console.log(`WhisperAdapter: ${segments.length} segmentos generados`)
 
       return ok({ segments, device: this.device })
     } catch (e) {
-      console.timeEnd('WhisperAdapter: transcribe total')
       console.error('WhisperAdapter: fallo al transcribir', describeError(e))
       return err('TRANSCRIPTION_FAILED')
     }
@@ -154,7 +144,6 @@ export class WhisperAdapter implements WhisperTranscriberPort {
         if (end <= lastEmittedEnd) return
         const start = Math.max(chunkStart, lastEmittedEnd)
         lastEmittedEnd = end
-        console.log(`WhisperAdapter: segmento win=${windowIndex} [${start.toFixed(1)}s-${end.toFixed(1)}s] "${text.slice(0, 40)}"`)
         onProgress({ text, start, end })
       },
       on_finalize: () => {
@@ -182,22 +171,12 @@ export class WhisperAdapter implements WhisperTranscriberPort {
   private async createTranscriber(): Promise<AutomaticSpeechRecognitionPipeline> {
     const useWebGpu = await hasWebGpu()
     this.device = useWebGpu ? 'webgpu' : 'wasm'
-    console.log(`WhisperAdapter: cargando modelo ${MODEL_ID} (device=${this.device})…`)
     return pipeline('automatic-speech-recognition', MODEL_ID, {
       device: this.device,
       // q8 en el decoder rompe la sesión de ONNX Runtime 1.25 (bug conocido de
       // transformers.js #1707: falta el scale de dequantización del decoder
       // merged). fp16 evita el bug y da mejor calidad que q4 con menor peso.
       dtype: useWebGpu ? 'fp32' : { encoder_model: 'fp32', decoder_model_merged: 'fp16' },
-      progress_callback: (progress: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => {
-        if (progress.status === 'progress' && progress.file) {
-          const pct = progress.progress?.toFixed(0) ?? '?'
-          const mb = progress.total ? (progress.total / 1024 / 1024).toFixed(1) : '?'
-          console.log(`WhisperAdapter: descargando ${progress.file} — ${pct}% de ${mb}MB`)
-        } else {
-          console.log(`WhisperAdapter: ${progress.status}${progress.file ? ` (${progress.file})` : ''}`)
-        }
-      },
     })
   }
 }
