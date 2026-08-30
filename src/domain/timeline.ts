@@ -434,13 +434,45 @@ export function removeSegments(
   return { timeline: working, removed }
 }
 
-/** Revierte exactamente el corte producido por removeSegment: abre de nuevo el hueco y reinserta el clip quitado en su lugar original. */
-export function reinsertSegment(timeline: Timeline, removed: RemovedSegment): Timeline {
-  const opened = shiftClipsFrom(timeline, removed.clip.offsetMs, removed.clip.durationMs)
+/**
+ * Revierte el corte producido por removeSegment: abre un hueco y reinserta el
+ * clip quitado ahí. `atMs` es la posición ACTUAL del hueco en el timeline
+ * vigente, no `removed.clip.offsetMs` — esa es la posición original del
+ * corte, que queda desactualizada si hubo otros cortes o reinserciones
+ * después (desplazan todo lo que viene detrás). El caller es responsable de
+ * rastrear la posición actual de cada corte pendiente de revertir.
+ */
+export function reinsertSegment(timeline: Timeline, removed: RemovedSegment, atMs: number): Timeline {
+  const opened = shiftClipsFrom(timeline, atMs, removed.clip.durationMs)
+  const relocated: Clip = { ...removed.clip, offsetMs: atMs }
   const updatedTracks = opened.tracks.map((track) =>
-    track.id === removed.trackId ? { ...track, clips: [...track.clips, removed.clip] } : track,
+    track.id === removed.trackId ? { ...track, clips: mergeContiguousClips([...track.clips, relocated]) } : track,
   )
   return { ...opened, tracks: updatedTracks }
+}
+
+/** Dos clips son el mismo material continuo si uno retoma el video fuente justo donde el otro lo dejó — el caso típico tras reinsertar un tramo que removeSegment había aislado partiendo un clip original en izquierda/segmento/derecha. */
+function areContiguous(left: Clip, right: Clip): boolean {
+  return (
+    left.assetId === right.assetId &&
+    left.offsetMs + left.durationMs === right.offsetMs &&
+    left.sourceStartMs + left.durationMs === right.sourceStartMs
+  )
+}
+
+/** Colapsa clips adyacentes que son en realidad un solo tramo de material partido, para que no queden como piezas separadas tras reinsertar un corte. Recorre ordenado por offset porque areContiguous solo compara vecinos inmediatos. */
+function mergeContiguousClips(clips: Clip[]): Clip[] {
+  const sorted = [...clips].sort((a, b) => a.offsetMs - b.offsetMs)
+  const merged: Clip[] = []
+  for (const clip of sorted) {
+    const last = merged[merged.length - 1]
+    if (last && areContiguous(last, clip)) {
+      merged[merged.length - 1] = { ...last, durationMs: last.durationMs + clip.durationMs }
+    } else {
+      merged.push(clip)
+    }
+  }
+  return merged
 }
 
 export interface SilenceCut {

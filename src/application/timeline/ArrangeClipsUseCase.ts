@@ -210,14 +210,19 @@ export class ArrangeClipsUseCase {
     return ok(result)
   }
 
-  /** Revierte exactamente el corte de removeSegment: reabre el hueco y reinserta el clip quitado. */
-  async reinsertSegment(projectId: string, removed: RemovedSegment): Promise<Result<Timeline, ArrangeError>> {
+  /**
+   * Revierte el corte de removeSegment: reabre el hueco y reinserta el clip
+   * quitado en `atMs` — la posición ACTUAL del hueco, que el caller rastrea
+   * porque puede haberse desplazado por otros cortes/reinserciones desde que
+   * se quitó este segmento.
+   */
+  async reinsertSegment(projectId: string, removed: RemovedSegment, atMs: number): Promise<Result<Timeline, ArrangeError>> {
     const timelineResult = await this.getTimeline(projectId)
     if (!timelineResult.ok) {
       return err(timelineResult.error)
     }
 
-    const reinserted = reinsertSegmentInDomain(timelineResult.value, removed)
+    const reinserted = reinsertSegmentInDomain(timelineResult.value, removed, atMs)
 
     const saveResult = await this.storage.save(reinserted)
     if (!saveResult.ok) {
