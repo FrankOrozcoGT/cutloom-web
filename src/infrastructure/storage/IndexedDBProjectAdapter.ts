@@ -1,7 +1,9 @@
 import type { Project } from '@domain/project'
 import { err, ok, type Result } from '@application/result'
 import type { ProjectStorage, ProjectStorageError } from '@application/project/ports'
-import { openCutloomDB, runTransaction, PROJECTS_STORE } from './database'
+import { openCutloomDB, runReadModifyWrite, runTransaction, PROJECTS_STORE } from './database'
+
+class NotFoundError extends Error {}
 
 export class IndexedDBProjectAdapter implements ProjectStorage {
   async create(name: string): Promise<Result<Project, ProjectStorageError>> {
@@ -25,15 +27,16 @@ export class IndexedDBProjectAdapter implements ProjectStorage {
     return runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.getAll())
   }
 
+  /** Read-modify-write atómico (misma transacción IndexedDB, ver runReadModifyWrite) — dos rename/updateDescription concurrentes sobre el mismo proyecto ya no pueden pisarse (lost update). */
   private async patch(id: string, changes: Partial<Omit<Project, 'id'>>): Promise<Result<Project, ProjectStorageError>> {
     try {
       const db = await openCutloomDB()
-      const existing = await runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.get(id))
-      if (!existing) {
-        return err('UNKNOWN_ERROR')
-      }
-      const updated: Project = { ...existing, ...changes }
-      await runTransaction(db, PROJECTS_STORE, 'readwrite', (store) => store.put(updated))
+      const updated = await runReadModifyWrite<Project>(db, PROJECTS_STORE, id, (existing) => {
+        if (!existing) {
+          throw new NotFoundError()
+        }
+        return { ...existing, ...changes }
+      })
       return ok(updated)
     } catch {
       return err('UNKNOWN_ERROR')
