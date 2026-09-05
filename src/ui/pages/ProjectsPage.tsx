@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Clapperboard, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import type { Project } from '@domain/project'
 import { Button } from '@ui/components/Button'
+import { ConfirmDialog } from '@ui/components/ConfirmDialog'
 import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
 import { FormField } from '@ui/components/FormField'
 import { projectUseCase, shortsStorage } from '@ui/video/composition'
@@ -48,6 +49,7 @@ export function ProjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [editingDescriptionProject, setEditingDescriptionProject] = useState<Project | null>(null)
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null)
 
   const loadProjects = useCallback(async () => {
     const stored = await projectUseCase.getAll()
@@ -102,13 +104,12 @@ export function ProjectsPage() {
     [editingName, cancelRename, loadProjects],
   )
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      await projectUseCase.delete(id)
-      await loadProjects()
-    },
-    [loadProjects],
-  )
+  const confirmDelete = useCallback(async () => {
+    if (!deletingProject) return
+    await projectUseCase.delete(deletingProject.id)
+    setDeletingProject(null)
+    await loadProjects()
+  }, [deletingProject, loadProjects])
 
   const handleSaveDescription = useCallback(
     async (value: string) => {
@@ -147,7 +148,7 @@ export function ProjectsPage() {
               const actions = projectActions(project, hasShorts, {
                 onEditDescription: () => setEditingDescriptionProject(project),
                 onRename: () => startRename(project),
-                onDelete: () => void handleDelete(project.id),
+                onDelete: () => setDeletingProject(project),
               })
 
               return (
@@ -269,6 +270,17 @@ export function ProjectsPage() {
           initialValue={editingDescriptionProject.description ?? ''}
           onSave={handleSaveDescription}
           onCancel={() => setEditingDescriptionProject(null)}
+        />
+      )}
+
+      {deletingProject && (
+        <ConfirmDialog
+          title={`Eliminar "${deletingProject.name}"`}
+          message="Se eliminará el proyecto junto con sus videos, timeline, subtítulos y shorts. Esta acción no se puede deshacer."
+          confirmLabel="Eliminar"
+          danger
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeletingProject(null)}
         />
       )}
     </div>
