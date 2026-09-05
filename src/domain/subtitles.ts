@@ -164,3 +164,4 @@ export function importSrt(content: string): Result<SubtitleSegment[], SubtitlePa
 export function importVtt(content: string): Result<SubtitleSegment[], SubtitleParseError> {
   return parseCues(content)
 }
+

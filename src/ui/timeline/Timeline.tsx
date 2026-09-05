@@ -46,8 +46,8 @@ interface TimelineProps {
   silencePaddingMs?: number
   onSilencePaddingMsChange?: (value: number) => void
   /** Silencios ya quitados, cada uno reversible por separado con su propia X (no por el historial genérico de undo). */
-  removedSilences?: RemovedSilenceChip[]
-  onRestoreSilence?: (index: number) => void
+  removedChips?: RemovedSegmentChip[]
+  onRestoreChip?: (index: number) => void
 }
 
 /**
@@ -56,7 +56,7 @@ interface TimelineProps {
  * posición en el timeline original, que es la que reinsertSegment necesita
  * para revertir, pero no la que coincide con lo que el usuario ve ahora.
  */
-export interface RemovedSilenceChip {
+export interface RemovedSegmentChip {
   segment: RemovedSegment
   displayOffsetMs: number
 }
@@ -103,8 +103,8 @@ export function Timeline({
   onSilenceThresholdDbChange,
   silencePaddingMs,
   onSilencePaddingMsChange,
-  removedSilences = [],
-  onRestoreSilence,
+  removedChips = [],
+  onRestoreChip,
 }: TimelineProps) {
   const {
     timeline,
@@ -273,19 +273,19 @@ export function Timeline({
     }
   }, [playheadMs, pxPerSec])
 
-  // Recentra el carrusel de silencios en el chip más cercano al playhead
-  // cada vez que este avanza (reproducción, click en el timeline, click en
-  // otro chip) — el usuario también puede scrollearlo a mano en cualquier
-  // momento, este efecto solo corre cuando playheadMs cambia, no en cada
-  // render ni por el scroll manual en sí.
+  // Recentra el carrusel de tramos quitados (silencios y muletillas) en el
+  // más cercano al playhead cada vez que este avanza (reproducción, click en
+  // el timeline, click en otro chip) — el usuario también puede scrollearlo
+  // a mano en cualquier momento, este efecto solo corre cuando playheadMs
+  // cambia, no en cada render ni por el scroll manual en sí.
   useEffect(() => {
     const carousel = silenceCarouselRef.current
-    if (!carousel || removedSilences.length === 0) return
+    if (!carousel || removedChips.length === 0) return
 
-    const closest = removedSilences.reduce((closest, chip) =>
+    const closest = removedChips.reduce((closest, chip) =>
       Math.abs(chip.displayOffsetMs - playheadMs) < Math.abs(closest.displayOffsetMs - playheadMs) ? chip : closest,
     )
-    const chipEl = carousel.querySelector<HTMLElement>(`[data-silence-offset-ms="${closest.displayOffsetMs}"]`)
+    const chipEl = carousel.querySelector<HTMLElement>(`[data-chip-offset-ms="${closest.displayOffsetMs}"]`)
     chipEl?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playheadMs])
@@ -410,7 +410,7 @@ export function Timeline({
           )}
         </div>
         <div className="flex items-center gap-1 text-sm text-text-muted">
-          {(onDetectSilence || removedSilences.length > 0) && (
+          {(onDetectSilence || removedChips.length > 0) && (
             <div className="flex items-center">
               {onDetectSilence && (
                 <>
@@ -429,7 +429,7 @@ export function Timeline({
                       <summary
                         title="Opciones de detección de silencio"
                         className={`flex h-10 w-6 cursor-pointer list-none items-center justify-center border border-border text-xs text-text-muted hover:bg-surface-hover sm:h-8 ${
-                          removedSilences.length > 0 ? 'border-r-0' : 'rounded-r-lg'
+                          removedChips.length > 0 ? 'border-r-0' : 'rounded-r-lg'
                         }`}
                       >
                         ⋯
@@ -462,12 +462,12 @@ export function Timeline({
                   )}
                 </>
               )}
-              {removedSilences.length > 0 && (
+              {removedChips.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setSilenceChipsVisible((visible) => !visible)}
-                  title={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
-                  aria-label={silenceChipsVisible ? 'Esconder silencios quitados' : 'Mostrar silencios quitados'}
+                  title={silenceChipsVisible ? 'Esconder cortes' : 'Mostrar cortes'}
+                  aria-label={silenceChipsVisible ? 'Esconder cortes' : 'Mostrar cortes'}
                   className={`flex h-10 w-10 items-center justify-center border border-border text-text-muted hover:bg-surface-hover hover:text-text-strong sm:h-8 sm:w-8 ${
                     onDetectSilence ? 'rounded-r-lg' : 'rounded-lg'
                   }`}
@@ -531,17 +531,17 @@ export function Timeline({
         </div>
       )}
 
-      {removedSilences.length > 0 && silenceChipsVisible && (
+      {removedChips.length > 0 && silenceChipsVisible && (
         // Carrusel de una sola línea (no crece a varias filas por más chips
         // que haya): scrollea manualmente con la rueda/arrastre, y además se
         // recentra solo en el chip más cercano al playhead cuando este avanza
         // por reproducción o click en el timeline — así siempre queda visible
         // el corte relevante sin que el usuario tenga que ir a buscarlo.
         <div ref={silenceCarouselRef} className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-          {removedSilences.map((chip, index) => (
+          {removedChips.map((chip, index) => (
             <div
               key={chip.segment.clip.id}
-              data-silence-offset-ms={chip.displayOffsetMs}
+              data-chip-offset-ms={chip.displayOffsetMs}
               style={chipProximityStyle(chip.displayOffsetMs, playheadMs)}
               className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors"
             >
@@ -555,7 +555,7 @@ export function Timeline({
               </button>
               <button
                 type="button"
-                onClick={() => onRestoreSilence?.(index)}
+                onClick={() => onRestoreChip?.(index)}
                 title="Revertir este corte"
                 className="text-danger hover:underline"
               >
@@ -678,6 +678,7 @@ export function Timeline({
                 }}
               />
             )}
+
           </div>
         </div>
       </div>

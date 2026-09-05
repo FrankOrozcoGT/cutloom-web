@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ChangeEvent } from 'react'
+import { X } from 'lucide-react'
 import type { SubtitleSegment } from '@domain/subtitles'
 import { formatDurationMs } from '@ui/format'
 
@@ -78,7 +79,15 @@ function diffWords(original: string, corrected: string): DiffOp[] {
   return ops
 }
 
-function SegmentDiff({ original, corrected }: { original: string; corrected: string }) {
+function SegmentDiff({
+  original,
+  corrected,
+  onRevert,
+}: {
+  original: string
+  corrected: string
+  onRevert: () => void
+}) {
   const ops = diffWords(original, corrected)
   return (
     <p className="text-sm">
@@ -96,7 +105,18 @@ function SegmentDiff({ original, corrected }: { original: string; corrected: str
             {op.text}
           </span>
         )
-      })}
+      })}{' '}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRevert()
+        }}
+        title="Revertir a como estaba"
+        className="inline-flex align-middle text-danger hover:text-danger/80"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </p>
   )
 }
@@ -168,16 +188,11 @@ export function SubtitleSegmentList({
         <div className="flex w-full flex-col gap-1 rounded-md border border-accent-border bg-accent-bg p-2 shadow-md">
           <SegmentTimingFields segment={activeSegment} onSeek={onSeek} onEditTiming={onEditTiming} />
           {activeDiff !== undefined ? (
-            <div className="flex flex-col gap-1">
-              <SegmentDiff original={activeDiff} corrected={activeSegment.text} />
-              <button
-                type="button"
-                onClick={() => onRevertSegment(activeSegment.id)}
-                className="self-start text-xs text-danger hover:underline"
-              >
-                Revertir a como estaba
-              </button>
-            </div>
+            <SegmentDiff
+              original={activeDiff}
+              corrected={activeSegment.text}
+              onRevert={() => onRevertSegment(activeSegment.id)}
+            />
           ) : (
             <textarea
               ref={activeTextareaRef}
@@ -214,7 +229,7 @@ export function SubtitleSegmentList({
               <SegmentTimingFields segment={segment} onSeek={onSeek} onEditTiming={onEditTiming} compact />
               {diffOriginal !== undefined ? (
                 <div className="line-clamp-2 text-sm">
-                  <SegmentDiff original={diffOriginal} corrected={segment.text} />
+                  <SegmentDiff original={diffOriginal} corrected={segment.text} onRevert={() => onRevertSegment(segment.id)} />
                 </div>
               ) : (
                 <p className="line-clamp-2 text-sm text-text-strong">{segment.text}</p>

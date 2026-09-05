@@ -3,7 +3,7 @@ import type { RemovedSegment, Timeline, TrimEdge } from '@domain/timeline'
 import type { Subtitles } from '@domain/subtitles'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { arrangeUseCase } from './composition'
-import type { RemovedSilenceChip } from './Timeline'
+import type { RemovedSegmentChip } from './Timeline'
 
 const DEFAULT_PX_PER_SEC = 60
 const MAX_HISTORY = 50
@@ -13,7 +13,7 @@ interface HistoryEntry {
   /** Subtítulos vigentes al momento de este snapshot, para restaurarlos coherentes con el timeline en undo/redo. */
   subtitles: Subtitles | null
   /** Chips de silencios quitados vigentes en este snapshot — sus offsets solo corresponden a ESTE timeline, así que viajan con él en el historial: undo/redo los restauran juntos. */
-  removedSilences: RemovedSilenceChip[]
+  removedChips: RemovedSegmentChip[]
 }
 
 interface SubtitlesBridge {
@@ -22,10 +22,10 @@ interface SubtitlesBridge {
   restore: (subtitles: Subtitles | null) => void
 }
 
-interface RemovedSilencesBridge {
-  get: () => RemovedSilenceChip[]
+interface RemovedChipsBridge {
+  get: () => RemovedSegmentChip[]
   /** Se llama al deshacer/rehacer/vaciar, para que los chips reflejen el snapshot restaurado. */
-  restore: (chips: RemovedSilenceChip[]) => void
+  restore: (chips: RemovedSegmentChip[]) => void
 }
 
 /**
@@ -36,7 +36,7 @@ interface RemovedSilencesBridge {
 export function useTimeline(
   projectId: string,
   subtitlesBridge?: SubtitlesBridge,
-  removedSilencesBridge?: RemovedSilencesBridge,
+  removedChipsBridge?: RemovedChipsBridge,
 ) {
   const [timeline, setTimelineState] = useState<Timeline | null>(null)
   const [past, setPast] = useState<HistoryEntry[]>([])
@@ -87,12 +87,12 @@ export function useTimeline(
   // los subtítulos vigentes (sus timestamps ya no corresponden al material
   // editado) — se limpian acá, no queda a cargo de cada acción individual.
   const applyNewTimeline = useCallback(
-    (nextTimeline: Timeline, nextRemovedSilences?: RemovedSilenceChip[]) => {
+    (nextTimeline: Timeline, nextRemovedChips?: RemovedSegmentChip[]) => {
       const previousSubtitles = subtitlesBridge?.get() ?? null
-      const previousSilences = removedSilencesBridge?.get() ?? []
+      const previousChips = removedChipsBridge?.get() ?? []
 
       if (timeline) {
-        const entry: HistoryEntry = { timeline, subtitles: previousSubtitles, removedSilences: previousSilences }
+        const entry: HistoryEntry = { timeline, subtitles: previousSubtitles, removedChips: previousChips }
         setPast((prev) => [...prev.slice(-(MAX_HISTORY - 1)), entry])
       }
       setFuture([])
@@ -105,11 +105,11 @@ export function useTimeline(
       // silencios), se restauran acá mismo — en el mismo paso que el timeline
       // — para que timeline y chips queden como un solo escalón de historial,
       // no dos independientes que undo/redo tendrían que deshacer por separado.
-      if (nextRemovedSilences) {
-        removedSilencesBridge?.restore(nextRemovedSilences)
+      if (nextRemovedChips) {
+        removedChipsBridge?.restore(nextRemovedChips)
       }
     },
-    [timeline, subtitlesBridge, removedSilencesBridge],
+    [timeline, subtitlesBridge, removedChipsBridge],
   )
 
   const addClip = useCallback(
@@ -170,7 +170,7 @@ export function useTimeline(
   const removeSegments = useCallback(
     async (
       cuts: { startMs: number; endMs: number }[],
-      computeNextRemovedSilences?: (removed: RemovedSegment[]) => RemovedSilenceChip[],
+      computeNextRemovedChips?: (removed: RemovedSegment[]) => RemovedSegmentChip[],
     ): Promise<RemovedSegment[]> => {
       if (cuts.length === 0) return []
       const result = await arrangeUseCase.removeSegments(projectId, cuts)
@@ -179,22 +179,22 @@ export function useTimeline(
         return []
       }
       setError(null)
-      const nextRemovedSilences = computeNextRemovedSilences?.(result.value.removed)
-      applyNewTimeline(result.value.timeline, nextRemovedSilences)
+      const nextRemovedChips = computeNextRemovedChips?.(result.value.removed)
+      applyNewTimeline(result.value.timeline, nextRemovedChips)
       return result.value.removed
     },
     [projectId, applyNewTimeline],
   )
 
   const reinsertSegment = useCallback(
-    async (removed: RemovedSegment, atMs: number, nextRemovedSilences?: RemovedSilenceChip[]) => {
+    async (removed: RemovedSegment, atMs: number, nextRemovedChips?: RemovedSegmentChip[]) => {
       const result = await arrangeUseCase.reinsertSegment(projectId, removed, atMs)
       if (!result.ok) {
         setError(result.error)
         return
       }
       setError(null)
-      applyNewTimeline(result.value, nextRemovedSilences)
+      applyNewTimeline(result.value, nextRemovedChips)
     },
     [projectId, applyNewTimeline],
   )
@@ -251,34 +251,34 @@ export function useTimeline(
   const undo = useCallback(async () => {
     if (past.length === 0 || !timeline) return
     const previous = past[past.length - 1]
-    const currentSilences = removedSilencesBridge?.get() ?? []
+    const currentChips = removedChipsBridge?.get() ?? []
     setFuture((prevFuture) =>
-      [...prevFuture, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedSilences: currentSilences }].slice(
+      [...prevFuture, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedChips: currentChips }].slice(
         -MAX_HISTORY,
       ),
     )
     setPast((prevPast) => prevPast.slice(0, -1))
     setTimelineState(previous.timeline)
     subtitlesBridge?.restore(previous.subtitles)
-    removedSilencesBridge?.restore(previous.removedSilences)
+    removedChipsBridge?.restore(previous.removedChips)
     void arrangeUseCase.saveTimeline(previous.timeline)
-  }, [timeline, past, subtitlesBridge, removedSilencesBridge])
+  }, [timeline, past, subtitlesBridge, removedChipsBridge])
 
   const redo = useCallback(async () => {
     if (future.length === 0 || !timeline) return
     const next = future[future.length - 1]
-    const currentSilences = removedSilencesBridge?.get() ?? []
+    const currentChips = removedChipsBridge?.get() ?? []
     setPast((prevPast) =>
-      [...prevPast, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedSilences: currentSilences }].slice(
+      [...prevPast, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedChips: currentChips }].slice(
         -MAX_HISTORY,
       ),
     )
     setFuture((prevFuture) => prevFuture.slice(0, -1))
     setTimelineState(next.timeline)
     subtitlesBridge?.restore(next.subtitles)
-    removedSilencesBridge?.restore(next.removedSilences)
+    removedChipsBridge?.restore(next.removedChips)
     void arrangeUseCase.saveTimeline(next.timeline)
-  }, [timeline, future, subtitlesBridge, removedSilencesBridge])
+  }, [timeline, future, subtitlesBridge, removedChipsBridge])
 
   return {
     timeline,

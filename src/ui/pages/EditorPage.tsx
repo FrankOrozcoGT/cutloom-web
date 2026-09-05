@@ -11,7 +11,7 @@ import { SubtitlePanel } from '@ui/components/SubtitlePanel'
 import { SubtitleSegmentList } from '@ui/components/SubtitleSegmentList'
 import { VideoListItem } from '@ui/components/VideoListItem'
 import { VideoUploader } from '@ui/components/VideoUploader'
-import { Timeline, type RemovedSilenceChip } from '@ui/timeline/Timeline'
+import { Timeline, type RemovedSegmentChip } from '@ui/timeline/Timeline'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useTimeline } from '@ui/timeline/useTimeline'
 import { useAuth } from '@ui/auth/useAuth'
@@ -27,18 +27,18 @@ function videosSectionTitle(assetCount: number): string {
 // Los chips de silencios quitados se persisten por proyecto en localStorage
 // para sobrevivir recargas — el corte en sí ya vive en el timeline guardado;
 // esto conserva solo el registro reversible (la X de cada chip).
-function removedSilencesKey(projectId: string): string {
+function removedChipsKey(projectId: string): string {
   return `cutloom:removed-silences:${projectId}`
 }
 
-function loadRemovedSilences(projectId: string): RemovedSilenceChip[] {
+function loadRemovedChips(projectId: string): RemovedSegmentChip[] {
   try {
-    const raw = localStorage.getItem(removedSilencesKey(projectId))
+    const raw = localStorage.getItem(removedChipsKey(projectId))
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter((chip): chip is RemovedSilenceChip => {
-      const candidate = chip as RemovedSilenceChip | null
+    return parsed.filter((chip): chip is RemovedSegmentChip => {
+      const candidate = chip as RemovedSegmentChip | null
       return (
         !!candidate &&
         Number.isFinite(candidate.displayOffsetMs) &&
@@ -51,6 +51,32 @@ function loadRemovedSilences(projectId: string): RemovedSilenceChip[] {
   }
 }
 
+/** Cada corte nuevo desplaza hacia la izquierda todo lo que quedó después de él en el timeline previo al lote — mismo sistema de coordenadas en el que ya están los displayOffsetMs de los chips existentes. */
+function shiftChipsForNewCuts(
+  previousChips: RemovedSegmentChip[],
+  newCuts: { atMs: number; durationMs: number }[],
+): RemovedSegmentChip[] {
+  return previousChips.map((chip) => {
+    const shiftMs = newCuts
+      .filter((cut) => cut.atMs <= chip.displayOffsetMs)
+      .reduce((total, cut) => total + cut.durationMs, 0)
+    return shiftMs > 0 ? { ...chip, displayOffsetMs: chip.displayOffsetMs - shiftMs } : chip
+  })
+}
+
+/** Reinsertar un tramo empuja hacia la derecha lo que quedó después de su posición — los chips posteriores se recorren. */
+function shiftChipsForReinsertion(
+  remainingChips: RemovedSegmentChip[],
+  reinsertedAtMs: number,
+  reinsertedDurationMs: number,
+): RemovedSegmentChip[] {
+  return remainingChips.map((chip) =>
+    chip.displayOffsetMs >= reinsertedAtMs
+      ? { ...chip, displayOffsetMs: chip.displayOffsetMs + reinsertedDurationMs }
+      : chip,
+  )
+}
+
 export function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [assets, setAssets] = useState<VideoAsset[]>([])
@@ -58,8 +84,8 @@ export function EditorPage() {
   const [projectName, setProjectName] = useState('')
   const [segmentsVisible, setSegmentsVisible] = useState(false)
   const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null)
-  const [removedSilences, setRemovedSilences] = useState<RemovedSilenceChip[]>(() =>
-    projectId ? loadRemovedSilences(projectId) : [],
+  const [removedChips, setRemovedChips] = useState<RemovedSegmentChip[]>(() =>
+    projectId ? loadRemovedChips(projectId) : [],
   )
   const [isDetectingSilence, setIsDetectingSilence] = useState(false)
   const [silenceThresholdDb, setSilenceThresholdDb] = useState(-40)
@@ -92,21 +118,21 @@ export function EditorPage() {
     [],
   )
 
-  // Los chips de silencios quitados viajan dentro del historial del timeline
+  // Los chips de tramos quitados viajan dentro del historial del timeline
   // (sus offsets solo corresponden al timeline en el que se detectaron) — el
   // bridge expone el estado actual y restaura snapshots en undo/redo/vaciar
-  // sin depender de la identidad de removedSilences en cada render.
-  const removedSilencesRef = useRef(removedSilences)
-  removedSilencesRef.current = removedSilences
-  const removedSilencesBridge = useMemo(
+  // sin depender de la identidad de removedChips en cada render.
+  const removedChipsRef = useRef(removedChips)
+  removedChipsRef.current = removedChips
+  const removedChipsBridge = useMemo(
     () => ({
-      get: () => removedSilencesRef.current,
-      restore: (chips: RemovedSilenceChip[]) => setRemovedSilences(chips),
+      get: () => removedChipsRef.current,
+      restore: (chips: RemovedSegmentChip[]) => setRemovedChips(chips),
     }),
     [],
   )
 
-  const timelineState = useTimeline(projectId ?? '', subtitlesBridge, removedSilencesBridge)
+  const timelineState = useTimeline(projectId ?? '', subtitlesBridge, removedChipsBridge)
 
   // Al cambiar de proyecto sin desmontar la página se recargan los chips del
   // proyecto entrante.
@@ -118,7 +144,7 @@ export function EditorPage() {
     // El efecto de guardado corre en este mismo commit con los chips del
     // proyecto saliente — se salta una vez para no pisar la llave nueva.
     skipNextSaveRef.current = true
-    setRemovedSilences(projectId ? loadRemovedSilences(projectId) : [])
+    setRemovedChips(projectId ? loadRemovedChips(projectId) : [])
   }, [projectId])
 
   // Guarda los chips en cada cambio — también cuando se limpian (undo, redo o
@@ -131,11 +157,11 @@ export function EditorPage() {
       return
     }
     try {
-      localStorage.setItem(removedSilencesKey(projectId), JSON.stringify(removedSilences))
+      localStorage.setItem(removedChipsKey(projectId), JSON.stringify(removedChips))
     } catch {
       // localStorage lleno o no disponible — los chips siguen funcionando en memoria.
     }
-  }, [projectId, removedSilences])
+  }, [projectId, removedChips])
 
   const loadAssets = useCallback(async () => {
     if (!projectId) return
@@ -246,7 +272,11 @@ export function EditorPage() {
       const segment = subtitlesState.subtitles.segments.find(
         (s) => s.startMs === improved.startMs && s.endMs === improved.endMs,
       )
-      if (segment && segment.text !== improved.corrected) {
+      if (!segment) continue
+      // Compara sin espacios/mayúsculas irrelevantes: si el LLM solo
+      // normalizó whitespace o capitalización sin cambiar palabras, no vale
+      // la pena mostrar el diff ni el botón de revertir para "nada".
+      if (segment.text.trim().toLowerCase() !== improved.corrected.trim().toLowerCase()) {
         diffs[segment.id] = segment.text
         void subtitlesState.editText(segment.id, improved.corrected)
       }
@@ -304,50 +334,38 @@ export function EditorPage() {
       // pills.
       await timelineState.removeSegments(cuts, (removed) => {
         const ascending = [...removed].reverse()
-        const previous = removedSilencesRef.current
-        // Los cortes nuevos vienen en coordenadas del timeline previo a este
-        // lote — el mismo sistema en el que están los displayOffsetMs
-        // anteriores: cada corte desplaza hacia la izquierda todo lo que
-        // quedó después de él.
-        const shifted = previous.map((chip) => {
-          const shiftMs = ascending
-            .filter((r) => r.clip.offsetMs <= chip.displayOffsetMs)
-            .reduce((total, r) => total + r.clip.durationMs, 0)
-          return shiftMs > 0 ? { ...chip, displayOffsetMs: chip.displayOffsetMs - shiftMs } : chip
-        })
-        // Y dentro del lote, cada corte queda desplazado por los anteriores.
+        const newChips: RemovedSegmentChip[] = []
         let removedBeforeMs = 0
-        const newChips = ascending.map((r) => {
-          const chip: RemovedSilenceChip = { segment: r, displayOffsetMs: r.clip.offsetMs - removedBeforeMs }
+        for (const r of ascending) {
+          newChips.push({ segment: r, displayOffsetMs: r.clip.offsetMs - removedBeforeMs })
           removedBeforeMs += r.clip.durationMs
-          return chip
-        })
-        return [...shifted, ...newChips].sort((a, b) => a.displayOffsetMs - b.displayOffsetMs)
+        }
+        const shiftedPrevious = shiftChipsForNewCuts(
+          removedChipsRef.current,
+          ascending.map((r) => ({ atMs: r.clip.offsetMs, durationMs: r.clip.durationMs })),
+        )
+        return [...shiftedPrevious, ...newChips].sort((a, b) => a.displayOffsetMs - b.displayOffsetMs)
       })
     }
     setIsDetectingSilence(false)
   }, [projectId, timelineState, silenceThresholdDb, silencePaddingMs])
 
-  const handleRestoreSilence = useCallback(
+  const handleRestoreChip = useCallback(
     async (index: number) => {
-      const chip = removedSilences[index]
+      const chip = removedChips[index]
       if (!chip) return
       // Igual que en handleDetectSilence: los chips restantes se calculan acá
       // y se pasan a reinsertSegment para que timeline + chips se apliquen
       // como un solo paso de historial, no dos setState separados que
       // undo/redo desincronizaría en pasos distintos.
-      const nextRemovedSilences = removedSilences
-        .filter((_, i) => i !== index)
-        // Reinsertar el silencio empuja hacia la derecha lo que quedó
-        // después de su posición — los chips posteriores se recorren.
-        .map((other) =>
-          other.displayOffsetMs >= chip.displayOffsetMs
-            ? { ...other, displayOffsetMs: other.displayOffsetMs + chip.segment.clip.durationMs }
-            : other,
-        )
-      await timelineState.reinsertSegment(chip.segment, chip.displayOffsetMs, nextRemovedSilences)
+      const nextRemovedChips = shiftChipsForReinsertion(
+        removedChips.filter((_, i) => i !== index),
+        chip.displayOffsetMs,
+        chip.segment.clip.durationMs,
+      )
+      await timelineState.reinsertSegment(chip.segment, chip.displayOffsetMs, nextRemovedChips)
     },
-    [removedSilences, timelineState],
+    [removedChips, timelineState],
   )
 
   if (!projectId) {
@@ -446,8 +464,8 @@ export function EditorPage() {
             onSilenceThresholdDbChange={setSilenceThresholdDb}
             silencePaddingMs={silencePaddingMs}
             onSilencePaddingMsChange={setSilencePaddingMs}
-            removedSilences={removedSilences}
-            onRestoreSilence={(index) => void handleRestoreSilence(index)}
+            removedChips={removedChips}
+            onRestoreChip={(index) => void handleRestoreChip(index)}
           />
         </div>
       )}
