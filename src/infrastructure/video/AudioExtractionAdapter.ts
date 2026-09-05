@@ -1,10 +1,9 @@
 import { AudioSampleSink, ALL_FORMATS, BlobSource, Input } from 'mediabunny'
+import { TARGET_SAMPLE_RATE } from '@domain/shorts'
 import type { RenderSegment } from '@application/video/exportTypes'
 import { err, ok, type Result } from '@application/result'
 import type { AudioExtractError, AudioExtractorPort } from '@application/subtitles/ports'
 import { describeError } from '@infrastructure/errors'
-
-const TARGET_SAMPLE_RATE = 16000
 
 interface PlacedBuffer {
   /** Offset dentro del audio final (tiempo de timeline), en segundos. */
