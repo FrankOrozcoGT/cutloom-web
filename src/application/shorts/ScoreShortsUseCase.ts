@@ -43,7 +43,7 @@ export class ScoreShortsUseCase {
       }
       const wav = wavPcm16(sliceResult.value, TARGET_SAMPLE_RATE)
       const audioBlob = new Blob([wav.slice()], { type: 'audio/wav' })
-      audioClips.push({ startMs: candidate.startMs, endMs: candidate.endMs, audioBlob })
+      audioClips.push({ candidateId: candidate.id, startMs: candidate.startMs, endMs: candidate.endMs, audioBlob })
     }
 
     return this.backend.score(candidates, audioClips, shortIdeal)

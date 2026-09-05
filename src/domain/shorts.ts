@@ -4,6 +4,8 @@ import { err, ok, type Result } from '@application/result'
 export const TARGET_SAMPLE_RATE = 16000
 
 export interface ShortCandidateDetect {
+  /** Id estable devuelto por /detect — se reenvía tal cual a /score (candidates y fieldname del audio audio_<id>), reemplaza la dependencia de la posición del candidato dentro del array. */
+  id: string
   startMs: number
   endMs: number
   confidence: number

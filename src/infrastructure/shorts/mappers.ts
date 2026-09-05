@@ -2,8 +2,9 @@ import type { DetectedCandidate, DetectResult, ImprovedSubtitle, ImproveResult, 
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import { ShortsError } from '@application/shorts/errors'
 
-/** Wire format real de POST /api/shorts/detect (respuesta) y de POST /api/shorts/score (candidates del request) — start/end en segundos, no ms. */
+/** Wire format real de POST /api/shorts/detect (respuesta) y de POST /api/shorts/score (candidates del request) — start/end en segundos, no ms. id se reenvía a /score tal cual, sin recalcularlo. */
 export interface DetectedCandidateDto {
+  id: string
   start: number
   end: number
   confidence: number
@@ -42,12 +43,24 @@ export interface ImproveResultDto {
 }
 
 export function mapDetectedCandidate(dto: DetectedCandidateDto): DetectedCandidate {
-  return { startMs: Math.round(dto.start * 1000), endMs: Math.round(dto.end * 1000), confidence: dto.confidence, reason: dto.reason }
+  return {
+    id: dto.id,
+    startMs: Math.round(dto.start * 1000),
+    endMs: Math.round(dto.end * 1000),
+    confidence: dto.confidence,
+    reason: dto.reason,
+  }
 }
 
-/** Inverso de mapDetectedCandidate — el dominio interno sigue en ms, pero score espera candidates en el mismo shape que devolvió detect (segundos). */
+/** Inverso de mapDetectedCandidate — el dominio interno sigue en ms, pero score espera candidates en el mismo shape que devolvió detect (segundos), id incluido tal cual. */
 export function toDetectedCandidateDto(candidate: DetectedCandidate): DetectedCandidateDto {
-  return { start: candidate.startMs / 1000, end: candidate.endMs / 1000, confidence: candidate.confidence, reason: candidate.reason }
+  return {
+    id: candidate.id,
+    start: candidate.startMs / 1000,
+    end: candidate.endMs / 1000,
+    confidence: candidate.confidence,
+    reason: candidate.reason,
+  }
 }
 
 

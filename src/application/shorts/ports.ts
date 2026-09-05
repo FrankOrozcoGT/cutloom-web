@@ -4,6 +4,8 @@ import type { Result } from '@application/result'
 import type { ShortsError } from './errors'
 
 export interface AudioClip {
+  /** Id del candidato al que pertenece este audio — el fieldname real del archivo en /score es audio_<candidateId>, no depende de la posición en el array. */
+  candidateId: string
   startMs: number
   endMs: number
   audioBlob: Blob
