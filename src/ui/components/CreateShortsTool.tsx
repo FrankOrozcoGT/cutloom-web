@@ -1,17 +1,15 @@
-import { useCallback, useState } from 'react'
-import type { ShortIdeal, ShortScore } from '@domain/shorts'
+import { useState } from 'react'
+import type { Timeline } from '@domain/timeline'
+import type { SubtitleSegment } from '@domain/subtitles'
+import { shortKey, type ShortIdeal, type ShortScore } from '@domain/shorts'
+import type { VideoAsset } from '@domain/video'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import type { CreateShortsState } from '@ui/hooks/useShorts'
 import { Button } from '@ui/components/Button'
 import { PremiumNotice } from '@ui/billing/PremiumNotice'
+import { ShortIdealModal } from '@ui/components/ShortIdealModal'
+import { ShortCard } from '@ui/components/ShortCard'
 import { describeShortsWarning, SHORTS_ERROR_MESSAGES } from '@ui/shorts/errorMessages'
-
-function createShortsButtonLabel(state: CreateShortsState): string {
-  if (state === 'detecting') return 'Detectando candidatos…'
-  if (state === 'extracting_audio') return 'Extrayendo audio…'
-  if (state === 'scoring') return 'Calculando score…'
-  return 'Crear shorts'
-}
 
 interface CreateShortsToolProps {
   hasAccess: boolean
@@ -22,29 +20,13 @@ interface CreateShortsToolProps {
   warnings: string[]
   isStale: boolean
   onCreateShorts: (shortIdeal?: ShortIdeal) => void
-}
-
-/** undefined/'' se tratan igual que "sin preferencia" — el backend aplica sus propios defaults cuando el campo falta. */
-function toShortIdeal(form: {
-  topic: string
-  targetAudience: string
-  targetDurationSeconds: string
-  tone: string
-  count: string
-}): ShortIdeal | undefined {
-  const ideal: ShortIdeal = {}
-  if (form.topic.trim()) ideal.topic = form.topic.trim()
-  if (form.targetAudience.trim()) ideal.targetAudience = form.targetAudience.trim()
-  if (form.tone.trim()) ideal.tone = form.tone.trim()
-  const duration = Number(form.targetDurationSeconds)
-  if (form.targetDurationSeconds.trim() && Number.isFinite(duration) && duration > 0) {
-    ideal.targetDurationSeconds = duration
-  }
-  const count = Number(form.count)
-  if (form.count.trim() && Number.isFinite(count) && count > 0) {
-    ideal.count = Math.round(count)
-  }
-  return Object.keys(ideal).length > 0 ? ideal : undefined
+  timeline: Timeline | null
+  assets: Record<string, VideoAsset>
+  subtitleSegments: SubtitleSegment[]
+  projectId: string
+  projectName: string
+  cropOffsetXByShort: Record<string, number>
+  onUpdateCropOffset: (short: { startMs: number; endMs: number }, cropOffsetX: number) => void
 }
 
 export function CreateShortsTool({
@@ -56,18 +38,16 @@ export function CreateShortsTool({
   warnings,
   isStale,
   onCreateShorts,
+  timeline,
+  assets,
+  subtitleSegments,
+  projectId,
+  projectName,
+  cropOffsetXByShort,
+  onUpdateCropOffset,
 }: CreateShortsToolProps) {
-  const [topic, setTopic] = useState('')
-  const [targetAudience, setTargetAudience] = useState('')
-  const [targetDurationSeconds, setTargetDurationSeconds] = useState('')
-  const [tone, setTone] = useState('')
-  const [count, setCount] = useState('')
+  const [isFormOpen, setIsFormOpen] = useState(false)
   const isCreating = state === 'detecting' || state === 'extracting_audio' || state === 'scoring'
-
-  const handleCreateShorts = useCallback(
-    () => onCreateShorts(toShortIdeal({ topic, targetAudience, targetDurationSeconds, tone, count })),
-    [onCreateShorts, topic, targetAudience, targetDurationSeconds, tone, count],
-  )
 
   if (!hasSubtitles) {
     return <p className="text-sm text-text-muted">Genera subtítulos primero para crear shorts.</p>
@@ -77,61 +57,13 @@ export function CreateShortsTool({
     <div className="flex flex-col gap-4">
       {!hasAccess && <PremiumNotice />}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm text-text-muted">
-          Tema (opcional)
-          <input
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
-            placeholder="¿De qué debe tratar el short?"
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-text-strong outline-none placeholder:text-text-muted"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-muted">
-          Audiencia objetivo (opcional)
-          <input
-            value={targetAudience}
-            onChange={(event) => setTargetAudience(event.target.value)}
-            placeholder="¿A quién apunta?"
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-text-strong outline-none placeholder:text-text-muted"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-muted">
-          Tono (opcional)
-          <input
-            value={tone}
-            onChange={(event) => setTone(event.target.value)}
-            placeholder="Si se omite, la IA lo detecta del contenido"
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-text-strong outline-none placeholder:text-text-muted"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-muted">
-          Duración por short en segundos (opcional)
-          <input
-            type="number"
-            min={1}
-            value={targetDurationSeconds}
-            onChange={(event) => setTargetDurationSeconds(event.target.value)}
-            placeholder="Por defecto 45"
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-text-strong outline-none placeholder:text-text-muted"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-text-muted">
-          Cantidad de candidatos (opcional)
-          <input
-            type="number"
-            min={1}
-            value={count}
-            onChange={(event) => setCount(event.target.value)}
-            placeholder="Por defecto 8"
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-text-strong outline-none placeholder:text-text-muted"
-          />
-        </label>
-      </div>
-
-      <Button onClick={handleCreateShorts} disabled={isCreating || !hasAccess} className="w-auto">
-        {createShortsButtonLabel(state)}
+      <Button onClick={() => setIsFormOpen(true)} disabled={isCreating || !hasAccess} className="w-auto">
+        {isCreating ? 'Creando shorts…' : shorts.length > 0 ? 'Recrear shorts' : 'Crear shorts'}
       </Button>
+
+      {isFormOpen && (
+        <ShortIdealModal state={state} onCreateShorts={onCreateShorts} onClose={() => setIsFormOpen(false)} />
+      )}
 
       {state === 'error' && error && (
         <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
@@ -151,16 +83,20 @@ export function CreateShortsTool({
         </div>
       )}
 
-      {shorts.length > 0 && (
-        <div className="flex flex-col gap-2">
+      {shorts.length > 0 && timeline && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {shorts.map((short, index) => (
-            <div key={`${short.startMs}-${index}`} className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
-              <span className="font-medium text-text-strong">
-                {(short.startMs / 1000).toFixed(1)}s – {(short.endMs / 1000).toFixed(1)}s · score {short.score.toFixed(2)}
-              </span>
-              {short.emotion && <span className="text-text-muted">Emoción: {short.emotion}</span>}
-              <span className="text-text-muted">{short.reason}</span>
-            </div>
+            <ShortCard
+              key={`${short.startMs}-${index}`}
+              short={short}
+              timeline={timeline}
+              assets={assets}
+              subtitleSegments={subtitleSegments}
+              projectId={projectId}
+              projectName={projectName}
+              cropOffsetX={cropOffsetXByShort[shortKey(short)] ?? 0.5}
+              onUpdateCropOffset={(cropOffsetX) => onUpdateCropOffset(short, cropOffsetX)}
+            />
           ))}
         </div>
       )}
