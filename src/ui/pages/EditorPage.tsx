@@ -268,6 +268,7 @@ export function EditorPage() {
     if (!subtitlesState.subtitles) return
 
     const diffs: Record<string, string> = {}
+    const changes: { segmentId: string; text: string }[] = []
     for (const improved of shortsState.improvedSubtitles) {
       const segment = subtitlesState.subtitles.segments.find(
         (s) => s.startMs === improved.startMs && s.endMs === improved.endMs,
@@ -278,11 +279,24 @@ export function EditorPage() {
       // la pena mostrar el diff ni el botón de revertir para "nada".
       if (segment.text.trim().toLowerCase() !== improved.corrected.trim().toLowerCase()) {
         diffs[segment.id] = segment.text
-        void subtitlesState.editText(segment.id, improved.corrected)
+        changes.push({ segmentId: segment.id, text: improved.corrected })
       }
     }
+    // Un solo editMultipleTexts en vez de un editText por segmento: cada
+    // editText parte del `subtitles` capturado en su propio closure, así
+    // que llamarlo en loop pisa los cambios anteriores del mismo lote entre
+    // sí — solo el último realmente quedaba aplicado.
+    if (changes.length > 0) {
+      void subtitlesState.editMultipleTexts(changes)
+    }
     setPendingSubtitleDiffs((previous) => ({ ...previous, ...diffs }))
-  }, [shortsState.improveState, shortsState.improvedSubtitles, subtitlesState])
+
+    // El resumen del video se guarda como descripción del proyecto — se ve y
+    // edita desde el listado de proyectos, no acá en el editor.
+    if (projectId && shortsState.improveSummary) {
+      void projectUseCase.updateDescription(projectId, shortsState.improveSummary)
+    }
+  }, [shortsState.improveState, shortsState.improvedSubtitles, shortsState.improveSummary, subtitlesState, projectId])
 
   const handleRevertImprovedSegment = useCallback(
     (segmentId: string) => {

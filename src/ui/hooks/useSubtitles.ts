@@ -26,6 +26,8 @@ interface UseSubtitlesResult {
   processedUntilMs: number | null
   generate: () => Promise<void>
   editText: (segmentId: string, text: string) => Promise<void>
+  /** Aplica varios cambios de texto de una sola vez sobre el mismo snapshot — llamar editText en loop pisa los cambios entre sí porque cada llamada parte del `subtitles` capturado en su propio closure, no del resultado de la anterior. */
+  editMultipleTexts: (changes: { segmentId: string; text: string }[]) => Promise<void>
   editTiming: (segmentId: string, startMs: number, endMs: number) => Promise<void>
   importFile: (content: string, format: 'srt' | 'vtt') => Promise<void>
   /** Restaura un snapshot (o lo limpia con null) sin pasar por las validaciones de edición — usado por undo/redo del timeline. */
@@ -155,6 +157,19 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     [subtitles, persist],
   )
 
+  const editMultipleTexts = useCallback(
+    async (changes: { segmentId: string; text: string }[]) => {
+      if (!subtitles) return
+      let segments = subtitles.segments
+      for (const { segmentId, text } of changes) {
+        const result = editSegmentText(segments, segmentId, text)
+        if (result.ok) segments = result.value
+      }
+      await persist({ ...subtitles, segments })
+    },
+    [subtitles, persist],
+  )
+
   const editTiming = useCallback(
     async (segmentId: string, startMs: number, endMs: number) => {
       if (!subtitles) return
@@ -190,6 +205,7 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     processedUntilMs,
     generate,
     editText,
+    editMultipleTexts,
     editTiming,
     importFile,
     restore,

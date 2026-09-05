@@ -187,25 +187,28 @@ export function SubtitleSegmentList({
       {activeSegment && (
         <div className="flex w-full flex-col gap-1 rounded-md border border-accent-border bg-accent-bg p-2 shadow-md">
           <SegmentTimingFields segment={activeSegment} onSeek={onSeek} onEditTiming={onEditTiming} />
-          {activeDiff !== undefined ? (
+          {/* El diff es solo de referencia (qué cambió la mejora de IA) — el
+              textarea sigue siempre editable debajo, incluso con un diff
+              pendiente, para no bloquear la edición manual mientras se
+              decide si aceptar o revertir el cambio. */}
+          {activeDiff !== undefined && (
             <SegmentDiff
               original={activeDiff}
               corrected={activeSegment.text}
               onRevert={() => onRevertSegment(activeSegment.id)}
             />
-          ) : (
-            <textarea
-              ref={activeTextareaRef}
-              value={activeSegment.text}
-              onChange={(event) => {
-                onEditText(activeSegment.id, event.target.value)
-                autoResize(event)
-              }}
-              rows={1}
-              style={{ maxHeight: ACTIVE_TEXTAREA_MAX_HEIGHT_PX }}
-              className="w-full resize-none overflow-y-auto rounded border border-border bg-transparent px-2 py-1 text-sm text-text-strong"
-            />
           )}
+          <textarea
+            ref={activeTextareaRef}
+            value={activeSegment.text}
+            onChange={(event) => {
+              onEditText(activeSegment.id, event.target.value)
+              autoResize(event)
+            }}
+            rows={1}
+            style={{ maxHeight: ACTIVE_TEXTAREA_MAX_HEIGHT_PX }}
+            className="w-full resize-none overflow-y-auto rounded border border-border bg-transparent px-2 py-1 text-sm text-text-strong"
+          />
         </div>
       )}
 
