@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import { isLanguageCode, toSrt, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
+import type { SubtitlesStorageError } from '@application/subtitles/ports'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
 import { Button } from '@ui/components/Button'
 
@@ -24,6 +25,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_HARDWARE: 'Tu dispositivo no tiene suficiente memoria para generar subtítulos localmente. Puedes importar un archivo SRT/VTT manualmente.',
   UNKNOWN_ERROR: 'Ocurrió un error inesperado al generar los subtítulos.',
   PARSE_ERROR: 'El archivo importado no tiene un formato SRT/VTT válido.',
+  STORAGE_ERROR: 'No se pudieron guardar los subtítulos. Verifica el espacio de almacenamiento disponible.',
+  CORRUPTED_DATA: 'Los subtítulos guardados están corruptos.',
 }
 
 function generateButtonLabel(state: SubtitlesState, hasSubtitles: boolean): string {
@@ -41,7 +44,7 @@ interface SubtitlePanelProps {
   hasTimeline: boolean
   state: SubtitlesState
   subtitles: Subtitles | null
-  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null
+  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | SubtitlesStorageError | null
   language: LanguageCode
   setLanguage: (language: LanguageCode) => void
   generate: () => Promise<void>

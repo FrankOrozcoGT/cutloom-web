@@ -11,6 +11,7 @@ import {
 } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
+import type { SubtitlesStorageError } from '@application/subtitles/ports'
 import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
 import { extractSubtitlesAudioUseCase, subtitlesStorage } from '@ui/subtitles/composition'
 
@@ -19,7 +20,7 @@ export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'suc
 interface UseSubtitlesResult {
   state: SubtitlesState
   subtitles: Subtitles | null
-  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null
+  error: SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | SubtitlesStorageError | null
   language: LanguageCode
   setLanguage: (language: LanguageCode) => void
   /** Extremo (ms, tiempo de timeline) del último segmento ya transcrito durante 'transcribing'; null si no hay progreso aún. */
@@ -37,7 +38,9 @@ interface UseSubtitlesResult {
 export function useSubtitles(projectId: string): UseSubtitlesResult {
   const [state, setState] = useState<SubtitlesState>('idle')
   const [subtitles, setSubtitles] = useState<Subtitles | null>(null)
-  const [error, setError] = useState<SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | null>(null)
+  const [error, setError] = useState<
+    SubtitlesError | ExtractSubtitlesAudioError | SubtitleParseError | SubtitlesStorageError | null
+  >(null)
   const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
   const [processedUntilMs, setProcessedUntilMs] = useState<number | null>(null)
   const workerRef = useRef<Worker | null>(null)
@@ -63,20 +66,37 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     })
   }, [projectId])
 
-  const persist = useCallback(async (next: Subtitles) => {
+  /** Persiste y actualiza el estado en memoria; devuelve si el guardado tuvo éxito para que el caller decida si seguir marcando 'success' o mostrar el error real en vez de asumir que ya quedó guardado. */
+  const persist = useCallback(async (next: Subtitles): Promise<boolean> => {
     setSubtitles(next)
-    await subtitlesStorage.save(next)
+    const result = await subtitlesStorage.save(next)
+    if (!result.ok) {
+      setError(result.error)
+      setState('error')
+      return false
+    }
+    return true
   }, [])
 
   const restore = useCallback(
     async (next: Subtitles | null) => {
       setSubtitles(next)
-      setState(next ? 'success' : 'idle')
       if (next) {
-        await subtitlesStorage.save(next)
+        const result = await subtitlesStorage.save(next)
+        if (!result.ok) {
+          setError(result.error)
+          setState('error')
+          return
+        }
       } else {
-        await subtitlesStorage.deleteByProject(projectId)
+        const result = await subtitlesStorage.deleteByProject(projectId)
+        if (!result.ok) {
+          setError(result.error)
+          setState('error')
+          return
+        }
       }
+      setState(next ? 'success' : 'idle')
     },
     [projectId],
   )
@@ -122,8 +142,12 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
           return
         }
 
-        void persist(message.result.subtitles).then(() => {
-          setState('success')
+        void persist(message.result.subtitles).then((persisted) => {
+          // persist ya deja error/state en 'error' si el guardado falló — acá
+          // solo se marca 'success' cuando realmente se persistió.
+          if (persisted) {
+            setState('success')
+          }
           setProcessedUntilMs(null)
           worker.terminate()
           workerRef.current = null
@@ -187,8 +211,10 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
       }
       setError(null)
       const next: Subtitles = { projectId, segments: result.value, language }
-      await persist(next)
-      setState('success')
+      const persisted = await persist(next)
+      if (persisted) {
+        setState('success')
+      }
     },
     [projectId, language, persist],
   )
