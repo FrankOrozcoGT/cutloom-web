@@ -446,7 +446,7 @@ export function reinsertSegment(timeline: Timeline, removed: RemovedSegment, atM
   const opened = shiftClipsFrom(timeline, atMs, removed.clip.durationMs)
   const relocated: Clip = { ...removed.clip, offsetMs: atMs }
   const updatedTracks = opened.tracks.map((track) =>
-    track.id === removed.trackId ? { ...track, clips: mergeContiguousClips([...track.clips, relocated]) } : track,
+    track.id === removed.trackId ? { ...track, clips: mergeWithNeighbors(track.clips, relocated) } : track,
   )
   return { ...opened, tracks: updatedTracks }
 }
@@ -460,19 +460,32 @@ function areContiguous(left: Clip, right: Clip): boolean {
   )
 }
 
-/** Colapsa clips adyacentes que son en realidad un solo tramo de material partido, para que no queden como piezas separadas tras reinsertar un corte. Recorre ordenado por offset porque areContiguous solo compara vecinos inmediatos. */
-function mergeContiguousClips(clips: Clip[]): Clip[] {
-  const sorted = [...clips].sort((a, b) => a.offsetMs - b.offsetMs)
-  const merged: Clip[] = []
-  for (const clip of sorted) {
-    const last = merged[merged.length - 1]
-    if (last && areContiguous(last, clip)) {
-      merged[merged.length - 1] = { ...last, durationMs: last.durationMs + clip.durationMs }
-    } else {
-      merged.push(clip)
-    }
+/**
+ * Recose el clip recién reinsertado con su vecino inmediato anterior y/o
+ * posterior si son en realidad el mismo material que removeSegment había
+ * partido. A propósito NO recorre el resto del track: dos clips ajenos al
+ * corte que un usuario haya colocado pegados a mano podrían calzar por
+ * casualidad en offset y sourceStartMs — fusionar solo contra los vecinos
+ * directos del clip que se está reinsertando acota el caso a la situación
+ * real que esta función resuelve.
+ */
+function mergeWithNeighbors(clips: Clip[], relocated: Clip): Clip[] {
+  const withRelocated = [...clips, relocated].sort((a, b) => a.offsetMs - b.offsetMs)
+  const index = withRelocated.findIndex((clip) => clip.id === relocated.id)
+
+  let merged = relocated
+  const before = withRelocated[index - 1]
+  if (before && areContiguous(before, merged)) {
+    merged = { ...before, durationMs: before.durationMs + merged.durationMs }
   }
-  return merged
+  const after = withRelocated[index + 1]
+  if (after && areContiguous(merged, after)) {
+    merged = { ...merged, durationMs: merged.durationMs + after.durationMs }
+  }
+
+  return withRelocated
+    .filter((clip) => clip.id !== before?.id && clip.id !== relocated.id && clip.id !== after?.id)
+    .concat(merged)
 }
 
 export interface SilenceCut {
