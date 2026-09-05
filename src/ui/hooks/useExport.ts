@@ -44,7 +44,7 @@ function isExportError(value: string): value is ExportError {
   return (EXPORT_ERROR_CODES as string[]).includes(value)
 }
 
-function errorMessage(error: string, options: ExportOptions): string {
+function errorMessage(error: string, options: ExportOptions, alreadyRetried: boolean): string {
   if (!isExportError(error)) {
     return `Ocurrió un error inesperado durante la exportación: ${error}`
   }
@@ -56,6 +56,13 @@ function errorMessage(error: string, options: ExportOptions): string {
     case 'UNSUPPORTED_API':
       return 'Este navegador no soporta la exportación de video (WebCodecs).'
     case 'UNSUPPORTED_CODEC': {
+      // Si ya se reintentó con el formato alternativo (ver runExport) y
+      // también falló, no queda un tercer formato que sugerir — options acá
+      // ya ES el fallback, así que ALTERNATIVE_FORMAT[options.format]
+      // apuntaría de vuelta al formato original ya descartado.
+      if (alreadyRetried) {
+        return 'Este navegador no soporta ningún formato de video disponible para exportar.'
+      }
       const extension = ALTERNATIVE_FORMAT[options.format] === 'video/mp4' ? 'MP4' : 'WebM'
       return `El formato solicitado no está disponible en este navegador. Prueba exportar en ${extension}.`
     }
@@ -148,7 +155,7 @@ export function useExport() {
           if (message.error !== 'ABORTED') {
             console.error('Export falló:', message.error)
           }
-          setError(errorMessage(message.error, options))
+          setError(errorMessage(message.error, options, isRetry))
           setExporting(false)
           setPhaseLabel('')
           setAborting(false)
