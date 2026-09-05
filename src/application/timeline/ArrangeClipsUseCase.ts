@@ -17,7 +17,18 @@ import {
   type TrimEdge,
 } from '@domain/timeline'
 import { err, ok, type Result } from '@application/result'
-import type { TimelineStorage } from './ports'
+import type { TimelineStorage, TimelineStorageError } from './ports'
+
+const STORAGE_ERROR_CODES: readonly TimelineStorageError[] = ['STORAGE_FULL', 'CORRUPTED_DATA', 'UNKNOWN_ERROR']
+
+function isTimelineStorageError(value: string): value is TimelineStorageError {
+  return (STORAGE_ERROR_CODES as string[]).includes(value)
+}
+
+/** Traduce el error de storage al subconjunto que ArrangeError expone — CORRUPTED_DATA se preserva porque el caller puede necesitar distinguirlo (ej. para ofrecer "reiniciar timeline"), el resto colapsa a STORAGE_ERROR. */
+function mapStorageError(storageError: TimelineStorageError): 'CORRUPTED_DATA' | 'STORAGE_ERROR' {
+  return storageError === 'CORRUPTED_DATA' ? 'CORRUPTED_DATA' : 'STORAGE_ERROR'
+}
 
 type DomainError = 'OVERLAP' | 'TRACK_FULL' | 'INVALID_DURATION' | 'INVALID_OFFSET' | 'CLIP_NOT_FOUND' | 'TRACK_NOT_FOUND' | 'TRIM_EXCEEDS_SOURCE' | 'CUT_OUT_OF_BOUNDS' | 'CUT_ZERO_LENGTH'
 
@@ -44,7 +55,7 @@ export class ArrangeClipsUseCase {
   async getTimeline(projectId: string): Promise<Result<Timeline, ArrangeError>> {
     const existingResult = await this.storage.getByProject(projectId)
     if (!existingResult.ok) {
-      return err(existingResult.error === 'CORRUPTED_DATA' ? 'CORRUPTED_DATA' : 'STORAGE_ERROR')
+      return err(mapStorageError(existingResult.error))
     }
     return ok(existingResult.value ?? this.createNewTimeline(projectId))
   }
@@ -102,31 +113,29 @@ export class ArrangeClipsUseCase {
   }
 
   /**
-   * Carga el timeline vigente, le aplica una operación de dominio que puede
-   * fallar (Result), y persiste el resultado — el patrón que comparten
-   * moveClip/resizeClip/splitClip/deleteClip: solo cambia qué función de
-   * dominio se aplica y con qué argumentos, nunca el resto del flujo.
+   * Lee y persiste el timeline dentro de la MISMA transacción de storage
+   * (ver TimelineStorage.readModifyWrite) — antes esto era getTimeline()
+   * seguido de storage.save() como dos pasos independientes, dejando una
+   * ventana real donde dos ediciones concurrentes (ej. un split y un undo
+   * casi simultáneos) podían leer el mismo timeline base y la segunda
+   * pisaba silenciosamente los cambios de la primera. Comparte el resto del
+   * flujo con moveClip/resizeClip/splitClip/deleteClip: solo cambia qué
+   * función de dominio se aplica y con qué argumentos.
    */
   private async loadApplyAndSave(
     projectId: string,
     apply: (timeline: Timeline) => Result<Timeline, DomainError>,
   ): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
+    const result = await this.storage.readModifyWrite(projectId, (existing) =>
+      apply(existing ?? this.createNewTimeline(projectId)),
+    )
+    if (!result.ok) {
+      // result.error es TimelineStorageError | DomainError — DomainError ya
+      // es un subconjunto válido de ArrangeError (se propaga tal cual);
+      // TimelineStorageError necesita el mismo mapeo que getTimeline.
+      return err(isTimelineStorageError(result.error) ? mapStorageError(result.error) : result.error)
     }
-
-    const applyResult = apply(timelineResult.value)
-    if (!applyResult.ok) {
-      return err(applyResult.error)
-    }
-
-    const saveResult = await this.storage.save(applyResult.value)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(applyResult.value)
+    return ok(result.value)
   }
 
   async moveClip(

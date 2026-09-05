@@ -1,11 +1,10 @@
 const DB_NAME = 'cutloom'
-const DB_VERSION = 6
+const DB_VERSION = 7
 
 export const PROJECTS_STORE = 'projects'
 export const VIDEOS_STORE = 'videos'
 export const VIDEOS_BY_PROJECT_INDEX = 'projectId'
 export const TIMELINE_STORE = 'timelines'
-export const TIMELINE_BY_PROJECT_INDEX = 'projectId'
 export const SUBTITLES_STORE = 'subtitles'
 export const SHORTS_STORE = 'shorts'
 
@@ -15,7 +14,7 @@ export function openCutloomDB(): Promise<IDBDatabase> {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION)
-      request.onupgradeneeded = () => {
+      request.onupgradeneeded = (event) => {
         const db = request.result
         const transaction = request.transaction!
 
@@ -31,12 +30,29 @@ export function openCutloomDB(): Promise<IDBDatabase> {
           videos.createIndex(VIDEOS_BY_PROJECT_INDEX, 'projectId')
         }
 
-        const timelines = db.objectStoreNames.contains(TIMELINE_STORE)
-          ? transaction.objectStore(TIMELINE_STORE)
-          : db.createObjectStore(TIMELINE_STORE, { keyPath: 'id' })
-
-        if (!timelines.indexNames.contains(TIMELINE_BY_PROJECT_INDEX)) {
-          timelines.createIndex(TIMELINE_BY_PROJECT_INDEX, 'projectId')
+        // TIMELINE_STORE pasaba de v6 a v7 de keyPath 'id' (buscado por
+        // índice projectId) a keyPath 'projectId' directo — igual que
+        // subtitles/shorts/projects. Eso es lo que permite reusar
+        // runReadModifyWrite (get+put atómico por key) sin un caso especial
+        // para timelines. Un proyecto tiene a lo sumo un timeline, así que
+        // projectId es una key única válida. IndexedDB no deja cambiar el
+        // keyPath de un store existente, así que la migración recrea el
+        // store: lee todo lo que había con el store viejo (mismo nombre,
+        // referencia tomada ANTES de borrarlo), lo borra, lo crea de nuevo
+        // con el keyPath correcto, y reinserta los datos ya leídos.
+        if (event.oldVersion < 7 && db.objectStoreNames.contains(TIMELINE_STORE)) {
+          const oldStore = transaction.objectStore(TIMELINE_STORE)
+          const getAllRequest = oldStore.getAll()
+          getAllRequest.onsuccess = () => {
+            const records = getAllRequest.result as { projectId: string }[]
+            db.deleteObjectStore(TIMELINE_STORE)
+            const migratedStore = db.createObjectStore(TIMELINE_STORE, { keyPath: 'projectId' })
+            for (const record of records) {
+              migratedStore.put(record)
+            }
+          }
+        } else if (!db.objectStoreNames.contains(TIMELINE_STORE)) {
+          db.createObjectStore(TIMELINE_STORE, { keyPath: 'projectId' })
         }
 
         if (!db.objectStoreNames.contains(SUBTITLES_STORE)) {

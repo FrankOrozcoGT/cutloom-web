@@ -1,7 +1,16 @@
 import type { Timeline } from '@domain/timeline'
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage, TimelineStorageError } from '@application/timeline/ports'
-import { openCutloomDB, runTransaction, TIMELINE_BY_PROJECT_INDEX, TIMELINE_STORE } from './database'
+import { openCutloomDB, runReadModifyWrite, runTransaction, TIMELINE_STORE } from './database'
+
+/** Puente entre el Result<Timeline, E> que devuelve `modify` (capa de aplicación) y el mecanismo de runReadModifyWrite, que señaliza "no persistir nada" lanzando una excepción — se desenvuelve de vuelta a Result en readModifyWrite, nunca se propaga fuera de este archivo. */
+class ModifyRejected<E> extends Error {
+  domainError: E
+  constructor(domainError: E) {
+    super('ModifyRejected')
+    this.domainError = domainError
+  }
+}
 
 function isValidClip(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false
@@ -35,10 +44,7 @@ function isValidTimeline(value: unknown): value is Timeline {
 export class IndexedDBTimelineAdapter implements TimelineStorage {
   async getByProject(projectId: string): Promise<Result<Timeline | null, TimelineStorageError>> {
     const db = await openCutloomDB()
-    const results = await runTransaction(db, TIMELINE_STORE, 'readonly', (store) =>
-      store.index(TIMELINE_BY_PROJECT_INDEX).getAll(projectId),
-    )
-    const timeline = results[0]
+    const timeline = await runTransaction(db, TIMELINE_STORE, 'readonly', (store) => store.get(projectId))
     if (timeline === undefined) {
       return ok(null)
     }
@@ -64,12 +70,37 @@ export class IndexedDBTimelineAdapter implements TimelineStorage {
   async delete(projectId: string): Promise<Result<void, TimelineStorageError>> {
     try {
       const db = await openCutloomDB()
-      const existingResult = await this.getByProject(projectId)
-      if (existingResult.ok && existingResult.value) {
-        await runTransaction(db, TIMELINE_STORE, 'readwrite', (store) => store.delete(existingResult.value!.id))
-      }
+      await runTransaction(db, TIMELINE_STORE, 'readwrite', (store) => store.delete(projectId))
       return ok(undefined)
     } catch {
+      return err('UNKNOWN_ERROR')
+    }
+  }
+
+  async readModifyWrite<E>(
+    projectId: string,
+    modify: (existing: Timeline | null) => Result<Timeline, E>,
+  ): Promise<Result<Timeline, TimelineStorageError | E>> {
+    try {
+      const db = await openCutloomDB()
+      const updated = await runReadModifyWrite<Timeline>(db, TIMELINE_STORE, projectId, (existing) => {
+        if (existing !== undefined && !isValidTimeline(existing)) {
+          throw new ModifyRejected<TimelineStorageError | E>('CORRUPTED_DATA')
+        }
+        const result = modify(existing ?? null)
+        if (!result.ok) {
+          throw new ModifyRejected<TimelineStorageError | E>(result.error)
+        }
+        return result.value
+      })
+      return ok(updated)
+    } catch (e) {
+      if (e instanceof ModifyRejected) {
+        return err(e.domainError)
+      }
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        return err('STORAGE_FULL')
+      }
       return err('UNKNOWN_ERROR')
     }
   }
