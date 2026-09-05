@@ -54,10 +54,13 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     const candidateDtos = candidates.map(toDetectedCandidateDto)
     const formData = new FormData()
     formData.append('payload', JSON.stringify({ candidates: candidateDtos, shortIdealJson: shortIdeal }))
-    for (const clip of audioClips) {
-      const fieldName = `audio_${clip.startMs / 1000}_${clip.endMs / 1000}`
+    // El fieldname es el índice 0-based del candidato dentro de payload.candidates
+    // (no sus tiempos) — ScoreShortsUseCase arma audioClips iterando candidates en
+    // el mismo orden sin saltos, así que el índice del array coincide 1:1.
+    audioClips.forEach((clip, index) => {
+      const fieldName = `audio_${index}`
       formData.append(fieldName, clip.audioBlob, `${fieldName}.wav`)
-    }
+    })
 
     const response = await this.http.postForm('/api/shorts/score', formData)
     if (!response.ok) {
