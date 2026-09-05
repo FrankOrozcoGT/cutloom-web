@@ -19,6 +19,8 @@ import {
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from './ports'
 
+type DomainError = 'OVERLAP' | 'TRACK_FULL' | 'INVALID_DURATION' | 'INVALID_OFFSET' | 'CLIP_NOT_FOUND' | 'TRACK_NOT_FOUND' | 'TRIM_EXCEEDS_SOURCE' | 'CUT_OUT_OF_BOUNDS' | 'CUT_ZERO_LENGTH'
+
 export type ArrangeError =
   | 'OVERLAP'
   | 'TRACK_FULL'
@@ -99,38 +101,50 @@ export class ArrangeClipsUseCase {
     return ok(addResult.value)
   }
 
+  /**
+   * Carga el timeline vigente, le aplica una operación de dominio que puede
+   * fallar (Result), y persiste el resultado — el patrón que comparten
+   * moveClip/resizeClip/splitClip/deleteClip: solo cambia qué función de
+   * dominio se aplica y con qué argumentos, nunca el resto del flujo.
+   */
+  private async loadApplyAndSave(
+    projectId: string,
+    apply: (timeline: Timeline) => Result<Timeline, DomainError>,
+  ): Promise<Result<Timeline, ArrangeError>> {
+    const timelineResult = await this.getTimeline(projectId)
+    if (!timelineResult.ok) {
+      return err(timelineResult.error)
+    }
+
+    const applyResult = apply(timelineResult.value)
+    if (!applyResult.ok) {
+      return err(applyResult.error)
+    }
+
+    const saveResult = await this.storage.save(applyResult.value)
+    if (!saveResult.ok) {
+      return err('STORAGE_ERROR')
+    }
+
+    return ok(applyResult.value)
+  }
+
   async moveClip(
     projectId: string,
     clipId: string,
     newTrackId?: string,
     newOffsetMs?: number,
   ): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-    const timeline = timelineResult.value
-
-    const currentTrack = timeline.tracks.find((track) => track.clips.some((clip) => clip.id === clipId))
-    if (!currentTrack) {
-      return err('CLIP_NOT_FOUND')
-    }
-    const currentClip = currentTrack.clips.find((clip) => clip.id === clipId)!
-
-    const resolvedTrackId = newTrackId ?? currentTrack.id
-    const resolvedOffset = newOffsetMs ?? currentClip.offsetMs
-
-    const moveResult = moveClipInDomain(timeline, clipId, resolvedTrackId, resolvedOffset)
-    if (!moveResult.ok) {
-      return err(moveResult.error)
-    }
-
-    const saveResult = await this.storage.save(moveResult.value)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(moveResult.value)
+    return this.loadApplyAndSave(projectId, (timeline) => {
+      const currentTrack = timeline.tracks.find((track) => track.clips.some((clip) => clip.id === clipId))
+      if (!currentTrack) {
+        return err('CLIP_NOT_FOUND')
+      }
+      const currentClip = currentTrack.clips.find((clip) => clip.id === clipId)!
+      const resolvedTrackId = newTrackId ?? currentTrack.id
+      const resolvedOffset = newOffsetMs ?? currentClip.offsetMs
+      return moveClipInDomain(timeline, clipId, resolvedTrackId, resolvedOffset)
+    })
   }
 
   async resizeClip(
@@ -140,23 +154,9 @@ export class ArrangeClipsUseCase {
     newBoundaryMs: number,
     sourceDurationMs: number,
   ): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-    const timeline = timelineResult.value
-
-    const resizeResult = resizeClipInDomain(timeline, clipId, edge, newBoundaryMs, sourceDurationMs)
-    if (!resizeResult.ok) {
-      return err(resizeResult.error)
-    }
-
-    const saveResult = await this.storage.save(resizeResult.value)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(resizeResult.value)
+    return this.loadApplyAndSave(projectId, (timeline) =>
+      resizeClipInDomain(timeline, clipId, edge, newBoundaryMs, sourceDurationMs),
+    )
   }
 
   async splitClip(
@@ -164,23 +164,7 @@ export class ArrangeClipsUseCase {
     clipId: string,
     cutPointMs: number,
   ): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-    const timeline = timelineResult.value
-
-    const splitResult = splitClipInDomain(timeline, clipId, cutPointMs)
-    if (!splitResult.ok) {
-      return err(splitResult.error)
-    }
-
-    const saveResult = await this.storage.save(splitResult.value)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(splitResult.value)
+    return this.loadApplyAndSave(projectId, (timeline) => splitClipInDomain(timeline, clipId, cutPointMs))
   }
 
   /**
@@ -214,76 +198,26 @@ export class ArrangeClipsUseCase {
    * Revierte el corte de removeSegment: reabre el hueco y reinserta el clip
    * quitado en `atMs` — la posición ACTUAL del hueco, que el caller rastrea
    * porque puede haberse desplazado por otros cortes/reinserciones desde que
-   * se quitó este segmento.
+   * se quitó este segmento. reinsertSegmentInDomain nunca falla (no tiene
+   * precondiciones que puedan violarse) — se envuelve en ok() solo para
+   * encajar en el mismo loadApplyAndSave que el resto de operaciones.
    */
   async reinsertSegment(projectId: string, removed: RemovedSegment, atMs: number): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-
-    const reinserted = reinsertSegmentInDomain(timelineResult.value, removed, atMs)
-
-    const saveResult = await this.storage.save(reinserted)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(reinserted)
+    return this.loadApplyAndSave(projectId, (timeline) => ok(reinsertSegmentInDomain(timeline, removed, atMs)))
   }
 
   async deleteClip(projectId: string, clipId: string): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-    const timeline = timelineResult.value
-
-    const deleteResult = deleteClipInDomain(timeline, clipId)
-    if (!deleteResult.ok) {
-      return err(deleteResult.error)
-    }
-
-    const saveResult = await this.storage.save(deleteResult.value)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(deleteResult.value)
+    return this.loadApplyAndSave(projectId, (timeline) => deleteClipInDomain(timeline, clipId))
   }
 
-  /** Quita del timeline los clips que referencian assetId, para cuando su VideoAsset se borra. */
+  /** Quita del timeline los clips que referencian assetId, para cuando su VideoAsset se borra. removeClipsByAsset nunca falla — se envuelve en ok() por el mismo motivo que reinsertSegment. */
   async removeClipsByAsset(projectId: string, assetId: string): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-
-    const updatedTimeline = removeClipsByAsset(timelineResult.value, assetId)
-
-    const saveResult = await this.storage.save(updatedTimeline)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(updatedTimeline)
+    return this.loadApplyAndSave(projectId, (timeline) => ok(removeClipsByAsset(timeline, assetId)))
   }
 
-  /** Vacía todos los clips del timeline, manteniendo la estructura de pistas. */
+  /** Vacía todos los clips del timeline, manteniendo la estructura de pistas. clearAllClips nunca falla — se envuelve en ok() por el mismo motivo que reinsertSegment. */
   async clearAllClips(projectId: string): Promise<Result<Timeline, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
-    }
-
-    const updatedTimeline = clearAllClips(timelineResult.value)
-
-    const saveResult = await this.storage.save(updatedTimeline)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(updatedTimeline)
+    return this.loadApplyAndSave(projectId, (timeline) => ok(clearAllClips(timeline)))
   }
 
   async saveTimeline(timeline: Timeline): Promise<Result<Timeline, ArrangeError>> {
