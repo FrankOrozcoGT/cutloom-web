@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { billingApi } from '@ui/billing/composition'
-
-const RETRY_DELAYS_MS = [1000, 1500, 2000]
+import { useRetryUntilReady } from '@ui/hooks/useRetryUntilReady'
 
 interface CreditsResultPageProps {
   result: 'success' | 'cancel'
@@ -10,41 +9,28 @@ interface CreditsResultPageProps {
 
 export function CreditsResultPage({ result }: CreditsResultPageProps) {
   const [balance, setBalance] = useState<number | null>(null)
-  const [isRefetching, setIsRefetching] = useState(result === 'success')
+  // Primera lectura de balance dentro de este ciclo de reintentos — vive en
+  // un ref (no en useRetryUntilReady) porque es un detalle de "qué significa
+  // estar listo" específico de este flujo, no algo que el hook genérico deba
+  // conocer.
+  const baselineRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (result !== 'success') return
-
-    let cancelled = false
-
-    async function refetchWithRetry() {
-      let baseline: number | null = null
-      for (const delay of [0, ...RETRY_DELAYS_MS]) {
-        if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay))
-        }
-        if (cancelled) return
-        const balanceResult = await billingApi.getCreditsBalance()
-        if (cancelled) return
-        if (balanceResult.ok) {
-          setBalance(balanceResult.value.balance)
-          if (baseline === null) {
-            baseline = balanceResult.value.balance
-          } else if (balanceResult.value.balance !== baseline) {
-            // El webhook ya sumó los créditos — el balance cambió respecto
-            // a la primera lectura.
-            break
-          }
-        }
-      }
-      if (!cancelled) setIsRefetching(false)
+  const attempt = useCallback(async () => {
+    const balanceResult = await billingApi.getCreditsBalance()
+    if (!balanceResult.ok) {
+      return { done: false }
     }
-
-    void refetchWithRetry()
-    return () => {
-      cancelled = true
+    setBalance(balanceResult.value.balance)
+    if (baselineRef.current === null) {
+      baselineRef.current = balanceResult.value.balance
+      return { done: false }
     }
-  }, [result])
+    // El webhook ya sumó los créditos — el balance cambió respecto a la
+    // primera lectura.
+    return { done: balanceResult.value.balance !== baselineRef.current }
+  }, [])
+
+  const isRefetching = useRetryUntilReady(result === 'success', attempt)
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 p-6 py-16 text-center">
