@@ -1,4 +1,4 @@
-import { findActiveSubtitle, splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
+import { estimateMaxCharsForCue, findActiveSubtitle, splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
 import type { SubtitlesStoragePort } from '@application/subtitles/ports'
@@ -77,10 +77,10 @@ export class ExportProjectUseCase {
 
     // Un SubtitleSegment de Whisper suele cubrir una oración completa —
     // demasiado texto para un solo frame, sobre todo en 9:16 (ancho angosto).
-    // Se re-segmenta en cues cortos antes de quemarlos, con un límite de
-    // caracteres proporcional al aspect ratio del canvas destino.
-    const isVertical = options.height > options.width
-    const maxCharsPerCue = isVertical ? 50 : 90
+    // Se re-segmenta en cues cortos antes de quemarlos, con el límite de
+    // caracteres derivado del tamaño real del canvas destino (mismo cálculo
+    // que usa el preview) en vez de un número fijo desalineado del estilo.
+    const maxCharsPerCue = estimateMaxCharsForCue(options.width, options.height)
     const subtitleSegments = splitLongSubtitleCues(rawSubtitleSegments, maxCharsPerCue)
 
     // Los timestamps de salida quedan reindexados a 0 por buildRenderSegments

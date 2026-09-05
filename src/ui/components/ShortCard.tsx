@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Crop, Download, Play, Star, X } from 'lucide-react'
 import type { Timeline } from '@domain/timeline'
-import { splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
+import { estimateMaxCharsForCue, splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
 import type { ShortScore } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import type { ExportOptions } from '@application/video/exportTypes'
@@ -112,13 +112,14 @@ export function ShortCard({
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
   const { exporting, progress, phaseLabel, error, exportProject } = useExport()
 
-  // 50 caracteres por cue: mismo límite que ExportProjectUseCase usa para el
-  // canvas vertical del export final — el preview debe verse igual.
+  // Mismo cálculo que ExportProjectUseCase (estimateMaxCharsForCue) sobre las
+  // mismas dimensiones de SHORT_EXPORT_OPTIONS — es una razón de aspecto, no
+  // un tamaño absoluto, así que da igual que el DOM real sea más chico.
   const shortSubtitles = useMemo(
     () =>
       splitLongSubtitleCues(
         subtitleSegments.filter((segment) => segment.startMs < short.endMs && segment.endMs > short.startMs),
-        50,
+        estimateMaxCharsForCue(SHORT_EXPORT_OPTIONS.width, SHORT_EXPORT_OPTIONS.height),
       ),
     [subtitleSegments, short.startMs, short.endMs],
   )
@@ -166,7 +167,6 @@ export function ShortCard({
           onPlayheadChange={handlePlayheadChange}
           onPlayingChange={setIsPlaying}
           segments={shortSubtitles}
-          subtitleSize="compact"
           containerClassName="absolute inset-0 h-full w-full overflow-hidden"
           videoObjectFit="cover"
           objectPositionX={cropOffsetX * 100}

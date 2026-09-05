@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { getTimelineDurationMs, type Timeline } from '@domain/timeline'
-import type { SubtitleSegment } from '@domain/subtitles'
+import { SUBTITLE_STYLE, type SubtitleSegment } from '@domain/subtitles'
 import type { VideoAsset } from '@domain/video'
 import { usePlaybackEngine } from './usePlaybackEngine'
 
@@ -17,8 +17,6 @@ interface TimelinePlayerProps {
   onActiveSegmentChange?: (segmentId: string | null) => void
   /** Click explícito del usuario sobre el subtítulo superpuesto: abrir/enfocar el listado de edición. */
   onSegmentClick?: (segmentId: string) => void
-  /** 'compact' escala el overlay de subtítulo a un tamaño de fuente proporcional al contenedor — usado en players chicos (ej. ShortCard) donde el texto a tamaño fijo se ve desproporcionadamente grande. Default 'normal' preserva el tamaño fijo del editor. */
-  subtitleSize?: 'normal' | 'compact'
   /** Reemplaza el aspect-video/bordes por defecto — usado para componer un fondo 9:16 cover+blur detrás de una instancia 'normal' en primer plano (ver ShortCard). */
   containerClassName?: string
   /** Reemplaza object-contain por defecto en los <video> — 'cover' para la capa de fondo desenfocada. */
@@ -49,7 +47,6 @@ export function TimelinePlayer({
   segments,
   onActiveSegmentChange,
   onSegmentClick,
-  subtitleSize = 'normal',
   containerClassName,
   videoObjectFit = 'contain',
   objectPositionX = 50,
@@ -79,6 +76,12 @@ export function TimelinePlayer({
         containerClassName ??
         'relative flex aspect-video max-h-full w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-bg'
       }
+      // container-type: size habilita las unidades cqh/cqw de abajo, que
+      // dimensionan el subtítulo como fracción real del tamaño del video —
+      // los mismos ratios (SUBTITLE_STYLE) que usa OffscreenCanvasCompositor
+      // para quemarlo en el export, así el preview coincide con el archivo
+      // final en vez de tener cada uno su propio tamaño fijo arbitrario.
+      style={{ containerType: 'size' }}
     >
       {!hasContent && (
         <span className="text-sm text-text-muted">
@@ -106,14 +109,20 @@ export function TimelinePlayer({
       )}
       {hasContent && activeSegment && (
         <div
-          className={`absolute inset-x-0 flex justify-center ${subtitleSize === 'compact' ? 'bottom-1 px-1' : 'bottom-4 px-4'}`}
+          className="absolute inset-x-0 flex justify-center"
+          style={{ bottom: `${SUBTITLE_STYLE.bottomMarginRatio * 100}cqh` }}
         >
           <button
             type="button"
             onClick={() => onSegmentClick?.(activeSegment.id)}
-            className={`max-w-[90%] rounded bg-black/70 text-center text-white hover:bg-black/85 ${
-              subtitleSize === 'compact' ? 'line-clamp-2 px-1.5 py-0.5 text-[10px] leading-tight' : 'px-3 py-1 text-sm'
-            }`}
+            className="line-clamp-2 rounded text-center font-bold text-white"
+            style={{
+              maxWidth: `${SUBTITLE_STYLE.maxWidthRatio * 100}cqw`,
+              fontSize: `${SUBTITLE_STYLE.fontSizeRatio * 100}cqh`,
+              lineHeight: SUBTITLE_STYLE.lineHeightRatio,
+              WebkitTextStroke: '0.06em black',
+              paintOrder: 'stroke fill',
+            }}
           >
             {activeSegment.text}
           </button>

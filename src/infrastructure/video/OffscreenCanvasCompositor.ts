@@ -1,13 +1,6 @@
 import type { ClipRenderSegment, GapRenderSegment } from '@application/video/exportTypes'
 import type { CanvasPort, ComposeOptions } from '@application/video/ports'
-
-// 7% del alto está dentro del rango recomendado (7-10%) para captions
-// legibles en shorts verticales — con el ancho angosto de un 9:16, un
-// tamaño menor (el 4.5% anterior) se ve chico en proporción al frame.
-const SUBTITLE_FONT_RATIO = 0.07
-const SUBTITLE_MAX_WIDTH_RATIO = 0.9
-const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.08
-const SUBTITLE_LINE_HEIGHT_RATIO = 1.3
+import { SUBTITLE_STYLE } from '@domain/subtitles'
 
 /**
  * Umbral para considerar que el aspect ratio del frame fuente difiere del
@@ -100,15 +93,19 @@ export class OffscreenCanvasCompositor implements CanvasPort {
   // del maxWidth, en vez de confiar en que el texto entre en una sola línea.
   private drawSubtitle(text: string, width: number, height: number): void {
     const ctx = this.context
-    const fontSize = Math.round(height * SUBTITLE_FONT_RATIO)
+    const fontSize = Math.round(height * SUBTITLE_STYLE.fontSizeRatio)
     ctx.font = `bold ${fontSize}px sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'bottom'
 
-    const maxWidth = width * SUBTITLE_MAX_WIDTH_RATIO
-    const lines = this.wrapText(text, maxWidth)
-    const lineHeight = fontSize * SUBTITLE_LINE_HEIGHT_RATIO
-    const bottomMargin = height * SUBTITLE_BOTTOM_MARGIN_RATIO
+    const maxWidth = width * SUBTITLE_STYLE.maxWidthRatio
+    // splitLongSubtitleCues ya acota el texto a un ancho razonable antes de
+    // llegar acá, pero measureText es la fuente de verdad real (a diferencia
+    // del conteo de caracteres, que es solo una aproximación) — este límite
+    // de líneas es una defensa contra palabras largas que igual desborden.
+    const lines = this.wrapText(text, maxWidth).slice(0, SUBTITLE_STYLE.maxLines)
+    const lineHeight = fontSize * SUBTITLE_STYLE.lineHeightRatio
+    const bottomMargin = height * SUBTITLE_STYLE.bottomMarginRatio
 
     ctx.lineWidth = fontSize * 0.15
     ctx.strokeStyle = 'black'

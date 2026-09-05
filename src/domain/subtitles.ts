@@ -7,6 +7,45 @@ export interface SubtitleSegment {
   endMs: number
 }
 
+/**
+ * Estilo del overlay de subtítulo, como fracciones del alto/ancho del
+ * frame — única fuente de verdad consumida tanto por el preview en vivo
+ * (TimelinePlayer, vía CSS con unidades relativas) como por el burn-in del
+ * export (OffscreenCanvasCompositor, vía canvas con estos mismos ratios
+ * multiplicados por las dimensiones reales). Antes cada uno tenía sus
+ * propias constantes arbitrarias (un tamaño de fuente en px fijo en CSS vs.
+ * un ratio del alto en el canvas) sin relación entre sí, por lo que el
+ * resultado final descargado no se parecía al preview.
+ */
+export const SUBTITLE_STYLE = {
+  fontSizeRatio: 0.045,
+  maxWidthRatio: 0.9,
+  bottomMarginRatio: 0.03,
+  lineHeightRatio: 1.3,
+  maxLines: 2,
+} as const
+
+/**
+ * Ancho promedio de un carácter en fuentes sans-serif bold, como fracción
+ * de su font-size — aproximación estándar de tipografía (no hay forma de
+ * medir texto real sin un canvas/DOM, y splitLongSubtitleCues es puro).
+ */
+const AVG_CHAR_WIDTH_RATIO = 0.58
+
+/**
+ * Cuántos caracteres caben en total en SUBTITLE_STYLE.maxLines líneas, para
+ * un frame de canvasWidth×canvasHeight con el estilo compartido — usado
+ * para decidir dónde cortar un SubtitleSegment largo en splitLongSubtitleCues
+ * antes de quemarlo, así el límite de caracteres es consistente con el
+ * tamaño de fuente real en vez de un número elegido a ojo.
+ */
+export function estimateMaxCharsForCue(canvasWidth: number, canvasHeight: number): number {
+  const fontSize = canvasHeight * SUBTITLE_STYLE.fontSizeRatio
+  const maxLineWidth = canvasWidth * SUBTITLE_STYLE.maxWidthRatio
+  const charsPerLine = maxLineWidth / (fontSize * AVG_CHAR_WIDTH_RATIO)
+  return Math.floor(charsPerLine * SUBTITLE_STYLE.maxLines)
+}
+
 /** Idiomas soportados para la transcripción manual (input del usuario, Whisper no expone detección con confianza). */
 export type LanguageCode = 'es' | 'en'
 export const DEFAULT_LANGUAGE: LanguageCode = 'es'
