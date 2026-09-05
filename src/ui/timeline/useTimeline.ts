@@ -240,45 +240,45 @@ export function useTimeline(
     applyNewTimeline(result.value, [])
   }, [projectId, applyNewTimeline])
 
-  // undo/redo leen `past`/`future`/`timeline` directamente del closure en vez
-  // de usar el patrón funcional setPast(prev => ...): ese patrón invitaba a
-  // meter side-effects (restore de bridges, setFuture, saveTimeline) DENTRO
-  // del updater, y React (sobre todo StrictMode) puede invocar un updater más
-  // de una vez para detectar impurezas — cada invocación extra repetía esos
+  // undo y redo son el mismo viaje en el historial, solo con past/future
+  // intercambiados — travel() concentra ese único flujo, parametrizado por
+  // de qué pila se saca la entrada (source) y a cuál se empuja el estado
+  // actual (destination), para que un fix futuro (ej. al manejo de bridges)
+  // no dependa de tocar dos copias espejadas y quedar desalineado entre sí.
+  //
+  // Lee `past`/`future`/`timeline` directamente del closure en vez de usar el
+  // patrón funcional setPast(prev => ...): ese patrón invitaba a meter
+  // side-effects (restore de bridges, saveTimeline) DENTRO del updater, y
+  // React (sobre todo StrictMode) puede invocar un updater más de una vez
+  // para detectar impurezas — cada invocación extra repetía esos
   // side-effects, vaciando los chips que la primera pasada ya había
-  // restaurado. Todo el trabajo real ahora corre una sola vez, fuera de
-  // cualquier updater; los updaters solo hacen el cálculo puro del array.
-  const undo = useCallback(async () => {
-    if (past.length === 0 || !timeline) return
-    const previous = past[past.length - 1]
-    const currentChips = removedChipsBridge?.get() ?? []
-    setFuture((prevFuture) =>
-      [...prevFuture, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedChips: currentChips }].slice(
-        -MAX_HISTORY,
-      ),
-    )
-    setPast((prevPast) => prevPast.slice(0, -1))
-    setTimelineState(previous.timeline)
-    subtitlesBridge?.restore(previous.subtitles)
-    removedChipsBridge?.restore(previous.removedChips)
-    void arrangeUseCase.saveTimeline(previous.timeline)
-  }, [timeline, past, subtitlesBridge, removedChipsBridge])
+  // restaurado. Todo el trabajo real corre una sola vez, fuera de cualquier
+  // updater; los updaters solo hacen el cálculo puro del array.
+  const travel = useCallback(
+    (
+      source: HistoryEntry[],
+      setSource: (updater: (prev: HistoryEntry[]) => HistoryEntry[]) => void,
+      setDestination: (updater: (prev: HistoryEntry[]) => HistoryEntry[]) => void,
+    ) => {
+      if (source.length === 0 || !timeline) return
+      const target = source[source.length - 1]
+      const currentChips = removedChipsBridge?.get() ?? []
+      setDestination((prev) =>
+        [...prev, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedChips: currentChips }].slice(
+          -MAX_HISTORY,
+        ),
+      )
+      setSource((prev) => prev.slice(0, -1))
+      setTimelineState(target.timeline)
+      subtitlesBridge?.restore(target.subtitles)
+      removedChipsBridge?.restore(target.removedChips)
+      void arrangeUseCase.saveTimeline(target.timeline)
+    },
+    [timeline, subtitlesBridge, removedChipsBridge],
+  )
 
-  const redo = useCallback(async () => {
-    if (future.length === 0 || !timeline) return
-    const next = future[future.length - 1]
-    const currentChips = removedChipsBridge?.get() ?? []
-    setPast((prevPast) =>
-      [...prevPast, { timeline, subtitles: subtitlesBridge?.get() ?? null, removedChips: currentChips }].slice(
-        -MAX_HISTORY,
-      ),
-    )
-    setFuture((prevFuture) => prevFuture.slice(0, -1))
-    setTimelineState(next.timeline)
-    subtitlesBridge?.restore(next.subtitles)
-    removedChipsBridge?.restore(next.removedChips)
-    void arrangeUseCase.saveTimeline(next.timeline)
-  }, [timeline, future, subtitlesBridge, removedChipsBridge])
+  const undo = useCallback(() => travel(past, setPast, setFuture), [travel, past])
+  const redo = useCallback(() => travel(future, setFuture, setPast), [travel, future])
 
   return {
     timeline,
