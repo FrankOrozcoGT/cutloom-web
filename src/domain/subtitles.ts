@@ -56,6 +56,61 @@ export function findActiveSubtitle(segments: SubtitleSegment[], timeMs: number):
   return segments.find((segment) => timeMs >= segment.startMs && timeMs < segment.endMs) ?? null
 }
 
+/**
+ * Agrupa las palabras de un segmento en cues cortos (~maxCharsPerCue
+ * caracteres cada uno, sin cortar palabras) — un SubtitleSegment de Whisper
+ * suele cubrir una oración completa, demasiado texto para mostrar de una
+ * vez en un frame vertical angosto sin ocupar la pantalla entera.
+ */
+function groupWordsIntoCues(text: string, maxCharsPerCue: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean)
+  const cues: string[] = []
+  let current = ''
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word
+    if (current && candidate.length > maxCharsPerCue) {
+      cues.push(current)
+      current = word
+    } else {
+      current = candidate
+    }
+  }
+  if (current) cues.push(current)
+  return cues
+}
+
+/**
+ * Re-segmenta subtítulos largos en sub-cues cortos con timing proporcional
+ * a la cantidad de caracteres de cada uno (aproximación estándar cuando no
+ * se tiene el timing real por palabra) — mismo criterio que usan las
+ * herramientas de captions profesionales para no mostrar una oración
+ * entera de una sola vez. Segmentos que ya caben en maxCharsPerCue quedan
+ * intactos (mismo id, sin re-timing).
+ */
+export function splitLongSubtitleCues(segments: SubtitleSegment[], maxCharsPerCue: number): SubtitleSegment[] {
+  const result: SubtitleSegment[] = []
+  for (const segment of segments) {
+    if (segment.text.length <= maxCharsPerCue) {
+      result.push(segment)
+      continue
+    }
+    const cues = groupWordsIntoCues(segment.text, maxCharsPerCue)
+    const totalChars = cues.reduce((sum, cue) => sum + cue.length, 0)
+    const durationMs = segment.endMs - segment.startMs
+    let cursorMs = segment.startMs
+    cues.forEach((cueText, index) => {
+      const isLast = index === cues.length - 1
+      const cueDurationMs = isLast
+        ? segment.endMs - cursorMs
+        : Math.round((cueText.length / totalChars) * durationMs)
+      const cueEndMs = isLast ? segment.endMs : cursorMs + cueDurationMs
+      result.push({ id: `${segment.id}-${index}`, text: cueText, startMs: cursorMs, endMs: cueEndMs })
+      cursorMs = cueEndMs
+    })
+  }
+  return result
+}
+
 export function editSegmentText(
   segments: SubtitleSegment[],
   segmentId: string,

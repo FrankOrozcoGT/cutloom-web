@@ -1,4 +1,4 @@
-import { findActiveSubtitle, type SubtitleSegment } from '@domain/subtitles'
+import { findActiveSubtitle, splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
 import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
 import type { SubtitlesStoragePort } from '@application/subtitles/ports'
@@ -41,6 +41,8 @@ export class ExportProjectUseCase {
     options: ExportOptions,
     onProgress?: ExportProgressListener,
     signal?: AbortSignal,
+    range?: { startMs: number; endMs: number },
+    cropOffsetX?: number,
   ): Promise<Result<Blob, ExportError>> {
     const prerequisitesError = this.validatePrerequisites()
     if (prerequisitesError) {
@@ -59,7 +61,7 @@ export class ExportProjectUseCase {
     }
     const { timeline, assetsById } = loadResult.value
 
-    const segmentsResult = buildRenderSegments(timeline, assetsById)
+    const segmentsResult = buildRenderSegments(timeline, assetsById, range)
     if (!segmentsResult.ok) {
       return err(segmentsResult.error)
     }
@@ -71,9 +73,20 @@ export class ExportProjectUseCase {
     // Los subtítulos son opcionales: si no hay ninguno guardado, se exporta sin
     // burn-in en vez de fallar toda la exportación por STORAGE_ERROR.
     const subtitlesResult = await this.subtitlesStorage.getByProject(projectId)
-    const subtitleSegments = subtitlesResult.ok ? (subtitlesResult.value?.segments ?? []) : []
+    const rawSubtitleSegments = subtitlesResult.ok ? (subtitlesResult.value?.segments ?? []) : []
 
-    return this.run(segmentsResult.value, options, subtitleSegments, onProgress, signal)
+    // Un SubtitleSegment de Whisper suele cubrir una oración completa —
+    // demasiado texto para un solo frame, sobre todo en 9:16 (ancho angosto).
+    // Se re-segmenta en cues cortos antes de quemarlos, con un límite de
+    // caracteres proporcional al aspect ratio del canvas destino.
+    const isVertical = options.height > options.width
+    const maxCharsPerCue = isVertical ? 50 : 90
+    const subtitleSegments = splitLongSubtitleCues(rawSubtitleSegments, maxCharsPerCue)
+
+    // Los timestamps de salida quedan reindexados a 0 por buildRenderSegments
+    // cuando hay range, pero subtitleSegments sigue en tiempo del timeline
+    // completo — hay que sumar el offset al buscar el subtítulo activo.
+    return this.run(segmentsResult.value, options, subtitleSegments, range?.startMs ?? 0, cropOffsetX, onProgress, signal)
   }
 
   private validatePrerequisites(): ExportError | null {
@@ -89,6 +102,8 @@ export class ExportProjectUseCase {
     segments: RenderSegment[],
     options: ExportOptions,
     subtitleSegments: SubtitleSegment[],
+    subtitleTimeOffsetMs: number,
+    cropOffsetX: number | undefined,
     onProgress?: ExportProgressListener,
     signal?: AbortSignal,
   ): Promise<Result<Blob, ExportError>> {
@@ -130,10 +145,11 @@ export class ExportProjectUseCase {
           const frameTimestamp = gapStartSeconds + i * frameDurationSeconds
           const remaining = gapDurationSeconds - i * frameDurationSeconds
           const duration = Math.min(frameDurationSeconds, remaining)
-          const activeSubtitle = findActiveSubtitle(subtitleSegments, frameTimestamp * 1000)
+          const activeSubtitle = findActiveSubtitle(subtitleSegments, frameTimestamp * 1000 + subtitleTimeOffsetMs)
           this.composer.composeBlank(segment, {
             dimensions: { width: options.width, height: options.height },
             subtitleText: activeSubtitle?.text,
+            cropOffsetX,
           })
           const result = await this.muxer.writeVideoFrame(frameTimestamp, duration)
           if (!result.ok) {
@@ -145,10 +161,11 @@ export class ExportProjectUseCase {
           segment,
           async (frame, timestampSeconds, durationSeconds) => {
             if (writeError || signal?.aborted) return
-            const activeSubtitle = findActiveSubtitle(subtitleSegments, timestampSeconds * 1000)
+            const activeSubtitle = findActiveSubtitle(subtitleSegments, timestampSeconds * 1000 + subtitleTimeOffsetMs)
             this.composer.compose(frame, segment, {
               dimensions: { width: options.width, height: options.height },
               subtitleText: activeSubtitle?.text,
+              cropOffsetX,
             })
             const result = await this.muxer.writeVideoFrame(timestampSeconds, durationSeconds)
             if (!result.ok) {
