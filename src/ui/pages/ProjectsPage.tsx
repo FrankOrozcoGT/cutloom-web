@@ -1,14 +1,49 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FileText } from 'lucide-react'
+import { Clapperboard, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import type { Project } from '@domain/project'
 import { Button } from '@ui/components/Button'
 import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
 import { FormField } from '@ui/components/FormField'
-import { projectUseCase } from '@ui/video/composition'
+import { projectUseCase, shortsStorage } from '@ui/video/composition'
+
+// Dos mecanismos genuinamente distintos (navegar vs. ejecutar un handler in
+// situ), no variantes de contenido de un mismo caso — de ahí el discriminante
+// `kind` en vez de forzar todas las acciones a la forma de botón con un
+// onClick vacío para la que en realidad es un link.
+type ProjectAction =
+  | { kind: 'button'; icon: typeof FileText; label: string; onClick: () => void; activeColor: boolean; danger?: boolean }
+  | { kind: 'link'; icon: typeof FileText; label: string; to: string; activeColor: boolean }
+
+function projectActions(
+  project: Project,
+  hasShorts: boolean,
+  handlers: {
+    onEditDescription: () => void
+    onRename: () => void
+    onDelete: () => void
+  },
+): ProjectAction[] {
+  const actions: ProjectAction[] = [
+    {
+      kind: 'button',
+      icon: FileText,
+      label: 'Ver/editar resumen',
+      onClick: handlers.onEditDescription,
+      activeColor: !!project.description,
+    },
+    { kind: 'button', icon: Pencil, label: 'Renombrar', onClick: handlers.onRename, activeColor: false },
+    { kind: 'button', icon: Trash2, label: 'Eliminar', onClick: handlers.onDelete, activeColor: false, danger: true },
+  ]
+  if (hasShorts) {
+    actions.unshift({ kind: 'link', icon: Clapperboard, label: 'Ver shorts', to: `/projects/${project.id}/shorts`, activeColor: true })
+  }
+  return actions
+}
 
 export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [projectIdsWithShorts, setProjectIdsWithShorts] = useState<Set<string>>(new Set())
   const [newProjectName, setNewProjectName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
@@ -17,6 +52,16 @@ export function ProjectsPage() {
   const loadProjects = useCallback(async () => {
     const stored = await projectUseCase.getAll()
     setProjects(stored)
+    // Un chequeo por proyecto en vez de un índice bulk — el volumen esperado
+    // de proyectos por usuario es bajo, y esto evita agregar un nuevo campo
+    // a Project (o un store aparte con índice) solo para esta bandera.
+    const withShorts = await Promise.all(
+      stored.map(async (project) => {
+        const result = await shortsStorage.getByProject(project.id)
+        return result.ok && result.value ? project.id : null
+      }),
+    )
+    setProjectIdsWithShorts(new Set(withShorts.filter((id): id is string => id !== null)))
   }, [])
 
   useEffect(() => {
@@ -97,74 +142,123 @@ export function ProjectsPage() {
           <p className="text-text-muted">No hay proyectos todavía.</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {projects.map((project) => (
-              <li
-                key={project.id}
-                className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-3"
-              >
-                {editingId === project.id ? (
-                  <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      value={editingName}
-                      onChange={(event) => setEditingName(event.target.value)}
-                      className="flex-1 rounded-lg border border-border bg-bg px-3 py-2.5 text-text-strong outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-bg"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => confirmRename(project.id)}
-                        className="flex-1 rounded-lg px-3 py-2.5 text-sm text-accent hover:bg-accent-bg sm:flex-none"
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={cancelRename}
-                        className="flex-1 rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover sm:flex-none"
-                      >
-                        Cancelar
-                      </button>
+            {projects.map((project) => {
+              const hasShorts = projectIdsWithShorts.has(project.id)
+              const actions = projectActions(project, hasShorts, {
+                onEditDescription: () => setEditingDescriptionProject(project),
+                onRename: () => startRename(project),
+                onDelete: () => void handleDelete(project.id),
+              })
+
+              return (
+                <li
+                  key={project.id}
+                  className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:py-3"
+                >
+                  {editingId === project.id ? (
+                    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        className="flex-1 rounded-lg border border-border bg-bg px-3 py-2.5 text-text-strong outline-none focus:border-accent-border focus:ring-2 focus:ring-accent-bg"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => confirmRename(project.id)}
+                          className="flex-1 rounded-lg px-3 py-2.5 text-sm text-accent hover:bg-accent-bg sm:flex-none"
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelRename}
+                          className="flex-1 rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover sm:flex-none"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    <Link
-                      to={`/projects/${project.id}`}
-                      className="flex-1 rounded-lg px-1 py-2 text-text-strong hover:underline"
-                    >
-                      {project.name}
-                    </Link>
-                    <div className="flex gap-1 self-end sm:self-auto">
-                      <button
-                        type="button"
-                        onClick={() => setEditingDescriptionProject(project)}
-                        title="Ver/editar resumen"
-                        aria-label="Ver/editar resumen"
-                        className={`rounded-lg p-2.5 hover:bg-surface-hover ${
-                          project.description ? 'text-accent' : 'text-text-muted'
-                        }`}
+                  ) : (
+                    <>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="flex-1 rounded-lg px-1 py-2 text-text-strong hover:underline"
                       >
-                        <FileText className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => startRename(project)}
-                        className="rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover"
-                      >
-                        Renombrar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(project.id)}
-                        className="rounded-lg px-3 py-2.5 text-sm text-danger hover:bg-danger-bg"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
+                        {project.name}
+                      </Link>
+
+                      {/* Desktop: cada acción es su propio ícono en fila. */}
+                      <div className="hidden items-center gap-1 sm:flex">
+                        {actions.map((action) =>
+                          action.kind === 'link' ? (
+                            <Link
+                              key={action.label}
+                              to={action.to}
+                              title={action.label}
+                              aria-label={action.label}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg text-accent hover:bg-surface-hover"
+                            >
+                              <action.icon className="h-4 w-4" />
+                            </Link>
+                          ) : (
+                            <button
+                              key={action.label}
+                              type="button"
+                              onClick={action.onClick}
+                              title={action.label}
+                              aria-label={action.label}
+                              className={`flex h-9 w-9 items-center justify-center rounded-lg hover:bg-surface-hover ${
+                                action.danger ? 'text-danger hover:bg-danger-bg' : action.activeColor ? 'text-accent' : 'text-text-muted'
+                              }`}
+                            >
+                              <action.icon className="h-4 w-4" />
+                            </button>
+                          ),
+                        )}
+                      </div>
+
+                      {/* Mobile: mismas acciones colapsadas en un menú kebab — cuatro íconos no entran cómodos en una fila angosta. */}
+                      <details className="relative self-end sm:hidden">
+                        <summary
+                          title="Más acciones"
+                          aria-label="Más acciones"
+                          className="flex h-9 w-9 list-none items-center justify-center rounded-lg text-text-muted hover:bg-surface-hover"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </summary>
+                        <div className="absolute right-0 z-10 mt-1 flex w-44 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+                          {actions.map((action) =>
+                            action.kind === 'link' ? (
+                              <Link
+                                key={action.label}
+                                to={action.to}
+                                className="flex items-center gap-2 px-3 py-2.5 text-sm text-accent hover:bg-surface-hover"
+                              >
+                                <action.icon className="h-4 w-4" />
+                                {action.label}
+                              </Link>
+                            ) : (
+                              <button
+                                key={action.label}
+                                type="button"
+                                onClick={action.onClick}
+                                className={`flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-surface-hover ${
+                                  action.danger ? 'text-danger' : 'text-text-strong'
+                                }`}
+                              >
+                                <action.icon className="h-4 w-4" />
+                                {action.label}
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      </details>
+                    </>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
