@@ -25,4 +25,6 @@ export interface ShortsStoragePort {
   save(shorts: ProjectShorts): Promise<Result<void, ShortsStorageError>>
   getByProject(projectId: string): Promise<Result<ProjectShorts | null, ShortsStorageError>>
   deleteByProject(projectId: string): Promise<Result<void, ShortsStorageError>>
+  /** Actualiza el ajuste de encuadre de un short sin pisar el resto del registro persistido. */
+  updateCropOffset(projectId: string, shortKeyValue: string, cropOffsetX: number): Promise<Result<void, ShortsStorageError>>
 }

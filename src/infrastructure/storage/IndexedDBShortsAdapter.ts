@@ -68,4 +68,18 @@ export class IndexedDBShortsAdapter implements ShortsStoragePort {
       return err('STORAGE_ERROR')
     }
   }
+
+  /** Read-modify-write centralizado para actualizar el ajuste de encuadre de un short sin pisar el resto del registro — evita que cada caller arme su propia copia read-modify-write por su cuenta. */
+  async updateCropOffset(
+    projectId: string,
+    shortKeyValue: string,
+    cropOffsetX: number,
+  ): Promise<Result<void, ShortsStorageError>> {
+    const existing = await this.getByProject(projectId)
+    if (!existing.ok || !existing.value) {
+      return err('STORAGE_ERROR')
+    }
+    const cropOffsetXByShort = { ...existing.value.cropOffsetXByShort, [shortKeyValue]: cropOffsetX }
+    return this.save({ ...existing.value, cropOffsetXByShort })
+  }
 }

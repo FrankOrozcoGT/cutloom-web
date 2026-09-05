@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import type { Timeline } from '@domain/timeline'
 import { timelineFingerprint } from '@domain/timeline'
-import type { ProjectShorts, ShortIdeal } from '@domain/shorts'
+import type { ShortIdeal } from '@domain/shorts'
 import { shortKey } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
@@ -12,6 +12,7 @@ import { useShorts } from '@ui/hooks/useShorts'
 import { useSubtitles } from '@ui/hooks/useSubtitles'
 import { shortsStorage, videoStorage, projectUseCase } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
+import { saveShortsResultUseCase } from '@ui/shorts/composition'
 
 /**
  * Pantalla dedicada a shorts, separada del editor — el formulario de "short
@@ -87,31 +88,17 @@ export function ShortsPage() {
     if (persistedRef.current === shortsState.shorts) return
     persistedRef.current = shortsState.shorts
     if (!projectId) return
-    void timelineStorage.getByProject(projectId).then((timelineResult) => {
-      const record: ProjectShorts = {
-        projectId,
-        shorts: shortsState.shorts,
-        warnings: shortsState.warnings,
-        createdAt: new Date().toISOString(),
-        timelineFingerprint:
-          timelineResult.ok && timelineResult.value ? timelineFingerprint(timelineResult.value) : undefined,
-      }
-      void shortsStorage.save(record)
-    })
+    void saveShortsResultUseCase.execute(projectId, shortsState.shorts, shortsState.warnings)
   }, [shortsState.justCreated, shortsState.createShortsState, shortsState.shorts, shortsState.warnings, projectId])
 
   const handleUpdateCropOffset = useCallback(
     (short: { startMs: number; endMs: number }, cropOffsetX: number) => {
       if (!projectId) return
       const key = shortKey(short)
-      const updated = { ...cropOffsetXByShort, [key]: cropOffsetX }
-      setCropOffsetXByShort(updated)
-      void shortsStorage.getByProject(projectId).then((result) => {
-        if (!result.ok || !result.value) return
-        void shortsStorage.save({ ...result.value, cropOffsetXByShort: updated })
-      })
+      setCropOffsetXByShort((prev) => ({ ...prev, [key]: cropOffsetX }))
+      void shortsStorage.updateCropOffset(projectId, key, cropOffsetX)
     },
-    [projectId, cropOffsetXByShort],
+    [projectId],
   )
 
   if (!projectId) {

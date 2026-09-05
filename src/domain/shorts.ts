@@ -51,6 +51,22 @@ export function shortKey(short: Pick<ShortScore, 'startMs' | 'endMs'>): string {
   return `${short.startMs}-${short.endMs}`
 }
 
+/** Arma el registro a persistir tras generar shorts nuevos — única forma válida de construir un ProjectShorts desde cero, para que no haya dos callers armando el shape por su cuenta. */
+export function buildProjectShorts(params: {
+  projectId: string
+  shorts: ShortScore[]
+  warnings: string[]
+  timelineFingerprint?: string
+}): ProjectShorts {
+  return {
+    projectId: params.projectId,
+    shorts: params.shorts,
+    warnings: params.warnings,
+    createdAt: new Date().toISOString(),
+    timelineFingerprint: params.timelineFingerprint,
+  }
+}
+
 /** Resultado de crear shorts para un proyecto, persistido para que el listado de proyectos sepa si ya tiene shorts generados sin tener que entrar al editor. */
 export interface ProjectShorts {
   projectId: string
