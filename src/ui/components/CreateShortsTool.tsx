@@ -85,9 +85,9 @@ export function CreateShortsTool({
 
       {shorts.length > 0 && timeline && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {shorts.map((short, index) => (
+          {shorts.map((short) => (
             <ShortCard
-              key={`${short.startMs}-${index}`}
+              key={shortKey(short)}
               short={short}
               timeline={timeline}
               assets={assets}
