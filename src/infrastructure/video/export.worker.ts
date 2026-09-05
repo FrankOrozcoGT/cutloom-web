@@ -12,6 +12,10 @@ export type ExportWorkerRequest = {
   type: 'export'
   projectId: string
   options: ExportOptions
+  /** Acota la exportación a [startMs, endMs) del timeline — usado para exportar un short en vez del proyecto completo. */
+  range?: { startMs: number; endMs: number }
+  /** Offset horizontal de crop cuando el aspect ratio de origen no coincide con el destino (0-1, 0.5 = centrado). Solo aplica a exportaciones con range (shorts). */
+  cropOffsetX?: number
 }
 
 export type ExportWorkerAbort = {
@@ -83,6 +87,8 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
         self.postMessage(response)
       },
       abortController.signal,
+      message.range,
+      message.cropOffsetX,
     )
 
     currentAbortController = null

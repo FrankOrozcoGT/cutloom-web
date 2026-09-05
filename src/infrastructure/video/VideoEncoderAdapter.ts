@@ -26,6 +26,14 @@ const AUDIO_CODEC_BY_FORMAT: Record<VideoFormat, AudioCodec> = {
   'video/webm': 'opus',
 }
 
+/** Codec string completo (WebCodecs, no el alias corto de mediabunny) para isConfigSupported. */
+const AUDIO_CODEC_STRING_BY_FORMAT: Record<VideoFormat, string> = {
+  'video/mp4': 'mp4a.40.2',
+  'video/webm': 'opus',
+}
+
+const AUDIO_BITRATE = 128_000
+
 function classifyError(error: unknown): EncodeError {
   if (error instanceof DOMException && error.name === 'QuotaExceededError') {
     return 'INSUFFICIENT_MEMORY'
@@ -63,9 +71,24 @@ export class VideoEncoderAdapter implements MediaMuxerPort {
     this.output.addVideoTrack(this.videoSource, { frameRate: options.fps })
 
     if (hasAudio) {
+      // AAC (mp4a.40.2) no está soportado por WebCodecs en absoluto en
+      // Chromium para Linux de escritorio — encodear el primer sample
+      // fallaría a mitad de un export ya iniciado. Se verifica acá, antes de
+      // arrancar el muxer, para poder devolver UNSUPPORTED_CODEC (que
+      // useExport.ts ya traduce a "prueba el otro formato") en vez de un
+      // ENCODING_ERROR genérico tras haber procesado video de por medio.
+      const audioSupport = await AudioEncoder.isConfigSupported({
+        codec: AUDIO_CODEC_STRING_BY_FORMAT[options.format],
+        sampleRate: 48_000,
+        numberOfChannels: 2,
+        bitrate: AUDIO_BITRATE,
+      })
+      if (!audioSupport.supported) {
+        return err('UNSUPPORTED_CODEC')
+      }
       this.audioSource = new AudioSampleSource({
         codec: AUDIO_CODEC_BY_FORMAT[options.format],
-        quality: new Quality('high'),
+        bitrate: AUDIO_BITRATE,
       })
       this.output.addAudioTrack(this.audioSource)
     }

@@ -100,8 +100,15 @@ export function useExport() {
     }
   }, [])
 
-  const exportProject = useCallback(
-    (projectId: string, projectName?: string, options: ExportOptions = DEFAULT_OPTIONS) => {
+  const runExport = useCallback(
+    (
+      projectId: string,
+      projectName: string | undefined,
+      options: ExportOptions,
+      range: { startMs: number; endMs: number } | undefined,
+      cropOffsetX: number | undefined,
+      isRetry: boolean,
+    ) => {
       const worker = new Worker(new URL('@infrastructure/video/export.worker.ts', import.meta.url), {
         type: 'module',
       })
@@ -127,6 +134,17 @@ export function useExport() {
         }
 
         if (message.type === 'error') {
+          // El formato pedido puede no tener codec de audio soportado en este
+          // navegador (ej. AAC no existe en WebCodecs para Chromium/Linux) —
+          // un solo reintento automático con el formato alternativo evita que
+          // el usuario tenga que darse cuenta y reintentar a mano.
+          if (message.error === 'UNSUPPORTED_CODEC' && !isRetry) {
+            worker.terminate()
+            workerRef.current = null
+            const fallbackOptions = { ...options, format: ALTERNATIVE_FORMAT[options.format] }
+            runExport(projectId, projectName, fallbackOptions, range, cropOffsetX, true)
+            return
+          }
           if (message.error !== 'ABORTED') {
             console.error('Export falló:', message.error)
           }
@@ -169,10 +187,23 @@ export function useExport() {
         workerRef.current = null
       }
 
-      const request: ExportWorkerMessage = { type: 'export', projectId, options }
+      const request: ExportWorkerMessage = { type: 'export', projectId, options, range, cropOffsetX }
       worker.postMessage(request)
     },
     [],
+  )
+
+  const exportProject = useCallback(
+    (
+      projectId: string,
+      projectName?: string,
+      options: ExportOptions = DEFAULT_OPTIONS,
+      range?: { startMs: number; endMs: number },
+      cropOffsetX?: number,
+    ) => {
+      runExport(projectId, projectName, options, range, cropOffsetX, false)
+    },
+    [runExport],
   )
 
   const abortExport = useCallback(() => {
