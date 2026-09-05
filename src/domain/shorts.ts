@@ -10,6 +10,15 @@ export interface ShortCandidateDetect {
   reason: string
 }
 
+/** Preferencias opcionales del usuario para guiar detect/score — todo el objeto y cada campo son opcionales, el backend aplica sus propios defaults (targetDurationSeconds: 45, count: 8) cuando faltan. */
+export interface ShortIdeal {
+  topic?: string
+  targetAudience?: string
+  targetDurationSeconds?: number
+  tone?: string
+  count?: number
+}
+
 export type DetectedCandidate = ShortCandidateDetect
 
 export interface ImprovedSubtitle {
@@ -35,6 +44,17 @@ export interface DetectResult {
 export interface ScoreResult {
   shorts: ShortScore[]
   warnings: string[]
+}
+
+/** Resultado de crear shorts para un proyecto, persistido para que el listado de proyectos sepa si ya tiene shorts generados sin tener que entrar al editor. */
+export interface ProjectShorts {
+  projectId: string
+  shorts: ShortScore[]
+  warnings: string[]
+  shortIdeal?: ShortIdeal
+  createdAt: string
+  /** Huella del timeline (ver domain/timeline.timelineFingerprint) al momento de generar estos shorts — si no coincide con la huella actual, el timeline cambió después y los startMs/endMs guardados ya no corresponden al contenido real. */
+  timelineFingerprint?: string
 }
 
 export interface ImproveResult {

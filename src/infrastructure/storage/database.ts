@@ -1,5 +1,5 @@
 const DB_NAME = 'cutloom'
-const DB_VERSION = 5
+const DB_VERSION = 6
 
 export const PROJECTS_STORE = 'projects'
 export const VIDEOS_STORE = 'videos'
@@ -7,6 +7,7 @@ export const VIDEOS_BY_PROJECT_INDEX = 'projectId'
 export const TIMELINE_STORE = 'timelines'
 export const TIMELINE_BY_PROJECT_INDEX = 'projectId'
 export const SUBTITLES_STORE = 'subtitles'
+export const SHORTS_STORE = 'shorts'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -40,6 +41,10 @@ export function openCutloomDB(): Promise<IDBDatabase> {
 
         if (!db.objectStoreNames.contains(SUBTITLES_STORE)) {
           db.createObjectStore(SUBTITLES_STORE, { keyPath: 'id' })
+        }
+
+        if (!db.objectStoreNames.contains(SHORTS_STORE)) {
+          db.createObjectStore(SHORTS_STORE, { keyPath: 'id' })
         }
       }
       request.onsuccess = () => resolve(request.result)

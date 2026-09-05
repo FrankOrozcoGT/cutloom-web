@@ -3,6 +3,7 @@ import { err, type Result } from '@application/result'
 import type { StorageError, VideoStorage } from '@application/video/ports'
 import type { TimelineStorage } from '@application/timeline/ports'
 import type { SubtitlesStoragePort } from '@application/subtitles/ports'
+import type { ShortsStoragePort } from '@application/shorts/ports'
 import type { ProjectStorage, ProjectStorageError } from './ports'
 
 export class ProjectUseCase {
@@ -10,12 +11,20 @@ export class ProjectUseCase {
   private readonly videos: VideoStorage
   private readonly timelines: TimelineStorage
   private readonly subtitles: SubtitlesStoragePort
+  private readonly shorts: ShortsStoragePort
 
-  constructor(projects: ProjectStorage, videos: VideoStorage, timelines: TimelineStorage, subtitles: SubtitlesStoragePort) {
+  constructor(
+    projects: ProjectStorage,
+    videos: VideoStorage,
+    timelines: TimelineStorage,
+    subtitles: SubtitlesStoragePort,
+    shorts: ShortsStoragePort,
+  ) {
     this.projects = projects
     this.videos = videos
     this.timelines = timelines
     this.subtitles = subtitles
+    this.shorts = shorts
   }
 
   create(name: string): Promise<Result<Project, ProjectStorageError>> {
@@ -48,6 +57,7 @@ export class ProjectUseCase {
     }
     await this.timelines.delete(id)
     await this.subtitles.deleteByProject(id)
+    await this.shorts.deleteByProject(id)
     return this.projects.delete(id)
   }
 }

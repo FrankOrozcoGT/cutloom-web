@@ -7,6 +7,7 @@ import { RegisterPage } from '@ui/pages/RegisterPage'
 import { GoogleCallbackPage } from '@ui/pages/GoogleCallbackPage'
 import { EditorPage } from '@ui/pages/EditorPage'
 import { ProjectsPage } from '@ui/pages/ProjectsPage'
+import { ShortsPage } from '@ui/pages/ShortsPage'
 import { ProfilePage } from '@ui/pages/ProfilePage'
 import { LandingPage } from '@ui/pages/LandingPage'
 import { BillingPage } from '@ui/pages/BillingPage'
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: '/projects', element: <ProjectsPage /> },
       { path: '/profile', element: <ProfilePage /> },
       { path: '/projects/:projectId', element: <EditorPage /> },
+      { path: '/projects/:projectId/shorts', element: <ShortsPage /> },
       { path: '/billing', element: <BillingPage /> },
       {
         path: '/billing/credits',

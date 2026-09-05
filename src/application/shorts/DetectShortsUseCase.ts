@@ -1,4 +1,4 @@
-import type { DetectResult } from '@domain/shorts'
+import type { DetectResult, ShortIdeal } from '@domain/shorts'
 import type { SubtitleSegment } from '@domain/subtitles'
 import { err, type Result } from '@application/result'
 import { ShortsError } from './errors'
@@ -11,10 +11,10 @@ export class DetectShortsUseCase {
     this.backend = backend
   }
 
-  async execute(projectId: string, segments: SubtitleSegment[], ideal?: string): Promise<Result<DetectResult, ShortsError>> {
+  async execute(segments: SubtitleSegment[], shortIdeal?: ShortIdeal): Promise<Result<DetectResult, ShortsError>> {
     if (segments.length === 0) {
       return err(new ShortsError('EMPTY_SEGMENTS', 'No hay subtítulos para detectar shorts.'))
     }
-    return this.backend.detect(projectId, segments, ideal)
+    return this.backend.detect(segments, shortIdeal)
   }
 }

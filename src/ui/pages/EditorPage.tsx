@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import { TARGET_SAMPLE_RATE } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
 import { detectSilenceCuts } from '@domain/timeline'
 import type { VideoAsset, VideoUploadResult } from '@domain/video'
 import { CollapsibleSection } from '@ui/components/CollapsibleSection'
-import { CreateShortsTool } from '@ui/components/CreateShortsTool'
 import { ImproveSubtitlesTool } from '@ui/components/ImproveSubtitlesTool'
 import { SubtitlePanel } from '@ui/components/SubtitlePanel'
 import { SubtitleSegmentList } from '@ui/components/SubtitleSegmentList'
@@ -332,14 +332,6 @@ export function EditorPage() {
     [pendingSubtitleDiffs, subtitlesState],
   )
 
-  const handleCreateShorts = useCallback(
-    (ideal?: string) => {
-      if (!projectId || !subtitlesState.subtitles) return
-      void shortsState.createShorts(projectId, subtitlesState.subtitles.segments, ideal)
-    },
-    [projectId, subtitlesState.subtitles, shortsState],
-  )
-
   // Detecta silencio real analizando el volumen del audio del timeline (RMS
   // por ventana bajo un umbral), igual que Descript/AutoCut/Premiere — no
   // depende de que existan subtítulos, que eran solo un proxy indirecto e
@@ -467,17 +459,16 @@ export function EditorPage() {
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Shorts" badge="Premium">
-            <CreateShortsTool
-              hasAccess={hasShortsAccess}
-              hasSubtitles={!!subtitlesState.subtitles && subtitlesState.subtitles.segments.length > 0}
-              state={shortsState.createShortsState}
-              error={shortsState.createShortsError}
-              shorts={shortsState.shorts}
-              warnings={shortsState.warnings}
-              onCreateShorts={handleCreateShorts}
-            />
-          </CollapsibleSection>
+          <Link
+            to={`/projects/${projectId}/shorts`}
+            className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm text-text-strong hover:bg-surface-hover"
+          >
+            <span className="flex items-center gap-2">
+              Shorts
+              <span className="rounded-full bg-accent-bg px-2 py-0.5 text-xs font-normal text-accent">Premium</span>
+            </span>
+            <ArrowRight className="h-4 w-4 text-text-muted" />
+          </Link>
         </div>
       </div>
 

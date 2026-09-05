@@ -59,6 +59,24 @@ export function createTimeline(projectId: string): Timeline {
   return { id: crypto.randomUUID(), projectId, tracks: [] }
 }
 
+/**
+ * Huella determinista del contenido editable del timeline (no de metadata
+ * como ids de track) — cambia si se corta, mueve, inserta o borra un clip.
+ * Se usa para detectar si un timeline cambió desde que se generaron unos
+ * shorts, ya que sus startMs/endMs quedan fijados al momento de creación y
+ * dejan de corresponder al contenido real si el timeline se edita después.
+ */
+export function timelineFingerprint(timeline: Timeline): string {
+  const clipsSignature = timeline.tracks
+    .map((track) =>
+      track.clips
+        .map((clip) => `${clip.assetId}:${clip.offsetMs}:${clip.durationMs}:${clip.sourceStartMs}`)
+        .join(','),
+    )
+    .join('|')
+  return clipsSignature
+}
+
 function clipEnd(clip: Clip): number {
   return clip.offsetMs + clip.durationMs
 }

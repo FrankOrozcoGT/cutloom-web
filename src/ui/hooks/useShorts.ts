@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { DetectedCandidate, ImprovedSubtitle, ShortScore } from '@domain/shorts'
+import type { DetectedCandidate, ImprovedSubtitle, ProjectShorts, ShortIdeal, ShortScore } from '@domain/shorts'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import {
@@ -24,7 +24,13 @@ interface UseShortsResult {
   candidates: DetectedCandidate[]
   shorts: ShortScore[]
   warnings: string[]
-  createShorts: (projectId: string, segments: SubtitleSegment[], ideal?: string) => Promise<void>
+  /** true si los shorts cargados fueron generados con una versión anterior del timeline (ver domain/timeline.timelineFingerprint) — sus tiempos ya no corresponden necesariamente al contenido actual. */
+  isStale: boolean
+  /** true solo tras un createShorts recién completado (no tras loadPersisted) — distingue "hay que persistir este resultado nuevo" de "esto ya viene de storage". */
+  justCreated: boolean
+  createShorts: (projectId: string, segments: SubtitleSegment[], shortIdeal?: ShortIdeal) => Promise<void>
+  /** Precarga shorts ya guardados (IndexedDB) sin volver a llamar al backend — usado al entrar a la pantalla de shorts si el proyecto ya tiene un resultado previo. currentTimelineFingerprint se compara contra el guardado para marcar isStale. */
+  loadPersisted: (persisted: ProjectShorts, currentTimelineFingerprint: string | null) => void
 }
 
 export function useShorts(): UseShortsResult {
@@ -38,6 +44,8 @@ export function useShorts(): UseShortsResult {
   const [candidates, setCandidates] = useState<DetectedCandidate[]>([])
   const [shorts, setShorts] = useState<ShortScore[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
+  const [isStale, setIsStale] = useState(false)
+  const [justCreated, setJustCreated] = useState(false)
 
   const improveSubtitles = useCallback(async (segments: SubtitleSegment[], userContext?: string) => {
     setImproveState('loading')
@@ -53,14 +61,16 @@ export function useShorts(): UseShortsResult {
     setImproveState('success')
   }, [])
 
-  const createShorts = useCallback(async (projectId: string, segments: SubtitleSegment[], ideal?: string) => {
+  const createShorts = useCallback(async (projectId: string, segments: SubtitleSegment[], shortIdeal?: ShortIdeal) => {
     setCreateShortsState('detecting')
     setCreateShortsError(null)
     setCandidates([])
     setShorts([])
     setWarnings([])
+    setIsStale(false)
+    setJustCreated(false)
 
-    const detectResult = await detectShortsUseCase.execute(projectId, segments, ideal)
+    const detectResult = await detectShortsUseCase.execute(segments, shortIdeal)
     if (!detectResult.ok) {
       setCreateShortsError(detectResult.error.code)
       setCreateShortsState('error')
@@ -77,7 +87,7 @@ export function useShorts(): UseShortsResult {
     }
 
     setCreateShortsState('scoring')
-    const scoreResult = await scoreShortsUseCase.execute(projectId, audioResult.value, detectResult.value.candidates, ideal)
+    const scoreResult = await scoreShortsUseCase.execute(audioResult.value, detectResult.value.candidates, shortIdeal)
     if (!scoreResult.ok) {
       setCreateShortsError(scoreResult.error.code)
       setCreateShortsState('error')
@@ -87,6 +97,17 @@ export function useShorts(): UseShortsResult {
     const sortedShorts = [...scoreResult.value.shorts].sort((a, b) => b.score - a.score)
     setShorts(sortedShorts)
     setWarnings(scoreResult.value.warnings)
+    setJustCreated(true)
+    setCreateShortsState('success')
+  }, [])
+
+  const loadPersisted = useCallback((persisted: ProjectShorts, currentTimelineFingerprint: string | null) => {
+    setShorts(persisted.shorts)
+    setWarnings(persisted.warnings)
+    setIsStale(
+      persisted.timelineFingerprint !== undefined && currentTimelineFingerprint !== persisted.timelineFingerprint,
+    )
+    setJustCreated(false)
     setCreateShortsState('success')
   }, [])
 
@@ -102,6 +123,9 @@ export function useShorts(): UseShortsResult {
     candidates,
     shorts,
     warnings,
+    isStale,
+    justCreated,
     createShorts,
+    loadPersisted,
   }
 }

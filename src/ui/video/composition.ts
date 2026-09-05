@@ -4,6 +4,7 @@ import { VideoValidator } from '@application/video/VideoValidator'
 import { FilePickerAdapter } from '@infrastructure/file/FilePickerAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBProjectAdapter } from '@infrastructure/storage/IndexedDBProjectAdapter'
+import { IndexedDBShortsAdapter } from '@infrastructure/storage/IndexedDBShortsAdapter'
 import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubtitlesAdapter'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { DurationReaderAdapter } from '@infrastructure/video/DurationReaderAdapter'
@@ -21,9 +22,11 @@ export const uploadVideoUseCase = new UploadVideoUseCase(
 // Instancia propia de los adaptadores de timeline/subtítulos (no los singletons
 // de ui/timeline|subtitles/composition.ts) para evitar un ciclo de imports:
 // subtitles/composition.ts ya importa videoStorage desde este módulo.
+export const shortsStorage = new IndexedDBShortsAdapter()
 export const projectUseCase = new ProjectUseCase(
   projectStorage,
   videoStorage,
   new IndexedDBTimelineAdapter(),
   new IndexedDBSubtitlesAdapter(),
+  shortsStorage,
 )
