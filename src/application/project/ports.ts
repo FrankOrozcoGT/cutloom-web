@@ -3,6 +3,13 @@ import type { Result } from '@application/result'
 
 export type ProjectStorageError = 'UNKNOWN_ERROR'
 
+/** Errores de ProjectUseCase.delete: identifican en qué paso de la cascada de borrado falló, en vez de colapsar todo a un único código genérico que dificultaría rastrear el origen real. */
+export type ProjectDeleteError =
+  | ProjectStorageError
+  | 'DELETE_TIMELINE_FAILED'
+  | 'DELETE_SUBTITLES_FAILED'
+  | 'DELETE_SHORTS_FAILED'
+
 export interface ProjectStorage {
   create(name: string): Promise<Result<Project, ProjectStorageError>>
   getAll(): Promise<Project[]>
