@@ -30,6 +30,10 @@ export class ProjectUseCase {
     return this.projects.rename(id, name)
   }
 
+  updateDescription(id: string, description: string): Promise<Result<Project, ProjectStorageError>> {
+    return this.projects.updateDescription(id, description)
+  }
+
   /**
    * Borra el proyecto y todo lo que le pertenece (videos, timeline,
    * subtítulos). Sin esto, un timeline/subtítulos viejo queda huérfano en

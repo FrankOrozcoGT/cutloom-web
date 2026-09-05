@@ -40,6 +40,21 @@ export class IndexedDBProjectAdapter implements ProjectStorage {
     }
   }
 
+  async updateDescription(id: string, description: string): Promise<Result<Project, ProjectStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const existing = await runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.get(id))
+      if (!existing) {
+        return err('UNKNOWN_ERROR')
+      }
+      const updated: Project = { ...existing, description }
+      await runTransaction(db, PROJECTS_STORE, 'readwrite', (store) => store.put(updated))
+      return ok(updated)
+    } catch {
+      return err('UNKNOWN_ERROR')
+    }
+  }
+
   async delete(id: string): Promise<Result<void, ProjectStorageError>> {
     try {
       const db = await openCutloomDB()

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FileText } from 'lucide-react'
 import type { Project } from '@domain/project'
 import { Button } from '@ui/components/Button'
+import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
 import { FormField } from '@ui/components/FormField'
 import { projectUseCase } from '@ui/video/composition'
 
@@ -10,6 +12,7 @@ export function ProjectsPage() {
   const [newProjectName, setNewProjectName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [editingDescriptionProject, setEditingDescriptionProject] = useState<Project | null>(null)
 
   const loadProjects = useCallback(async () => {
     const stored = await projectUseCase.getAll()
@@ -60,6 +63,16 @@ export function ProjectsPage() {
       await loadProjects()
     },
     [loadProjects],
+  )
+
+  const handleSaveDescription = useCallback(
+    async (value: string) => {
+      if (!editingDescriptionProject) return
+      await projectUseCase.updateDescription(editingDescriptionProject.id, value)
+      setEditingDescriptionProject(null)
+      await loadProjects()
+    },
+    [editingDescriptionProject, loadProjects],
   )
 
   return (
@@ -124,6 +137,17 @@ export function ProjectsPage() {
                     <div className="flex gap-1 self-end sm:self-auto">
                       <button
                         type="button"
+                        onClick={() => setEditingDescriptionProject(project)}
+                        title="Ver/editar resumen"
+                        aria-label="Ver/editar resumen"
+                        className={`rounded-lg p-2.5 hover:bg-surface-hover ${
+                          project.description ? 'text-accent' : 'text-text-muted'
+                        }`}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => startRename(project)}
                         className="rounded-lg px-3 py-2.5 text-sm text-text-muted hover:bg-surface-hover"
                       >
@@ -144,6 +168,15 @@ export function ProjectsPage() {
           </ul>
         )}
       </div>
+
+      {editingDescriptionProject && (
+        <EditDescriptionDialog
+          title={`Resumen de "${editingDescriptionProject.name}"`}
+          initialValue={editingDescriptionProject.description ?? ''}
+          onSave={handleSaveDescription}
+          onCancel={() => setEditingDescriptionProject(null)}
+        />
+      )}
     </div>
   )
 }
