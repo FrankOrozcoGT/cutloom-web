@@ -1,7 +1,8 @@
 import { buildProjectShorts, type ShortScore } from '@domain/shorts'
 import { timelineFingerprint, type Timeline } from '@domain/timeline'
+import type { Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
-import type { ShortsStoragePort } from './ports'
+import type { ShortsStoragePort, ShortsStorageError } from './ports'
 
 /**
  * Persiste el resultado de un score de shorts recién generado — única
@@ -19,7 +20,7 @@ export class SaveShortsResultUseCase {
     this.timelineStorage = timelineStorage
   }
 
-  async execute(projectId: string, shorts: ShortScore[], warnings: string[]): Promise<void> {
+  async execute(projectId: string, shorts: ShortScore[], warnings: string[]): Promise<Result<void, ShortsStorageError>> {
     const timelineResult = await this.timelineStorage.getByProject(projectId)
     const timeline: Timeline | null = timelineResult.ok ? timelineResult.value : null
     const record = buildProjectShorts({
@@ -28,6 +29,6 @@ export class SaveShortsResultUseCase {
       warnings,
       timelineFingerprint: timeline ? timelineFingerprint(timeline) : undefined,
     })
-    await this.shortsStorage.save(record)
+    return this.shortsStorage.save(record)
   }
 }

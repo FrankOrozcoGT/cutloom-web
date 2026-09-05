@@ -37,6 +37,7 @@ export function ShortsPage() {
   const [assetsById, setAssetsById] = useState<Record<string, VideoAsset>>({})
   const [projectName, setProjectName] = useState('')
   const [cropOffsetXByShort, setCropOffsetXByShort] = useState<Record<string, number>>({})
+  const [persistError, setPersistError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!projectId) return
@@ -88,7 +89,11 @@ export function ShortsPage() {
     if (persistedRef.current === shortsState.shorts) return
     persistedRef.current = shortsState.shorts
     if (!projectId) return
-    void saveShortsResultUseCase.execute(projectId, shortsState.shorts, shortsState.warnings)
+    void saveShortsResultUseCase.execute(projectId, shortsState.shorts, shortsState.warnings).then((result) => {
+      if (!result.ok) {
+        setPersistError('No se pudieron guardar los shorts generados. Verifica el espacio de almacenamiento disponible.')
+      }
+    })
   }, [shortsState.justCreated, shortsState.createShortsState, shortsState.shorts, shortsState.warnings, projectId])
 
   const handleUpdateCropOffset = useCallback(
@@ -96,7 +101,11 @@ export function ShortsPage() {
       if (!projectId) return
       const key = shortKey(short)
       setCropOffsetXByShort((prev) => ({ ...prev, [key]: cropOffsetX }))
-      void shortsStorage.updateCropOffset(projectId, key, cropOffsetX)
+      void shortsStorage.updateCropOffset(projectId, key, cropOffsetX).then((result) => {
+        if (!result.ok) {
+          setPersistError('No se pudo guardar el ajuste de encuadre.')
+        }
+      })
     },
     [projectId],
   )
@@ -118,6 +127,12 @@ export function ShortsPage() {
         </Link>
         <h1 className="text-lg font-semibold text-text-strong">Shorts</h1>
       </div>
+
+      {persistError && (
+        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
+          {persistError}
+        </div>
+      )}
 
       <CreateShortsTool
         hasAccess={hasShortsAccess}
