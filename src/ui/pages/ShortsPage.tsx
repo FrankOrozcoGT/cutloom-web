@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
-import type { ProjectShorts, ShortIdeal } from '@domain/shorts'
+import type { Timeline } from '@domain/timeline'
 import { timelineFingerprint } from '@domain/timeline'
+import type { ProjectShorts, ShortIdeal } from '@domain/shorts'
+import { shortKey } from '@domain/shorts'
+import type { VideoAsset } from '@domain/video'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
 import { useAuth } from '@ui/auth/useAuth'
 import { useShorts } from '@ui/hooks/useShorts'
 import { useSubtitles } from '@ui/hooks/useSubtitles'
-import { shortsStorage } from '@ui/video/composition'
+import { shortsStorage, videoStorage, projectUseCase } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 
 /**
@@ -26,6 +29,27 @@ export function ShortsPage() {
   const subtitlesState = useSubtitles(projectId ?? '')
   const shortsState = useShorts()
 
+  // Timeline, assets y nombre del proyecto para reproducir/descargar el
+  // recorte de cada short en ShortPreviewModal — se cargan una sola vez al
+  // entrar, no se editan desde esta pantalla (solo lectura).
+  const [timeline, setTimeline] = useState<Timeline | null>(null)
+  const [assetsById, setAssetsById] = useState<Record<string, VideoAsset>>({})
+  const [projectName, setProjectName] = useState('')
+  const [cropOffsetXByShort, setCropOffsetXByShort] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (!projectId) return
+    void timelineStorage.getByProject(projectId).then((result) => {
+      if (result.ok) setTimeline(result.value)
+    })
+    void videoStorage.getByProject(projectId).then((assets) => {
+      setAssetsById(Object.fromEntries(assets.map((asset) => [asset.id, asset])))
+    })
+    void projectUseCase.getAll().then((projects) => {
+      setProjectName(projects.find((project) => project.id === projectId)?.name ?? projectId)
+    })
+  }, [projectId])
+
   // Se cargan los shorts ya guardados del proyecto (si los hay) al entrar a
   // la pantalla — createShorts los sobrescribe cuando el usuario genera de
   // nuevo, y el resultado nuevo se vuelve a persistir apenas llega.
@@ -39,6 +63,7 @@ export function ShortsPage() {
         const currentFingerprint =
           timelineResult.ok && timelineResult.value ? timelineFingerprint(timelineResult.value) : null
         shortsState.loadPersisted(shortsResult.value, currentFingerprint)
+        setCropOffsetXByShort(shortsResult.value.cropOffsetXByShort ?? {})
       },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,6 +100,20 @@ export function ShortsPage() {
     })
   }, [shortsState.justCreated, shortsState.createShortsState, shortsState.shorts, shortsState.warnings, projectId])
 
+  const handleUpdateCropOffset = useCallback(
+    (short: { startMs: number; endMs: number }, cropOffsetX: number) => {
+      if (!projectId) return
+      const key = shortKey(short)
+      const updated = { ...cropOffsetXByShort, [key]: cropOffsetX }
+      setCropOffsetXByShort(updated)
+      void shortsStorage.getByProject(projectId).then((result) => {
+        if (!result.ok || !result.value) return
+        void shortsStorage.save({ ...result.value, cropOffsetXByShort: updated })
+      })
+    },
+    [projectId, cropOffsetXByShort],
+  )
+
   if (!projectId) {
     return null
   }
@@ -102,6 +141,13 @@ export function ShortsPage() {
         warnings={shortsState.warnings}
         isStale={shortsState.isStale}
         onCreateShorts={handleCreateShorts}
+        timeline={timeline}
+        assets={assetsById}
+        subtitleSegments={subtitlesState.subtitles?.segments ?? []}
+        projectId={projectId}
+        projectName={projectName}
+        cropOffsetXByShort={cropOffsetXByShort}
+        onUpdateCropOffset={handleUpdateCropOffset}
       />
     </div>
   )
