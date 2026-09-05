@@ -6,6 +6,8 @@ export interface ComposeOptions {
   dimensions: { width: number; height: number }
   /** Texto del subtítulo activo en el timestamp de este frame, si hay alguno. */
   subtitleText?: string
+  /** Offset horizontal de crop cuando el aspect ratio de origen no coincide con el destino (0 = borde izquierdo visible, 0.5 = centrado, 1 = borde derecho visible). Default 0.5. */
+  cropOffsetX?: number
 }
 
 export type VideoPickerError = 'PICKER_FAILED'

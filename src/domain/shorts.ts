@@ -46,6 +46,11 @@ export interface ScoreResult {
   warnings: string[]
 }
 
+/** Identifica un short dentro de un ProjectShorts — startMs/endMs son estables mientras no se regeneren los shorts del proyecto. */
+export function shortKey(short: Pick<ShortScore, 'startMs' | 'endMs'>): string {
+  return `${short.startMs}-${short.endMs}`
+}
+
 /** Resultado de crear shorts para un proyecto, persistido para que el listado de proyectos sepa si ya tiene shorts generados sin tener que entrar al editor. */
 export interface ProjectShorts {
   projectId: string
@@ -55,6 +60,8 @@ export interface ProjectShorts {
   createdAt: string
   /** Huella del timeline (ver domain/timeline.timelineFingerprint) al momento de generar estos shorts — si no coincide con la huella actual, el timeline cambió después y los startMs/endMs guardados ya no corresponden al contenido real. */
   timelineFingerprint?: string
+  /** Offset horizontal de crop manual por short (0 = borde izquierdo visible, 0.5 = centrado, 1 = borde derecho visible), keyed por shortKey(). Ausente o sin entrada = centrado (default). Preferencia de UI, no del backend — vive acá y no en ShortScore para no mezclarla con la respuesta del scoring. */
+  cropOffsetXByShort?: Record<string, number>
 }
 
 export interface ImproveResult {

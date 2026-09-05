@@ -85,33 +85,48 @@ export async function loadTimelineAndAssets(
  * final del timeline, en orden. Compartida por exportación y generación de
  * subtítulos: ambas necesitan saber exactamente qué material (y en qué orden)
  * corresponde a cada posición del timeline compuesto.
+ *
+ * range acota la salida a [range.startMs, range.endMs) del timeline (usado al
+ * exportar un short) — outputStartMs queda reindexado a 0 en ese caso, para
+ * que la salida siempre empiece en el origen sin importar dónde vivía el
+ * recorte dentro del timeline completo.
  */
 export function buildRenderSegments(
   timeline: Timeline,
   assetsById: Record<string, VideoAsset>,
+  range?: { startMs: number; endMs: number },
 ): Result<RenderSegment[], BuildRenderSegmentsError> {
-  const durationMs = getTimelineDurationMs(timeline)
-  if (durationMs <= 0) {
+  const timelineDurationMs = getTimelineDurationMs(timeline)
+  if (timelineDurationMs <= 0) {
+    return err('EMPTY_TIMELINE')
+  }
+
+  const rangeStartMs = range ? Math.max(0, range.startMs) : 0
+  const durationMs = range ? Math.min(range.endMs, timelineDurationMs) : timelineDurationMs
+  if (durationMs <= rangeStartMs) {
     return err('EMPTY_TIMELINE')
   }
 
   // Puntos donde puede cambiar el clip activo: el inicio y el fin de cada
   // clip de cualquier pista. Basta evaluar findActiveClip en cada inicio de
   // tramo para derivar los segmentos, sin muestrear el timeline ms a ms.
-  const boundaries = new Set<number>([0, durationMs])
+  const boundaries = new Set<number>([rangeStartMs, durationMs])
   for (const track of timeline.tracks) {
     for (const clip of track.clips) {
       boundaries.add(clip.offsetMs)
       boundaries.add(clip.offsetMs + clip.durationMs)
     }
   }
-  const sortedBoundaries = [...boundaries].filter((ms) => ms >= 0 && ms < durationMs).sort((a, b) => a - b)
+  const sortedBoundaries = [...boundaries]
+    .filter((ms) => ms >= rangeStartMs && ms < durationMs)
+    .sort((a, b) => a - b)
 
   const segments: RenderSegment[] = []
 
   for (const boundaryMs of sortedBoundaries) {
     const nextBoundaryMs = sortedBoundaries.find((ms) => ms > boundaryMs) ?? durationMs
     const active = findActiveClip(timeline, boundaryMs)
+    const outputStartMs = boundaryMs - rangeStartMs
 
     if (!active) {
       // Hueco en el timeline (sin clip activo en este tramo): se genera un
@@ -119,7 +134,7 @@ export function buildRenderSegments(
       // la duración total de salida en vez de acortar el video exportado.
       segments.push({
         kind: 'gap',
-        outputStartMs: boundaryMs,
+        outputStartMs,
         outputDurationMs: nextBoundaryMs - boundaryMs,
       })
       continue
@@ -141,7 +156,7 @@ export function buildRenderSegments(
       asset,
       sourceStartMs: active.sourceTimeMs,
       sourceEndMs: active.sourceTimeMs + outputDurationMs,
-      outputStartMs: boundaryMs,
+      outputStartMs,
       outputDurationMs,
     })
   }

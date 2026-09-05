@@ -1,10 +1,21 @@
 import type { ClipRenderSegment, GapRenderSegment } from '@application/video/exportTypes'
 import type { CanvasPort, ComposeOptions } from '@application/video/ports'
 
-const SUBTITLE_FONT_RATIO = 0.045
+// 7% del alto está dentro del rango recomendado (7-10%) para captions
+// legibles en shorts verticales — con el ancho angosto de un 9:16, un
+// tamaño menor (el 4.5% anterior) se ve chico en proporción al frame.
+const SUBTITLE_FONT_RATIO = 0.07
 const SUBTITLE_MAX_WIDTH_RATIO = 0.9
 const SUBTITLE_BOTTOM_MARGIN_RATIO = 0.08
 const SUBTITLE_LINE_HEIGHT_RATIO = 1.3
+
+/**
+ * Umbral para considerar que el aspect ratio del frame fuente difiere del
+ * canvas destino (ej. video horizontal 16:9 exportado a short vertical
+ * 9:16) — por debajo de esto la diferencia es ruido de redondeo, no un
+ * cambio real de formato.
+ */
+const ASPECT_RATIO_MISMATCH_THRESHOLD = 0.01
 
 export class OffscreenCanvasCompositor implements CanvasPort {
   private canvas: OffscreenCanvas
@@ -22,7 +33,7 @@ export class OffscreenCanvasCompositor implements CanvasPort {
   compose(frame: VideoFrame, _segment: ClipRenderSegment, options: ComposeOptions): void {
     const { width, height } = options.dimensions
     this.resizeIfNeeded(width, height)
-    this.context.drawImage(frame, 0, 0, width, height)
+    this.drawFrameFitted(frame, frame.codedWidth, frame.codedHeight, width, height, options.cropOffsetX)
     if (options.subtitleText) {
       this.drawSubtitle(options.subtitleText, width, height)
     }
@@ -36,6 +47,41 @@ export class OffscreenCanvasCompositor implements CanvasPort {
     if (options.subtitleText) {
       this.drawSubtitle(options.subtitleText, width, height)
     }
+  }
+
+  // Si el aspect ratio del frame fuente no coincide con el del canvas destino
+  // (típicamente: video horizontal exportado como short vertical 9:16), se
+  // escala a cubrir todo el canvas y se recortan los bordes sobrantes
+  // (crop-to-fill / object-fit: cover) — es el estándar para contenido de
+  // pantalla completa o cámara amplia en shorts (TikTok, Reels, YouTube
+  // Shorts): llenar el frame vertical entero es más legible que mostrar el
+  // video completo achicado con relleno arriba/abajo.
+  private drawFrameFitted(
+    source: CanvasImageSource,
+    sourceWidth: number,
+    sourceHeight: number,
+    canvasWidth: number,
+    canvasHeight: number,
+    cropOffsetX = 0.5,
+  ): void {
+    const ctx = this.context
+    const sourceRatio = sourceWidth / sourceHeight
+    const canvasRatio = canvasWidth / canvasHeight
+
+    if (Math.abs(sourceRatio - canvasRatio) < ASPECT_RATIO_MISMATCH_THRESHOLD) {
+      ctx.drawImage(source, 0, 0, canvasWidth, canvasHeight)
+      return
+    }
+
+    const coverScale = Math.max(canvasWidth / sourceWidth, canvasHeight / sourceHeight)
+    const coverWidth = sourceWidth * coverScale
+    const coverHeight = sourceHeight * coverScale
+    const maxOffsetX = canvasWidth - coverWidth
+    const maxOffsetY = canvasHeight - coverHeight
+    // cropOffsetX en [0,1] interpola entre mostrar el borde izquierdo (0) y
+    // el derecho (1) del contenido escalado — 0.5 es el centrado de siempre.
+    // El eje vertical no tiene ajuste manual: se mantiene centrado.
+    ctx.drawImage(source, maxOffsetX * cropOffsetX, maxOffsetY / 2, coverWidth, coverHeight)
   }
 
   getCanvas(): OffscreenCanvas {
