@@ -50,6 +50,11 @@ export function estimateMaxCharsForCue(canvasWidth: number, canvasHeight: number
 export type LanguageCode = 'es' | 'en'
 export const DEFAULT_LANGUAGE: LanguageCode = 'es'
 
+/** Única validación de LanguageCode del proyecto — usada tanto para validar el value de un <select> del DOM como para validar datos leídos de IndexedDB, evita mantener dos chequeos independientes que puedan divergir si se agrega un idioma. */
+export function isLanguageCode(value: unknown): value is LanguageCode {
+  return value === 'es' || value === 'en'
+}
+
 /** Subtítulos del timeline compuesto de un proyecto (uno por proyecto, no por asset). */
 export interface Subtitles {
   projectId: string

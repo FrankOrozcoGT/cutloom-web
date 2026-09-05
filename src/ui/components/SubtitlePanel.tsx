@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { toSrt, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
+import { isLanguageCode, toSrt, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
@@ -14,10 +14,6 @@ function toFileName(projectName: string | undefined, projectId: string): string 
 const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   es: 'Español',
   en: 'English',
-}
-
-function isLanguageCode(value: string): value is LanguageCode {
-  return value in LANGUAGE_LABELS
 }
 
 const ERROR_MESSAGES: Record<string, string> = {

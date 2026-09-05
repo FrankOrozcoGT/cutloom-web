@@ -1,4 +1,4 @@
-import type { Subtitles } from '@domain/subtitles'
+import { isLanguageCode, type Subtitles } from '@domain/subtitles'
 import { err, ok, type Result } from '@application/result'
 import type { SubtitlesStorageError, SubtitlesStoragePort } from '@application/subtitles/ports'
 import { openCutloomDB, runTransaction, SUBTITLES_STORE } from './database'
@@ -25,7 +25,7 @@ function isValidSubtitles(value: unknown): value is StoredSubtitles {
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.projectId === 'string' &&
-    (candidate.language === 'es' || candidate.language === 'en') &&
+    isLanguageCode(candidate.language) &&
     Array.isArray(candidate.segments) &&
     candidate.segments.every(isValidSegment)
   )
