@@ -1,6 +1,7 @@
 import type { ChangePlanResult, Plan, PlanFeature, Subscription, SubscriptionStatus } from '@domain/billing'
 import type { BillingErrorCode } from '@application/billing/errors'
 import { BillingError } from '@application/billing/errors'
+import { mapKnownError } from '@infrastructure/errors'
 
 export interface PlanFeatureDto {
   feature: string
@@ -70,7 +71,7 @@ export function mapChangePlanResult(dto: ChangePlanResultDto): ChangePlanResult 
   }
 }
 
-const KNOWN_ERROR_CODES = new Set<BillingErrorCode>([
+const KNOWN_ERROR_CODES: readonly BillingErrorCode[] = [
   'MISSING_ORGANIZATION',
   'PLAN_NOT_FOUND',
   'NO_ACTIVE_SUBSCRIPTION',
@@ -79,11 +80,8 @@ const KNOWN_ERROR_CODES = new Set<BillingErrorCode>([
   'INVALID_DONATION_AMOUNT',
   'NETWORK_ERROR',
   'UNKNOWN_ERROR',
-])
+]
 
 export function mapBillingError(code: string, message?: string): BillingError {
-  const resolvedCode: BillingErrorCode = KNOWN_ERROR_CODES.has(code as BillingErrorCode)
-    ? (code as BillingErrorCode)
-    : 'UNKNOWN_ERROR'
-  return new BillingError(resolvedCode, message ?? resolvedCode)
+  return mapKnownError(KNOWN_ERROR_CODES, (c, m) => new BillingError(c, m), code, message)
 }

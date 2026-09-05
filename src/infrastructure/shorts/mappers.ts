@@ -1,6 +1,7 @@
 import type { DetectedCandidate, DetectResult, ImprovedSubtitle, ImproveResult, ScoreResult, ShortScore } from '@domain/shorts'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import { ShortsError } from '@application/shorts/errors'
+import { mapKnownError } from '@infrastructure/errors'
 
 /** Wire format real de POST /api/shorts/detect (respuesta) y de POST /api/shorts/score (candidates del request) — start/end en segundos, no ms. id se reenvía a /score tal cual, sin recalcularlo. */
 export interface DetectedCandidateDto {
@@ -91,7 +92,7 @@ export function mapScoreResult(dto: ScoreResultDto): ScoreResult {
   return { shorts: dto.shorts.map(mapShortScore), warnings: dto.warnings }
 }
 
-const KNOWN_ERROR_CODES = new Set<ShortsErrorCode>([
+const KNOWN_ERROR_CODES: readonly ShortsErrorCode[] = [
   'MISSING_ORGANIZATION',
   'EMPTY_SEGMENTS',
   'EMPTY_CANDIDATES',
@@ -104,11 +105,8 @@ const KNOWN_ERROR_CODES = new Set<ShortsErrorCode>([
   'SUBTITLES_LLM_FAILED',
   'NETWORK_ERROR',
   'UNKNOWN_ERROR',
-])
+]
 
 export function mapShortsError(code: string, message?: string): ShortsError {
-  const resolvedCode: ShortsErrorCode = KNOWN_ERROR_CODES.has(code as ShortsErrorCode)
-    ? (code as ShortsErrorCode)
-    : 'UNKNOWN_ERROR'
-  return new ShortsError(resolvedCode, message ?? resolvedCode)
+  return mapKnownError(KNOWN_ERROR_CODES, (c, m) => new ShortsError(c, m), code, message)
 }

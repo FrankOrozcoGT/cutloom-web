@@ -1,5 +1,6 @@
 import type { AuthErrorCode, AuthSession, CurrentUser, User, UserEntitlement } from '@domain/auth'
 import { AuthError } from '@application/auth/errors'
+import { mapKnownError } from '@infrastructure/errors'
 
 interface UserDto {
   id: string
@@ -63,7 +64,7 @@ export function mapCurrentUser(dto: CurrentUserDto): CurrentUser {
   }
 }
 
-const KNOWN_ERROR_CODES = new Set<AuthErrorCode>([
+const KNOWN_ERROR_CODES: readonly AuthErrorCode[] = [
   'EMAIL_EXISTS',
   'EMAIL_EXISTS_GOOGLE',
   'EMAIL_EXISTS_LOCAL',
@@ -75,11 +76,8 @@ const KNOWN_ERROR_CODES = new Set<AuthErrorCode>([
   'GOOGLE_AUTH_FAILED',
   'NETWORK_ERROR',
   'UNKNOWN_ERROR',
-])
+]
 
 export function mapAuthError(code: string, message?: string): AuthError {
-  const resolvedCode: AuthErrorCode = KNOWN_ERROR_CODES.has(code as AuthErrorCode)
-    ? (code as AuthErrorCode)
-    : 'UNKNOWN_ERROR'
-  return new AuthError(resolvedCode, message ?? resolvedCode)
+  return mapKnownError(KNOWN_ERROR_CODES, (c, m) => new AuthError(c, m), code, message)
 }
