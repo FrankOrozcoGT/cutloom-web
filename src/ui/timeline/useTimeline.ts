@@ -272,7 +272,15 @@ export function useTimeline(
       setTimelineState(target.timeline)
       subtitlesBridge?.restore(target.subtitles)
       removedChipsBridge?.restore(target.removedChips)
-      void arrangeUseCase.saveTimeline(target.timeline)
+      // El timeline en memoria ya avanzó al punto del historial — si el
+      // guardado falla, se avisa pero no se revierte el estado en pantalla
+      // (undo/redo debe seguir siendo instantáneo); el usuario sabe que ese
+      // punto todavía no quedó persistido.
+      void arrangeUseCase.saveTimeline(target.timeline).then((result) => {
+        if (!result.ok) {
+          setError(result.error)
+        }
+      })
     },
     [timeline, subtitlesBridge, removedChipsBridge],
   )
