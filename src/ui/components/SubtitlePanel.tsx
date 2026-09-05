@@ -16,6 +16,10 @@ const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   en: 'English',
 }
 
+function isLanguageCode(value: string): value is LanguageCode {
+  return value in LANGUAGE_LABELS
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   EMPTY_TIMELINE: 'El timeline está vacío. Agrega al menos un video para generar subtítulos.',
   MISSING_ASSET: 'Uno de los videos del timeline ya no está disponible.',
@@ -110,7 +114,9 @@ export function SubtitlePanel({
         <h3 className="text-sm font-medium text-text-strong">Subtítulos automáticos</h3>
         <select
           value={language}
-          onChange={(event) => setLanguage(event.target.value as LanguageCode)}
+          onChange={(event) => {
+            if (isLanguageCode(event.target.value)) setLanguage(event.target.value)
+          }}
           disabled={isBusy}
           className="rounded-md border border-border bg-transparent px-2 py-1 text-xs text-text-strong"
         >
