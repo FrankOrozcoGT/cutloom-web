@@ -10,6 +10,16 @@ export interface Clip {
   offsetMs: number
   /** Punto de inicio dentro del video fuente (ms). Permite recortar sin perder el resto del material. */
   sourceStartMs: number
+  /**
+   * Id del clip del que este fue partido (splitClip), heredado a ambos
+   * fragmentos resultantes — si está ausente, el clip es su propio origen
+   * (nunca fue partido, o es la raíz de la cadena de splits). Permite a
+   * mergeWithNeighbors reconocer "estos fragmentos vienen del mismo corte
+   * original" por identidad en vez de inferirlo comparando aritmética de
+   * offsets/sourceStartMs, que podía calzar por casualidad entre dos clips
+   * genuinamente distintos que un usuario colocó pegados a mano.
+   */
+  originClipId?: string
 }
 
 export interface Track {
@@ -339,14 +349,19 @@ export function splitClip(
     return err('CUT_OUT_OF_BOUNDS')
   }
 
+  // Ambos fragmentos heredan el mismo originClipId — si clip ya tenía uno
+  // (viene de un split previo), se propaga tal cual; si no, clip.id mismo
+  // se convierte en el origen para esta y futuras divisiones de sus partes.
+  const originClipId = clip.originClipId ?? clip.id
   const deltaMs = cutPointMs - clip.offsetMs
-  const segment1: Clip = { ...clip, durationMs: deltaMs }
+  const segment1: Clip = { ...clip, durationMs: deltaMs, originClipId }
   const segment2: Clip = {
     id: crypto.randomUUID(),
     assetId: clip.assetId,
     offsetMs: cutPointMs,
     durationMs: end - cutPointMs,
     sourceStartMs: clip.sourceStartMs + deltaMs,
+    originClipId,
   }
 
   const updatedTracks = timeline.tracks.map((track) =>
@@ -469,41 +484,67 @@ export function reinsertSegment(timeline: Timeline, removed: RemovedSegment, atM
   return { ...opened, tracks: updatedTracks }
 }
 
-/** Dos clips son el mismo material continuo si uno retoma el video fuente justo donde el otro lo dejó — el caso típico tras reinsertar un tramo que removeSegment había aislado partiendo un clip original en izquierda/segmento/derecha. */
+/** Origen real de un clip para fines de fusión: su propio id si nunca fue partido (splitClip), o el id heredado del clip del que salió. Dos clips con el mismo origen vienen del mismo corte original, sin importar cuántas reinserciones/reordenamientos haya de por medio. */
+function originOf(clip: Clip): string {
+  return clip.originClipId ?? clip.id
+}
+
+/** Dos clips son el mismo material continuo si comparten origen y uno retoma el video fuente justo donde el otro lo dejó — el caso típico tras reinsertar un tramo que removeSegment había aislado partiendo un clip original en izquierda/segmento/derecha. */
 function areContiguous(left: Clip, right: Clip): boolean {
   return (
-    left.assetId === right.assetId &&
+    originOf(left) === originOf(right) &&
     left.offsetMs + left.durationMs === right.offsetMs &&
     left.sourceStartMs + left.durationMs === right.sourceStartMs
   )
 }
 
 /**
- * Recose el clip recién reinsertado con su vecino inmediato anterior y/o
- * posterior si son en realidad el mismo material que removeSegment había
- * partido. A propósito NO recorre el resto del track: dos clips ajenos al
- * corte que un usuario haya colocado pegados a mano podrían calzar por
- * casualidad en offset y sourceStartMs — fusionar solo contra los vecinos
- * directos del clip que se está reinsertando acota el caso a la situación
- * real que esta función resuelve.
+ * Recose el clip recién reinsertado con cualquier otro fragmento del track
+ * que comparta su origen (originClipId) y resulte contiguo tras la
+ * reinserción — ya no se limita a los vecinos inmediatos: al comparar por
+ * identidad de origen en vez de coincidencia numérica de offset/
+ * sourceStartMs, dos clips ajenos entre sí que un usuario haya colocado
+ * pegados a mano nunca pueden calzar por casualidad (nunca comparten
+ * originClipId), así que recorrer todo el track ya no arriesga fusionar
+ * material no relacionado.
  */
 function mergeWithNeighbors(clips: Clip[], relocated: Clip): Clip[] {
-  const withRelocated = [...clips, relocated].sort((a, b) => a.offsetMs - b.offsetMs)
-  const index = withRelocated.findIndex((clip) => clip.id === relocated.id)
+  const sorted = [...clips, relocated].sort((a, b) => a.offsetMs - b.offsetMs)
 
   let merged = relocated
-  const before = withRelocated[index - 1]
-  if (before && areContiguous(before, merged)) {
-    merged = { ...before, durationMs: before.durationMs + merged.durationMs }
-  }
-  const after = withRelocated[index + 1]
-  if (after && areContiguous(merged, after)) {
-    merged = { ...merged, durationMs: merged.durationMs + after.durationMs }
+  let survivors = sorted.filter((clip) => clip.id !== relocated.id)
+
+  // Se repite hasta que ningún otro fragmento del track sea contiguo con el
+  // resultado — una sola pasada alcanza para vecinos directos, pero
+  // encadenar hacia ambos lados requiere volver a intentar tras cada fusión
+  // (ej. A-B-C-D partidos en cuatro, reinsertando B: primero se funde con A,
+  // y el resultado A+B recién ahí puede calzar contra C).
+  let mergedSomething = true
+  while (mergedSomething) {
+    mergedSomething = false
+    const mergedEnd = clipEnd(merged)
+
+    const beforeIndex = survivors.findIndex(
+      (clip) => clipEnd(clip) === merged.offsetMs && areContiguous(clip, merged),
+    )
+    if (beforeIndex !== -1) {
+      const before = survivors[beforeIndex]
+      merged = { ...before, durationMs: before.durationMs + merged.durationMs }
+      survivors = survivors.filter((_, i) => i !== beforeIndex)
+      mergedSomething = true
+      continue
+    }
+
+    const afterIndex = survivors.findIndex((clip) => clip.offsetMs === mergedEnd && areContiguous(merged, clip))
+    if (afterIndex !== -1) {
+      const after = survivors[afterIndex]
+      merged = { ...merged, durationMs: merged.durationMs + after.durationMs }
+      survivors = survivors.filter((_, i) => i !== afterIndex)
+      mergedSomething = true
+    }
   }
 
-  return withRelocated
-    .filter((clip) => clip.id !== before?.id && clip.id !== relocated.id && clip.id !== after?.id)
-    .concat(merged)
+  return [...survivors, merged]
 }
 
 export interface SilenceCut {
