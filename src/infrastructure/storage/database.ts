@@ -79,3 +79,56 @@ export function runTransaction<T>(
     request.onsuccess = () => resolve(request.result)
   })
 }
+
+/**
+ * Read-modify-write atómico: get y put ocurren dentro de la MISMA
+ * transacción readwrite, encadenados en el callback onsuccess del get (sin
+ * ningún `await` de por medio) — mientras eso se cumpla, IndexedDB garantiza
+ * que ninguna otra transacción sobre el mismo store puede intercalarse entre
+ * la lectura y la escritura. Dos llamadas concurrentes a esta función ya no
+ * pueden pisarse (lost update): la segunda transacción espera a que la
+ * primera termine antes de empezar su propio get.
+ */
+export function runReadModifyWrite<T>(
+  db: IDBDatabase,
+  storeName: string,
+  key: IDBValidKey,
+  modify: (existing: T | undefined) => T,
+  retried = false,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+    const getRequest = store.get(key)
+
+    let updated: T
+    let modifyFailed = false
+    const retryOrReject = () => {
+      // Un error propio de `modify` (ej. registro inexistente) no es un
+      // fallo transaccional de IndexedDB — no tiene sentido reintentar la
+      // transacción completa por eso, el resultado sería el mismo.
+      if (modifyFailed) return
+      if (!retried) {
+        runReadModifyWrite(db, storeName, key, modify, true).then(resolve, reject)
+        return
+      }
+      reject(transaction.error)
+    }
+
+    transaction.onerror = retryOrReject
+    transaction.onabort = retryOrReject
+
+    getRequest.onsuccess = () => {
+      try {
+        updated = modify(getRequest.result as T | undefined)
+      } catch (e) {
+        modifyFailed = true
+        reject(e)
+        transaction.abort()
+        return
+      }
+      store.put(updated)
+    }
+    transaction.oncomplete = () => resolve(updated)
+  })
+}

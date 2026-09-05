@@ -1,7 +1,7 @@
 import type { ProjectShorts } from '@domain/shorts'
 import { err, ok, type Result } from '@application/result'
 import type { ShortsStorageError, ShortsStoragePort } from '@application/shorts/ports'
-import { openCutloomDB, runTransaction, SHORTS_STORE } from './database'
+import { openCutloomDB, runReadModifyWrite, runTransaction, SHORTS_STORE } from './database'
 
 interface StoredProjectShorts extends ProjectShorts {
   /** Un proyecto tiene a lo sumo un ProjectShorts asociado: se usa projectId como keyPath. */
@@ -69,17 +69,23 @@ export class IndexedDBShortsAdapter implements ShortsStoragePort {
     }
   }
 
-  /** Read-modify-write centralizado para actualizar el ajuste de encuadre de un short sin pisar el resto del registro — evita que cada caller arme su propia copia read-modify-write por su cuenta. */
+  /** Read-modify-write atómico (misma transacción IndexedDB, ver runReadModifyWrite) para actualizar el ajuste de encuadre de un short sin pisar el resto del registro ni arriesgar un lost update si dos ajustes llegan casi al mismo tiempo. */
   async updateCropOffset(
     projectId: string,
     shortKeyValue: string,
     cropOffsetX: number,
   ): Promise<Result<void, ShortsStorageError>> {
-    const existing = await this.getByProject(projectId)
-    if (!existing.ok || !existing.value) {
+    try {
+      const db = await openCutloomDB()
+      await runReadModifyWrite<StoredProjectShorts | undefined>(db, SHORTS_STORE, projectId, (existing) => {
+        if (!existing) {
+          throw new Error('NOT_FOUND')
+        }
+        return { ...existing, cropOffsetXByShort: { ...existing.cropOffsetXByShort, [shortKeyValue]: cropOffsetX } }
+      })
+      return ok(undefined)
+    } catch {
       return err('STORAGE_ERROR')
     }
-    const cropOffsetXByShort = { ...existing.value.cropOffsetXByShort, [shortKeyValue]: cropOffsetX }
-    return this.save({ ...existing.value, cropOffsetXByShort })
   }
 }
