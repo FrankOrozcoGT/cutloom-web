@@ -2,11 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Clapperboard, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react'
 import type { Project } from '@domain/project'
+import type { ProjectDeleteError } from '@application/project/ports'
+import type { StorageError } from '@application/video/ports'
 import { Button } from '@ui/components/Button'
 import { ConfirmDialog } from '@ui/components/ConfirmDialog'
 import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
 import { FormField } from '@ui/components/FormField'
 import { projectUseCase, shortsStorage } from '@ui/video/composition'
+
+const PROJECT_ERROR_MESSAGES: Record<ProjectDeleteError | StorageError, string> = {
+  UNKNOWN_ERROR: 'Ocurrió un error inesperado.',
+  STORAGE_FULL: 'No hay espacio suficiente de almacenamiento.',
+  DELETE_TIMELINE_FAILED: 'No se pudo eliminar el timeline del proyecto.',
+  DELETE_SUBTITLES_FAILED: 'No se pudieron eliminar los subtítulos del proyecto.',
+  DELETE_SHORTS_FAILED: 'No se pudieron eliminar los shorts del proyecto.',
+}
 
 // Dos mecanismos genuinamente distintos (navegar vs. ejecutar un handler in
 // situ), no variantes de contenido de un mismo caso — de ahí el discriminante
@@ -50,6 +60,7 @@ export function ProjectsPage() {
   const [editingName, setEditingName] = useState('')
   const [editingDescriptionProject, setEditingDescriptionProject] = useState<Project | null>(null)
   const [deletingProject, setDeletingProject] = useState<Project | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const loadProjects = useCallback(async () => {
     const stored = await projectUseCase.getAll()
@@ -97,8 +108,13 @@ export function ProjectsPage() {
         cancelRename()
         return
       }
-      await projectUseCase.rename(id, name)
+      const result = await projectUseCase.rename(id, name)
       cancelRename()
+      if (!result.ok) {
+        setActionError(PROJECT_ERROR_MESSAGES[result.error])
+        return
+      }
+      setActionError(null)
       await loadProjects()
     },
     [editingName, cancelRename, loadProjects],
@@ -106,16 +122,26 @@ export function ProjectsPage() {
 
   const confirmDelete = useCallback(async () => {
     if (!deletingProject) return
-    await projectUseCase.delete(deletingProject.id)
+    const result = await projectUseCase.delete(deletingProject.id)
     setDeletingProject(null)
+    if (!result.ok) {
+      setActionError(PROJECT_ERROR_MESSAGES[result.error])
+      return
+    }
+    setActionError(null)
     await loadProjects()
   }, [deletingProject, loadProjects])
 
   const handleSaveDescription = useCallback(
     async (value: string) => {
       if (!editingDescriptionProject) return
-      await projectUseCase.updateDescription(editingDescriptionProject.id, value)
+      const result = await projectUseCase.updateDescription(editingDescriptionProject.id, value)
       setEditingDescriptionProject(null)
+      if (!result.ok) {
+        setActionError(PROJECT_ERROR_MESSAGES[result.error])
+        return
+      }
+      setActionError(null)
       await loadProjects()
     },
     [editingDescriptionProject, loadProjects],
@@ -124,6 +150,12 @@ export function ProjectsPage() {
   return (
     <div>
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+        {actionError && (
+          <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
+            {actionError}
+          </div>
+        )}
+
         <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
             <FormField
