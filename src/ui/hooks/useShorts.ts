@@ -17,7 +17,7 @@ interface UseShortsResult {
   improveError: ShortsErrorCode | null
   improvedSubtitles: ImprovedSubtitle[]
   improveSummary: string | null
-  improveSubtitles: (projectId: string, segments: SubtitleSegment[], userContext?: string) => Promise<void>
+  improveSubtitles: (segments: SubtitleSegment[], userContext?: string) => Promise<void>
 
   createShortsState: CreateShortsState
   createShortsError: ShortsErrorCode | null
@@ -39,10 +39,10 @@ export function useShorts(): UseShortsResult {
   const [shorts, setShorts] = useState<ShortScore[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
 
-  const improveSubtitles = useCallback(async (projectId: string, segments: SubtitleSegment[], userContext?: string) => {
+  const improveSubtitles = useCallback(async (segments: SubtitleSegment[], userContext?: string) => {
     setImproveState('loading')
     setImproveError(null)
-    const result = await improveSubtitlesUseCase.execute(projectId, segments, userContext)
+    const result = await improveSubtitlesUseCase.execute(segments, userContext)
     if (!result.ok) {
       setImproveError(result.error.code)
       setImproveState('error')

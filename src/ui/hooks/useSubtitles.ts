@@ -147,16 +147,6 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     })
   }, [projectId, language, persist])
 
-  const editText = useCallback(
-    async (segmentId: string, text: string) => {
-      if (!subtitles) return
-      const result = editSegmentText(subtitles.segments, segmentId, text)
-      if (!result.ok) return
-      await persist({ ...subtitles, segments: result.value })
-    },
-    [subtitles, persist],
-  )
-
   const editMultipleTexts = useCallback(
     async (changes: { segmentId: string; text: string }[]) => {
       if (!subtitles) return
@@ -168,6 +158,13 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
       await persist({ ...subtitles, segments })
     },
     [subtitles, persist],
+  )
+
+  const editText = useCallback(
+    async (segmentId: string, text: string) => {
+      await editMultipleTexts([{ segmentId, text }])
+    },
+    [editMultipleTexts],
   )
 
   const editTiming = useCallback(

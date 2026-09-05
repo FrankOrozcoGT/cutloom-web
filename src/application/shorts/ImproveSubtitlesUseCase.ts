@@ -11,11 +11,7 @@ export class ImproveSubtitlesUseCase {
     this.backend = backend
   }
 
-  async execute(
-    projectId: string,
-    segments: SubtitleSegment[],
-    userContext?: string,
-  ): Promise<Result<ImproveResult, ShortsError>> {
-    return this.backend.improveSubtitles(projectId, segments, userContext)
+  async execute(segments: SubtitleSegment[], userContext?: string): Promise<Result<ImproveResult, ShortsError>> {
+    return this.backend.improveSubtitles(segments, userContext)
   }
 }

@@ -10,11 +10,7 @@ export interface AudioClip {
 }
 
 export interface ShortsBackendPort {
-  improveSubtitles(
-    projectId: string,
-    segments: SubtitleSegment[],
-    userContext?: string,
-  ): Promise<Result<ImproveResult, ShortsError>>
+  improveSubtitles(segments: SubtitleSegment[], userContext?: string): Promise<Result<ImproveResult, ShortsError>>
   detect(
     projectId: string,
     segments: SubtitleSegment[],

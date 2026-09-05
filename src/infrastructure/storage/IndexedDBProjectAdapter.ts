@@ -25,14 +25,14 @@ export class IndexedDBProjectAdapter implements ProjectStorage {
     return runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.getAll())
   }
 
-  async rename(id: string, name: string): Promise<Result<Project, ProjectStorageError>> {
+  private async patch(id: string, changes: Partial<Omit<Project, 'id'>>): Promise<Result<Project, ProjectStorageError>> {
     try {
       const db = await openCutloomDB()
       const existing = await runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.get(id))
       if (!existing) {
         return err('UNKNOWN_ERROR')
       }
-      const updated: Project = { ...existing, name }
+      const updated: Project = { ...existing, ...changes }
       await runTransaction(db, PROJECTS_STORE, 'readwrite', (store) => store.put(updated))
       return ok(updated)
     } catch {
@@ -40,19 +40,12 @@ export class IndexedDBProjectAdapter implements ProjectStorage {
     }
   }
 
-  async updateDescription(id: string, description: string): Promise<Result<Project, ProjectStorageError>> {
-    try {
-      const db = await openCutloomDB()
-      const existing = await runTransaction(db, PROJECTS_STORE, 'readonly', (store) => store.get(id))
-      if (!existing) {
-        return err('UNKNOWN_ERROR')
-      }
-      const updated: Project = { ...existing, description }
-      await runTransaction(db, PROJECTS_STORE, 'readwrite', (store) => store.put(updated))
-      return ok(updated)
-    } catch {
-      return err('UNKNOWN_ERROR')
-    }
+  rename(id: string, name: string): Promise<Result<Project, ProjectStorageError>> {
+    return this.patch(id, { name })
+  }
+
+  updateDescription(id: string, description: string): Promise<Result<Project, ProjectStorageError>> {
+    return this.patch(id, { description })
   }
 
   async delete(id: string): Promise<Result<void, ProjectStorageError>> {

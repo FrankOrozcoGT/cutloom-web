@@ -235,6 +235,16 @@ export function EditorPage() {
   const handleEditSegmentText = useCallback(
     (segmentId: string, text: string) => {
       void subtitlesState.editText(segmentId, text)
+      // Editar a mano mientras hay un diff pendiente de la mejora de IA
+      // significa que el usuario ya tomó control del texto — seguir
+      // comparando contra la versión de la IA (y ofreciendo "revertir" a
+      // ella) perdería justo esa edición manual.
+      setPendingSubtitleDiffs((previous) => {
+        if (!(segmentId in previous)) return previous
+        const next = { ...previous }
+        delete next[segmentId]
+        return next
+      })
     },
     [subtitlesState],
   )
@@ -249,7 +259,7 @@ export function EditorPage() {
   const handleImproveSubtitles = useCallback(
     (userContext?: string) => {
       if (!projectId || !subtitlesState.subtitles) return
-      void shortsState.improveSubtitles(projectId, subtitlesState.subtitles.segments, userContext)
+      void shortsState.improveSubtitles(subtitlesState.subtitles.segments, userContext)
     },
     [projectId, subtitlesState.subtitles, shortsState],
   )
@@ -290,13 +300,23 @@ export function EditorPage() {
       void subtitlesState.editMultipleTexts(changes)
     }
     setPendingSubtitleDiffs((previous) => ({ ...previous, ...diffs }))
+  }, [shortsState.improveState, shortsState.improvedSubtitles, subtitlesState])
 
-    // El resumen del video se guarda como descripción del proyecto — se ve y
-    // edita desde el listado de proyectos, no acá en el editor.
-    if (projectId && shortsState.improveSummary) {
-      void projectUseCase.updateDescription(projectId, shortsState.improveSummary)
-    }
-  }, [shortsState.improveState, shortsState.improvedSubtitles, shortsState.improveSummary, subtitlesState, projectId])
+  // El resumen del video (dominio de proyecto, no de subtítulos) se guarda
+  // como descripción del proyecto — se ve y edita desde el listado de
+  // proyectos, no acá en el editor. Efecto separado del de arriba: son dos
+  // datos independientes de la misma respuesta de mejora, cada uno dueño de
+  // su propio disparador de "una sola vez por resultado".
+  const appliedSummaryRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (shortsState.improveState !== 'success') return
+    if (!shortsState.improveSummary || !projectId) return
+    if (appliedSummaryRef.current === shortsState.improveSummary) return
+    appliedSummaryRef.current = shortsState.improveSummary
+    void projectUseCase.updateDescription(projectId, shortsState.improveSummary).then((result) => {
+      if (!result.ok) console.error('No se pudo guardar el resumen del proyecto:', result.error)
+    })
+  }, [shortsState.improveState, shortsState.improveSummary, projectId])
 
   const handleRevertImprovedSegment = useCallback(
     (segmentId: string) => {
