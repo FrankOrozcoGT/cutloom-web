@@ -2,9 +2,10 @@ import type { DetectedCandidate, DetectResult, ImprovedSubtitle, ImproveResult, 
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import { ShortsError } from '@application/shorts/errors'
 
+/** Wire format real de POST /api/shorts/detect (respuesta) y de POST /api/shorts/score (candidates del request) — start/end en segundos, no ms. */
 export interface DetectedCandidateDto {
-  startMs: number
-  endMs: number
+  start: number
+  end: number
   confidence: number
   reason: string
 }
@@ -16,9 +17,10 @@ export interface ImprovedSubtitleDto {
   corrected: string
 }
 
+/** Wire format real de la respuesta de POST /api/shorts/score — start/end en segundos, no ms, igual que detect. */
 export interface ShortScoreDto {
-  startMs: number
-  endMs: number
+  start: number
+  end: number
   confidence: number
   reason: string
   emotion: string | null
@@ -40,8 +42,14 @@ export interface ImproveResultDto {
 }
 
 export function mapDetectedCandidate(dto: DetectedCandidateDto): DetectedCandidate {
-  return { startMs: dto.startMs, endMs: dto.endMs, confidence: dto.confidence, reason: dto.reason }
+  return { startMs: Math.round(dto.start * 1000), endMs: Math.round(dto.end * 1000), confidence: dto.confidence, reason: dto.reason }
 }
+
+/** Inverso de mapDetectedCandidate — el dominio interno sigue en ms, pero score espera candidates en el mismo shape que devolvió detect (segundos). */
+export function toDetectedCandidateDto(candidate: DetectedCandidate): DetectedCandidateDto {
+  return { start: candidate.startMs / 1000, end: candidate.endMs / 1000, confidence: candidate.confidence, reason: candidate.reason }
+}
+
 
 export function mapDetectResult(dto: DetectResultDto): DetectResult {
   return { candidates: dto.candidates.map(mapDetectedCandidate) }
@@ -57,8 +65,8 @@ export function mapImproveResult(dto: ImproveResultDto): ImproveResult {
 
 export function mapShortScore(dto: ShortScoreDto): ShortScore {
   return {
-    startMs: dto.startMs,
-    endMs: dto.endMs,
+    startMs: Math.round(dto.start * 1000),
+    endMs: Math.round(dto.end * 1000),
     confidence: dto.confidence,
     reason: dto.reason,
     emotion: dto.emotion,
@@ -76,6 +84,8 @@ const KNOWN_ERROR_CODES = new Set<ShortsErrorCode>([
   'EMPTY_CANDIDATES',
   'TOO_MANY_CLIPS',
   'INVALID_AUDIO_SEGMENT',
+  'INVALID_PAYLOAD',
+  'PAYLOAD_TOO_LARGE',
   'SHORTS_ACCESS_DENIED',
   'SHORTS_LLM_FAILED',
   'SUBTITLES_LLM_FAILED',

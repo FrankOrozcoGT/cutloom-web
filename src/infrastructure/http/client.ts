@@ -102,6 +102,11 @@ export class HttpClient {
     }
     return this.request(path, { ...init, method: 'POST', headers, body: requestBody })
   }
+
+  // No fijar Content-Type acá: el navegador debe generarlo con el boundary correcto al ver un FormData.
+  postForm(path: string, formData: FormData, init: RequestInit = {}): Promise<Response> {
+    return this.request(path, { ...init, method: 'POST', body: formData })
+  }
 }
 
 export const httpClient = new HttpClient()

@@ -1,4 +1,4 @@
-import type { DetectedCandidate, DetectResult, ImproveResult, ScoreResult } from '@domain/shorts'
+import type { DetectedCandidate, DetectResult, ImproveResult, ScoreResult, ShortIdeal } from '@domain/shorts'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { AudioClip, ShortsBackendPort } from '@application/shorts/ports'
 import { ShortsError } from '@application/shorts/errors'
@@ -9,6 +9,7 @@ import {
   mapImproveResult,
   mapScoreResult,
   mapShortsError,
+  toDetectedCandidateDto,
   type DetectResultDto,
   type ImproveResultDto,
   type ScoreResultDto,
@@ -33,12 +34,11 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     return ok(mapImproveResult(body))
   }
 
-  async detect(
-    projectId: string,
-    segments: SubtitleSegment[],
-    ideal?: string,
-  ): Promise<Result<DetectResult, ShortsError>> {
-    const response = await this.http.post('/api/shorts/detect', { projectId, segments, ideal })
+  async detect(segments: SubtitleSegment[], shortIdeal?: ShortIdeal): Promise<Result<DetectResult, ShortsError>> {
+    const response = await this.http.post('/api/shorts/detect', {
+      segments: segments.map((segment) => ({ start: segment.startMs / 1000, end: segment.endMs / 1000, text: segment.text })),
+      shortIdealJson: shortIdeal,
+    })
     if (!response.ok) {
       return err(await this.parseError(response))
     }
@@ -47,12 +47,19 @@ export class ShortsApiAdapter implements ShortsBackendPort {
   }
 
   async score(
-    projectId: string,
     candidates: DetectedCandidate[],
-    ideal: string | undefined,
     audioClips: AudioClip[],
+    shortIdeal?: ShortIdeal,
   ): Promise<Result<ScoreResult, ShortsError>> {
-    const response = await this.http.post('/api/shorts/score', { projectId, candidates, ideal, audioClips })
+    const candidateDtos = candidates.map(toDetectedCandidateDto)
+    const formData = new FormData()
+    formData.append('payload', JSON.stringify({ candidates: candidateDtos, shortIdealJson: shortIdeal }))
+    for (const clip of audioClips) {
+      const fieldName = `audio_${clip.startMs / 1000}_${clip.endMs / 1000}`
+      formData.append(fieldName, clip.audioBlob, `${fieldName}.wav`)
+    }
+
+    const response = await this.http.postForm('/api/shorts/score', formData)
     if (!response.ok) {
       return err(await this.parseError(response))
     }
@@ -61,6 +68,9 @@ export class ShortsApiAdapter implements ShortsBackendPort {
   }
 
   private async parseError(response: Response): Promise<ShortsError> {
+    if (response.status === 413) {
+      return mapShortsError('PAYLOAD_TOO_LARGE', 'El contenido enviado es demasiado grande para procesarlo.')
+    }
     try {
       const body = (await response.json()) as { error?: string; message?: string }
       return mapShortsError(body.error ?? 'UNKNOWN_ERROR', body.message)
