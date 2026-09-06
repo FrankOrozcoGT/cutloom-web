@@ -10,7 +10,7 @@ import {
   type Subtitles,
 } from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
-import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
+import { isSubtitlesError, type SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesStorageError } from '@application/subtitles/ports'
 import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
 import { extractSubtitlesAudioUseCase, subtitlesStorage } from '@ui/subtitles/composition'
@@ -133,7 +133,7 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
 
         if (message.type === 'error') {
           console.error('Generación de subtítulos falló:', message.error)
-          setError(message.error as SubtitlesError)
+          setError(isSubtitlesError(message.error) ? message.error : 'UNKNOWN_ERROR')
           setState('error')
           setProcessedUntilMs(null)
           worker.terminate()

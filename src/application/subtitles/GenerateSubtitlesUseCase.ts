@@ -10,6 +10,17 @@ export interface SubtitlesResult {
 
 export type SubtitlesError = 'NO_SPEECH' | 'UNSUPPORTED_API' | 'INSUFFICIENT_HARDWARE' | 'UNKNOWN_ERROR'
 
+const SUBTITLES_ERROR_CODES: readonly SubtitlesError[] = [
+  'NO_SPEECH',
+  'UNSUPPORTED_API',
+  'INSUFFICIENT_HARDWARE',
+  'UNKNOWN_ERROR',
+]
+
+export function isSubtitlesError(value: string): value is SubtitlesError {
+  return (SUBTITLES_ERROR_CODES as readonly string[]).includes(value)
+}
+
 /** Transcribe audio ya extraído (ver ExtractSubtitlesAudioUseCase) y lo mapea a segmentos de dominio. */
 export class GenerateSubtitlesUseCase {
   private readonly transcriber: WhisperTranscriberPort
