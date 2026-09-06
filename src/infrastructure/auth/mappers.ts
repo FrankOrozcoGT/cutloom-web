@@ -10,7 +10,7 @@ interface UserDto {
   createdAt: string
 }
 
-interface AuthSessionDto {
+export interface AuthSessionDto {
   user: UserDto
   accessToken: string
   isNewUser: boolean

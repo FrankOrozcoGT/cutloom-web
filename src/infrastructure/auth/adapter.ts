@@ -3,7 +3,7 @@ import type { AuthApi } from '@application/auth/ports'
 import { AuthError } from '@application/auth/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
-import { mapAuthError, mapAuthSession, mapCurrentUser, type CurrentUserDto } from './mappers'
+import { mapAuthError, mapAuthSession, mapCurrentUser, type AuthSessionDto, type CurrentUserDto } from './mappers'
 
 export class AuthApiAdapter implements AuthApi {
   private readonly http: HttpClient
@@ -48,7 +48,7 @@ export class AuthApiAdapter implements AuthApi {
       const error = await this.parseError(response)
       return err(error)
     }
-    const body = await response.json()
+    const body = (await response.json()) as AuthSessionDto
     return ok(mapAuthSession(body))
   }
 
