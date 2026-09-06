@@ -132,6 +132,10 @@ export function usePlaybackEngine({
   useEffect(() => {
     const video = activeVideoRef.current
     if (!video) return
+    // El video activo cambió: cualquier estado de "buscando" que dejó
+    // colgado el video anterior ya no aplica al nuevo.
+    isSeekingRef.current = false
+    setIsSeeking(false)
     function handleSeeking() {
       isSeekingRef.current = true
       setIsSeeking(true)
@@ -146,7 +150,13 @@ export function usePlaybackEngine({
       video.removeEventListener('seeking', handleSeeking)
       video.removeEventListener('seeked', handleSeeked)
     }
-  }, [activeVideoRef])
+    // activeVideoRef es un ref object estable (videoRefA/videoRefB nunca
+    // cambian de identidad) — sin lastActiveIsA en deps, este efecto no se
+    // re-suscribiría cuando el slot activo rota de A a B, dejando los
+    // listeners escuchando el <video> que pasó a estar en espera. Eso podía
+    // dejar isSeekingRef trabado en true tras un seek durante la
+    // reproducción, congelando tick() a mitad de avance.
+  }, [activeVideoRef, lastActiveIsA])
 
   // Si el timeline indica un clip activo pero su asset ya no existe (se borró
   // el VideoAsset original mientras se reproducía), usePlaybackBuffers deja el
