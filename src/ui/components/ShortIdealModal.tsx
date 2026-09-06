@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { ShortIdeal } from '@domain/shorts'
 import type { CreateShortsState } from '@ui/hooks/useShorts'
 import { Button } from '@ui/components/Button'
+import { Modal } from '@ui/components/Modal'
 
 function createShortsButtonLabel(state: CreateShortsState): string {
   if (state === 'detecting') return 'Detectando candidatos…'
@@ -53,24 +54,9 @@ export function ShortIdealModal({ state, onCreateShorts, onClose }: ShortIdealMo
     onClose()
   }, [onCreateShorts, onClose, topic, targetAudience, targetDurationSeconds, tone, count])
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Crear shorts"
-        className="w-full max-w-lg rounded-xl border border-border bg-surface p-6"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold text-text-strong">Crear shorts</h2>
+    <Modal title="Crear shorts" maxWidth="lg" onClose={onClose}>
+      <h2 className="text-lg font-semibold text-text-strong">Crear shorts</h2>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm text-text-muted">
@@ -132,7 +118,6 @@ export function ShortIdealModal({ state, onCreateShorts, onClose }: ShortIdealMo
             {createShortsButtonLabel(state)}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
