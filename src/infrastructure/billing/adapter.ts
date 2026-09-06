@@ -6,9 +6,16 @@ import type { HttpClient } from '@infrastructure/http/client'
 import {
   mapBillingError,
   mapChangePlanResult,
+  mapCheckoutLink,
+  mapCreditBalance,
+  mapDonationLink,
   mapPlan,
   mapSubscription,
+  type CancelSubscriptionResultDto,
   type ChangePlanResultDto,
+  type CheckoutLinkDto,
+  type CreditBalanceDto,
+  type DonationLinkDto,
   type PlanDto,
   type SubscriptionDto,
 } from './mappers'
@@ -43,8 +50,8 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CreditBalance
-    return ok(body)
+    const body = (await response.json()) as CreditBalanceDto
+    return ok(mapCreditBalance(body))
   }
 
   async createCheckout(planId: string): Promise<Result<CheckoutLink, BillingError>> {
@@ -52,16 +59,16 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CheckoutLink
-    return ok(body)
+    const body = (await response.json()) as CheckoutLinkDto
+    return ok(mapCheckoutLink(body))
   }
 
-  async cancel(): Promise<Result<{ cancelAtPeriodEnd: boolean; currentPeriodEnd: string }, BillingError>> {
+  async cancel(): Promise<Result<CancelSubscriptionResultDto, BillingError>> {
     const response = await this.http.post('/api/billing/cancel')
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as { cancelAtPeriodEnd: boolean; currentPeriodEnd: string }
+    const body = (await response.json()) as CancelSubscriptionResultDto
     return ok(body)
   }
 
@@ -79,8 +86,8 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CheckoutLink
-    return ok(body)
+    const body = (await response.json()) as CheckoutLinkDto
+    return ok(mapCheckoutLink(body))
   }
 
   async donateCoffee(amountInCents: number, currency?: string): Promise<Result<DonationLink, BillingError>> {
@@ -88,8 +95,8 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as DonationLink
-    return ok(body)
+    const body = (await response.json()) as DonationLinkDto
+    return ok(mapDonationLink(body))
   }
 
   private async parseError(response: Response): Promise<BillingError> {

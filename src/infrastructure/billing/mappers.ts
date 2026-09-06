@@ -1,4 +1,13 @@
-import type { ChangePlanResult, Plan, PlanFeature, Subscription, SubscriptionStatus } from '@domain/billing'
+import type {
+  ChangePlanResult,
+  CheckoutLink,
+  CreditBalance,
+  DonationLink,
+  Plan,
+  PlanFeature,
+  Subscription,
+  SubscriptionStatus,
+} from '@domain/billing'
 import type { BillingErrorCode } from '@application/billing/errors'
 import { BillingError } from '@application/billing/errors'
 import { mapKnownError } from '@infrastructure/errors'
@@ -31,6 +40,23 @@ export interface ChangePlanResultDto {
   currentPeriodStart: string
   currentPeriodEnd: string
   proratedAmountInCents: number
+}
+
+export interface CreditBalanceDto {
+  balance: number
+}
+
+export interface CheckoutLinkDto {
+  checkoutUrl: string
+}
+
+export interface DonationLinkDto {
+  donationUrl: string
+}
+
+export interface CancelSubscriptionResultDto {
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd: string
 }
 
 export function mapPlanFeature(dto: PlanFeatureDto): PlanFeature {
@@ -69,6 +95,18 @@ export function mapChangePlanResult(dto: ChangePlanResultDto): ChangePlanResult 
     currentPeriodEnd: dto.currentPeriodEnd,
     proratedAmountInCents: dto.proratedAmountInCents,
   }
+}
+
+export function mapCreditBalance(dto: CreditBalanceDto): CreditBalance {
+  return { balance: dto.balance }
+}
+
+export function mapCheckoutLink(dto: CheckoutLinkDto): CheckoutLink {
+  return { checkoutUrl: dto.checkoutUrl }
+}
+
+export function mapDonationLink(dto: DonationLinkDto): DonationLink {
+  return { donationUrl: dto.donationUrl }
 }
 
 const KNOWN_ERROR_CODES: readonly BillingErrorCode[] = [
