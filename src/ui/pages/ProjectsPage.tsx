@@ -7,6 +7,7 @@ import type { StorageError } from '@application/video/ports'
 import { Button } from '@ui/components/Button'
 import { ConfirmDialog } from '@ui/components/ConfirmDialog'
 import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { FormField } from '@ui/components/FormField'
 import { projectUseCase, shortsStorage } from '@ui/video/composition'
 
@@ -150,11 +151,7 @@ export function ProjectsPage() {
   return (
     <div>
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-        {actionError && (
-          <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-            {actionError}
-          </div>
-        )}
+        {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
 
         <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">

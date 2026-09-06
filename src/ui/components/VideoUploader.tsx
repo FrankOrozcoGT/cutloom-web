@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type DragEvent, type KeyboardEvent } from 'react'
 import type { UploadError, VideoUploadResult } from '@domain/video'
 import { useVideoUpload, type UploadState } from '@ui/hooks/useVideoUpload'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 
 const ERROR_MESSAGES: Record<UploadError, string> = {
   UNSUPPORTED_FORMAT: 'Formato no soportado. Usa MP4 o WebM.',
@@ -84,11 +85,13 @@ export function VideoUploader({ projectId, onUploaded }: VideoUploaderProps) {
         </div>
       </div>
       {state === 'error' && (
-        <div role="alert" className="flex flex-col gap-1 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {errors.map((error, index) => (
-            <span key={`${error}-${index}`}>{ERROR_MESSAGES[error]}</span>
-          ))}
-        </div>
+        <ErrorBanner>
+          <div className="flex flex-col gap-1">
+            {errors.map((error, index) => (
+              <span key={`${error}-${index}`}>{ERROR_MESSAGES[error]}</span>
+            ))}
+          </div>
+        </ErrorBanner>
       )}
     </div>
   )

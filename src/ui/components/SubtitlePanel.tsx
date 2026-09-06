@@ -5,6 +5,7 @@ import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUse
 import type { SubtitlesStorageError } from '@application/subtitles/ports'
 import type { SubtitlesState } from '@ui/hooks/useSubtitles'
 import { Button } from '@ui/components/Button'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 
 function toFileName(projectName: string | undefined, projectId: string): string {
   const base = projectName?.trim() || projectId
@@ -131,11 +132,7 @@ export function SubtitlePanel({
         {generateButtonLabel(state, !!subtitles)}
       </Button>
 
-      {state === 'error' && error && (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {ERROR_MESSAGES[error] ?? error}
-        </div>
-      )}
+      {state === 'error' && error && <ErrorBanner>{ERROR_MESSAGES[error] ?? error}</ErrorBanner>}
 
       <Button variant="secondary" onClick={handleImportClick} className="w-auto">
         Importar SRT/VTT

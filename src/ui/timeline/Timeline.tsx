@@ -6,6 +6,7 @@ import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
 import { formatTimelineMs } from '@ui/format'
 import { ConfirmDialog } from '@ui/components/ConfirmDialog'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { TimeRuler } from './TimeRuler'
 import { Track } from './Track'
 import type { useTimeline } from './useTimeline'
@@ -325,11 +326,7 @@ export function Timeline({
 
   if (!timeline) {
     if (error) {
-      return (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {ERROR_MESSAGES[error]}
-        </div>
-      )
+      return <ErrorBanner>{ERROR_MESSAGES[error]}</ErrorBanner>
     }
     return null
   }
@@ -525,11 +522,7 @@ export function Timeline({
         </div>
       </div>
 
-      {error && (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {ERROR_MESSAGES[error]}
-        </div>
-      )}
+      {error && <ErrorBanner>{ERROR_MESSAGES[error]}</ErrorBanner>}
 
       {removedChips.length > 0 && silenceChipsVisible && (
         // Carrusel de una sola línea (no crece a varias filas por más chips
@@ -572,11 +565,7 @@ export function Timeline({
         </div>
       )}
 
-      {exportError && (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {exportError}
-        </div>
-      )}
+      {exportError && <ErrorBanner>{exportError}</ErrorBanner>}
 
       {exportCompleted && (
         <div role="status" className="rounded-lg bg-success-bg px-3 py-2 text-sm text-success">

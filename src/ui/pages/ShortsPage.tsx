@@ -7,6 +7,7 @@ import type { ShortIdeal } from '@domain/shorts'
 import { shortKey } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { useAuth } from '@ui/auth/useAuth'
 import { useShorts } from '@ui/hooks/useShorts'
 import { useSubtitles } from '@ui/hooks/useSubtitles'
@@ -128,11 +129,7 @@ export function ShortsPage() {
         <h1 className="text-lg font-semibold text-text-strong">Shorts</h1>
       </div>
 
-      {persistError && (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {persistError}
-        </div>
-      )}
+      {persistError && <ErrorBanner>{persistError}</ErrorBanner>}
 
       <CreateShortsTool
         hasAccess={hasShortsAccess}

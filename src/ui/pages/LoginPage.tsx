@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@ui/auth/useAuth'
 import { AuthLayout } from '@ui/components/AuthLayout'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { FormField } from '@ui/components/FormField'
 import { Button } from '@ui/components/Button'
 import { GoogleButton } from '@ui/components/GoogleButton'
@@ -64,11 +65,7 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && (
-          <p role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-            {error}
-          </p>
-        )}
+        {error && <ErrorBanner as="p">{error}</ErrorBanner>}
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Ingresando…' : 'Ingresar'}
         </Button>

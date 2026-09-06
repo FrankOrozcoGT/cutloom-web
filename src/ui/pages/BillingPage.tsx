@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import type { Subscription } from '@domain/billing'
 import { useAuth } from '@ui/auth/useAuth'
 import { Button } from '@ui/components/Button'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { billingApi } from '@ui/billing/composition'
 import { formatPlanAmount } from '@ui/billing/format'
 import { PlanCard } from '@ui/billing/PlanCard'
@@ -128,7 +129,7 @@ export function BillingPage() {
       </div>
 
       {message && <p className="rounded-lg bg-accent-bg px-3 py-2 text-sm text-accent">{message}</p>}
-      {error && <p className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">{error}</p>}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {plans.map((plan) => {

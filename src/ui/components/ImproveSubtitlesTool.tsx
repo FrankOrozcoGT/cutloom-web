@@ -3,6 +3,7 @@ import type { ShortsErrorCode } from '@application/shorts/errors'
 import type { ImproveSubtitlesState } from '@ui/hooks/useShorts'
 import { BlockingLoader } from '@ui/components/BlockingLoader'
 import { Button } from '@ui/components/Button'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { PremiumNotice } from '@ui/billing/PremiumNotice'
 import { SHORTS_ERROR_MESSAGES } from '@ui/shorts/errorMessages'
 
@@ -48,11 +49,7 @@ export function ImproveSubtitlesTool({ hasAccess, hasSubtitles, state, error, on
         {improveButtonLabel(state)}
       </Button>
 
-      {state === 'error' && error && (
-        <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-          {SHORTS_ERROR_MESSAGES[error]}
-        </div>
-      )}
+      {state === 'error' && error && <ErrorBanner>{SHORTS_ERROR_MESSAGES[error]}</ErrorBanner>}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import type { ShortScore } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
 import type { ExportOptions } from '@application/video/exportTypes'
 import { Button } from '@ui/components/Button'
+import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useExport } from '@ui/hooks/useExport'
 
@@ -228,11 +229,7 @@ export function ShortCard({
           </span>
         </Button>
 
-        {error && (
-          <div role="alert" className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger">
-            {error}
-          </div>
-        )}
+        {error && <ErrorBanner>{error}</ErrorBanner>}
       </div>
     </div>
   )
