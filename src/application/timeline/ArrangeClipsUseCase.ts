@@ -179,28 +179,29 @@ export class ArrangeClipsUseCase {
   /**
    * Quita varios tramos [startMs, endMs) del timeline en una sola operación
    * (p.ej. todos los silencios detectados de una vez) — removeSegments del
-   * dominio ya resuelve el lote completo sobre el timeline en memoria; acá
-   * solo se persiste el resultado final, igual que cualquier otra acción de
-   * este caso de uso. Deshacer con Ctrl+Z revierte los N cortes juntos, no de
-   * a uno, porque llega como un único cambio a useTimeline.
+   * dominio ya resuelve el lote completo sobre el timeline en memoria.
+   * Usa el mismo readModifyWrite atómico que loadApplyAndSave (get+save en
+   * la MISMA transacción) para no reabrir la misma ventana de lost-update
+   * que ya se cerró para el resto de operaciones — `removed` se captura del
+   * closure porque readModifyWrite solo devuelve el Timeline resultante, no
+   * el shape compuesto {timeline, removed} que este método necesita.
+   * Deshacer con Ctrl+Z revierte los N cortes juntos, no de a uno, porque
+   * llega como un único cambio a useTimeline.
    */
   async removeSegments(
     projectId: string,
     cuts: { startMs: number; endMs: number }[],
   ): Promise<Result<{ timeline: Timeline; removed: RemovedSegment[] }, ArrangeError>> {
-    const timelineResult = await this.getTimeline(projectId)
-    if (!timelineResult.ok) {
-      return err(timelineResult.error)
+    let removed: RemovedSegment[] = []
+    const result = await this.storage.readModifyWrite<never>(projectId, (existing) => {
+      const applied = removeSegmentsInDomain(existing ?? this.createNewTimeline(projectId), cuts)
+      removed = applied.removed
+      return ok(applied.timeline)
+    })
+    if (!result.ok) {
+      return err(isTimelineStorageError(result.error) ? mapStorageError(result.error) : result.error)
     }
-
-    const result = removeSegmentsInDomain(timelineResult.value, cuts)
-
-    const saveResult = await this.storage.save(result.timeline)
-    if (!saveResult.ok) {
-      return err('STORAGE_ERROR')
-    }
-
-    return ok(result)
+    return ok({ timeline: result.value, removed })
   }
 
   /**
