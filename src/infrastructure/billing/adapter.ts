@@ -1,10 +1,19 @@
-import type { ChangePlanResult, CheckoutLink, CreditBalance, DonationLink, Plan, Subscription } from '@domain/billing'
+import type {
+  CancelSubscriptionResult,
+  ChangePlanResult,
+  CheckoutLink,
+  CreditBalance,
+  DonationLink,
+  Plan,
+  Subscription,
+} from '@domain/billing'
 import type { BillingApi } from '@application/billing/ports'
 import { BillingError } from '@application/billing/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
 import {
   mapBillingError,
+  mapCancelSubscriptionResult,
   mapChangePlanResult,
   mapCheckoutLink,
   mapCreditBalance,
@@ -63,13 +72,13 @@ export class BillingApiAdapter implements BillingApi {
     return ok(mapCheckoutLink(body))
   }
 
-  async cancel(): Promise<Result<CancelSubscriptionResultDto, BillingError>> {
+  async cancel(): Promise<Result<CancelSubscriptionResult, BillingError>> {
     const response = await this.http.post('/api/billing/cancel')
     if (!response.ok) {
       return err(await this.parseError(response))
     }
     const body = (await response.json()) as CancelSubscriptionResultDto
-    return ok(body)
+    return ok(mapCancelSubscriptionResult(body))
   }
 
   async changePlan(planId: string): Promise<Result<ChangePlanResult, BillingError>> {

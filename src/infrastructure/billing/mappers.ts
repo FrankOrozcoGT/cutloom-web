@@ -1,4 +1,5 @@
 import type {
+  CancelSubscriptionResult,
   ChangePlanResult,
   CheckoutLink,
   CreditBalance,
@@ -107,6 +108,10 @@ export function mapCheckoutLink(dto: CheckoutLinkDto): CheckoutLink {
 
 export function mapDonationLink(dto: DonationLinkDto): DonationLink {
   return { donationUrl: dto.donationUrl }
+}
+
+export function mapCancelSubscriptionResult(dto: CancelSubscriptionResultDto): CancelSubscriptionResult {
+  return { cancelAtPeriodEnd: dto.cancelAtPeriodEnd, currentPeriodEnd: dto.currentPeriodEnd }
 }
 
 const KNOWN_ERROR_CODES: readonly BillingErrorCode[] = [

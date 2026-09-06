@@ -41,3 +41,8 @@ export interface CheckoutLink {
 export interface DonationLink {
   donationUrl: string
 }
+
+export interface CancelSubscriptionResult {
+  cancelAtPeriodEnd: boolean
+  currentPeriodEnd: string
+}
