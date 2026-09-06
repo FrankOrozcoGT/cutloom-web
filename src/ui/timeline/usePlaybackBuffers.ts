@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { VideoAsset } from '@domain/video'
 
 export interface PlaybackBuffer {
@@ -16,13 +16,32 @@ interface ClipRef {
 function loadBuffer(prev: PlaybackBuffer, clip: ClipRef | null, assets: Record<string, VideoAsset>): PlaybackBuffer {
   if (!clip) return prev
   const asset = assets[clip.assetId]
-  if (!asset) {
-    if (prev.url) URL.revokeObjectURL(prev.url)
-    return EMPTY_BUFFER
-  }
+  if (!asset) return EMPTY_BUFFER
   if (prev.clipId === clip.id) return prev
-  if (prev.url) URL.revokeObjectURL(prev.url)
   return { clipId: clip.id, url: URL.createObjectURL(asset.blob) }
+}
+
+/**
+ * Revoca `url` un tick después de que React ya haya commiteado el nuevo
+ * valor al DOM (efecto separado, corre después del render) — revocar en el
+ * mismo cálculo que produce el buffer nuevo puede invalidar la blob URL
+ * mientras el <video> todavía apunta a ella (net::ERR_FILE_NOT_FOUND).
+ */
+function useRevokeOnChange(url: string): void {
+  const prevUrl = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (prevUrl.current && prevUrl.current !== url) {
+      URL.revokeObjectURL(prevUrl.current)
+    }
+    prevUrl.current = url || null
+  }, [url])
+
+  useEffect(() => {
+    return () => {
+      if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
+    }
+  }, [])
 }
 
 /**
@@ -49,14 +68,8 @@ export function usePlaybackBuffers(
     setBufferB((prev) => loadBuffer(prev, wantsB, assets))
   }, [wantsB, assets])
 
-  useEffect(() => {
-    return () => {
-      if (bufferA.url) URL.revokeObjectURL(bufferA.url)
-      if (bufferB.url) URL.revokeObjectURL(bufferB.url)
-    }
-    // Solo debe limpiar al desmontar el componente, no en cada cambio de buffer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useRevokeOnChange(bufferA.url)
+  useRevokeOnChange(bufferB.url)
 
   return { bufferA, bufferB }
 }
