@@ -69,6 +69,16 @@ export class IndexedDBShortsAdapter implements ShortsStoragePort {
     }
   }
 
+  async getProjectIdsWithShorts(): Promise<Result<Set<string>, ShortsStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const keys = await runTransaction(db, SHORTS_STORE, 'readonly', (store) => store.getAllKeys())
+      return ok(new Set(keys as string[]))
+    } catch {
+      return err('STORAGE_ERROR')
+    }
+  }
+
   /** Read-modify-write atómico (misma transacción IndexedDB, ver runReadModifyWrite) para actualizar el ajuste de encuadre de un short sin pisar el resto del registro ni arriesgar un lost update si dos ajustes llegan casi al mismo tiempo. */
   async updateCropOffset(
     projectId: string,

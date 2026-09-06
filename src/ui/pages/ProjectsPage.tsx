@@ -66,16 +66,8 @@ export function ProjectsPage() {
   const loadProjects = useCallback(async () => {
     const stored = await projectUseCase.getAll()
     setProjects(stored)
-    // Un chequeo por proyecto en vez de un índice bulk — el volumen esperado
-    // de proyectos por usuario es bajo, y esto evita agregar un nuevo campo
-    // a Project (o un store aparte con índice) solo para esta bandera.
-    const withShorts = await Promise.all(
-      stored.map(async (project) => {
-        const result = await shortsStorage.getByProject(project.id)
-        return result.ok && result.value ? project.id : null
-      }),
-    )
-    setProjectIdsWithShorts(new Set(withShorts.filter((id): id is string => id !== null)))
+    const result = await shortsStorage.getProjectIdsWithShorts()
+    setProjectIdsWithShorts(result.ok ? result.value : new Set())
   }, [])
 
   useEffect(() => {
