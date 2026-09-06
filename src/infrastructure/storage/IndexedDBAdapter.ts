@@ -52,11 +52,21 @@ export class IndexedDBAdapter implements VideoStorage {
 
   async deleteByProject(projectId: string): Promise<Result<void, StorageError>> {
     try {
-      const videos = await this.getByProject(projectId)
       const db = await openCutloomDB()
-      await Promise.all(
-        videos.map((video) => runTransaction(db, VIDEOS_STORE, 'readwrite', (store) => store.delete(video.id))),
-      )
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction(VIDEOS_STORE, 'readwrite')
+        const store = transaction.objectStore(VIDEOS_STORE)
+        const cursorRequest = store.index(VIDEOS_BY_PROJECT_INDEX).openKeyCursor(IDBKeyRange.only(projectId))
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result
+          if (!cursor) return
+          store.delete(cursor.primaryKey)
+          cursor.continue()
+        }
+        transaction.onerror = () => reject(transaction.error)
+        transaction.onabort = () => reject(transaction.error)
+        transaction.oncomplete = () => resolve()
+      })
       return ok(undefined)
     } catch {
       return err('UNKNOWN_ERROR')
