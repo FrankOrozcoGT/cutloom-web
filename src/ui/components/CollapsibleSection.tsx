@@ -3,11 +3,19 @@ import { useState, type ReactNode } from 'react'
 interface CollapsibleSectionProps {
   title: string
   badge?: string
+  /** Clases de color del badge — default es el acento genérico; se puede pisar para reflejar estado (éxito/error/en curso). */
+  badgeClassName?: string
   defaultOpen?: boolean
   children: ReactNode
 }
 
-export function CollapsibleSection({ title, badge, defaultOpen = false, children }: CollapsibleSectionProps) {
+export function CollapsibleSection({
+  title,
+  badge,
+  badgeClassName = 'bg-accent-bg text-accent',
+  defaultOpen = false,
+  children,
+}: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
@@ -19,9 +27,7 @@ export function CollapsibleSection({ title, badge, defaultOpen = false, children
       >
         <span className="flex items-center gap-2 text-sm font-medium text-text-strong">
           {title}
-          {badge && (
-            <span className="rounded-full bg-accent-bg px-2 py-0.5 text-xs font-normal text-accent">{badge}</span>
-          )}
+          {badge && <span className={`rounded-full px-2 py-0.5 text-xs font-normal ${badgeClassName}`}>{badge}</span>}
         </span>
         <span className="text-text-muted">{isOpen ? '▾' : '▸'}</span>
       </button>

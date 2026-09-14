@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@ui/auth/useAuth'
-import { AuthLayout } from '@ui/components/AuthLayout'
-import { Button } from '@ui/components/Button'
+import { OAuthCallbackError, OAuthCallbackPending } from '@ui/components/OAuthCallbackStatus'
 import { resolveReturnTo } from '@ui/auth/returnTo'
 
 function errorMessage(code: string): string {
@@ -51,34 +50,13 @@ export function GoogleCallbackPage() {
     const returnTo = resolveReturnTo(searchParams.get('returnTo'))
     const retryTarget = returnTo === '/projects' ? '/login' : `/login?returnTo=${encodeURIComponent(returnTo)}`
     return (
-      <AuthLayout>
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger-bg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-danger">
-              <circle cx="12" cy="12" r="10" />
-              <path strokeLinecap="round" d="M12 8v5M12 16h.01" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-text-strong">No se pudo iniciar sesión</h1>
-            <p role="alert" className="mt-1 text-sm text-text-muted">
-              {error}
-            </p>
-          </div>
-          <Button type="button" onClick={() => navigate(retryTarget, { replace: true })} className="mt-2">
-            Volver a intentar
-          </Button>
-        </div>
-      </AuthLayout>
+      <OAuthCallbackError
+        title="No se pudo iniciar sesión"
+        message={error}
+        onRetry={() => navigate(retryTarget, { replace: true })}
+      />
     )
   }
 
-  return (
-    <AuthLayout>
-      <div className="flex flex-col items-center gap-4 py-4 text-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
-        <p className="text-sm text-text-muted">Completando inicio de sesión con Google…</p>
-      </div>
-    </AuthLayout>
-  )
+  return <OAuthCallbackPending message="Completando inicio de sesión con Google…" />
 }
