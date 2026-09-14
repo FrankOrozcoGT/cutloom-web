@@ -131,13 +131,14 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
   // pierde la metadata ya generada y no hay forma de saber si un source ya
   // se publicó antes.
   const initItems = useCallback((seriesItems: PublishSeriesItem[], persisted?: Record<string, PublishedSourceRecord>) => {
-    const withPersisted = seriesItems.map((item): PublishSeriesItem => {
+    const withPersisted = seriesItems.map((item) => {
       const record = persisted?.[item.sourceId]
       if (!record) return item
       const state: PublishItemState = record.result?.status ?? 'ready'
-      if (item.videoType === 'long') {
-        return { ...item, revision: record.revision, result: record.result, state }
-      }
+      // El spread sobre `item` (una unión discriminada) preserva su rama
+      // concreta (PublishLongSeriesItem o PublishShortSeriesItem) porque
+      // TypeScript infiere el tipo de retorno del literal, no de PublishSeriesItem —
+      // no hace falta bifurcar por videoType para que el tipo quede bien inferido.
       return { ...item, revision: record.revision, result: record.result, state }
     })
     setItems(Object.fromEntries(withPersisted.map((item) => [item.sourceId, item])))

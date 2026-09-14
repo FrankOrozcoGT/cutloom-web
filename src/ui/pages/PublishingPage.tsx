@@ -10,7 +10,7 @@ import { PremiumNotice } from '@ui/billing/PremiumNotice'
 import { PublishItemCard } from '@ui/components/PublishItemCard'
 import { PublishSchedule } from '@ui/components/PublishSchedule'
 import { GenerateMetadataModal } from '@ui/components/GenerateMetadataModal'
-import { usePublishYouTube, type PublishSeriesItem } from '@ui/hooks/usePublishYouTube'
+import { usePublishYouTube, type PublishItemState, type PublishSeriesItem } from '@ui/hooks/usePublishYouTube'
 import { shortsStorage, projectUseCase } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 import { subtitlesStorage } from '@ui/subtitles/composition'
@@ -21,6 +21,23 @@ import type { ShortScore } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
 
 const MAX_ITEMS_PER_BULK = 10
+
+/** Switch exhaustivo (no un array de strings) — si PublishItemState gana un valor nuevo, TS obliga a decidir explícitamente si cuenta como "ya publicado" en vez de quedar desactualizado en silencio. */
+function isAlreadyPublishedState(state: PublishItemState): boolean {
+  switch (state) {
+    case 'uploaded':
+    case 'scheduled':
+      return true
+    case 'idle':
+    case 'generating':
+    case 'ready':
+    case 'exporting':
+    case 'uploading':
+    case 'failed':
+    case 'unknown':
+      return false
+  }
+}
 
 /** sourceId derivado del short: estable mientras no se regeneren los shorts del proyecto (mismo criterio que shortKey). */
 function shortSourceId(projectId: string, short: Pick<ShortScore, 'startMs' | 'endMs'>): string {
@@ -133,9 +150,10 @@ export function PublishingPage() {
   const anySelectedGenerating = [...selected].some((sourceId) => publishState.items[sourceId]?.state === 'generating')
   // No se puede publicar si algún seleccionado no tiene metadata generada todavía — bloquea el botón, no solo el intento de submit.
   const anySelectedWithoutMetadata = [...selected].some((sourceId) => !publishState.items[sourceId]?.revision)
-  const anySelectedAlreadyPublished = [...selected].some((sourceId) =>
-    ['uploaded', 'scheduled'].includes(publishState.items[sourceId]?.state ?? ''),
-  )
+  const anySelectedAlreadyPublished = [...selected].some((sourceId) => {
+    const state = publishState.items[sourceId]?.state
+    return state !== undefined && isAlreadyPublishedState(state)
+  })
 
   function toggleSelected(sourceId: string) {
     setSelected((prev) => {
