@@ -2,12 +2,7 @@ import { useCallback, useState } from 'react'
 import type { DetectedCandidate, ImprovedSubtitle, ProjectShorts, ShortIdeal, ShortScore } from '@domain/shorts'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { ShortsErrorCode } from '@application/shorts/errors'
-import {
-  detectShortsUseCase,
-  extractSubtitlesAudioUseCase,
-  improveSubtitlesUseCase,
-  scoreShortsUseCase,
-} from '@ui/shorts/composition'
+import { detectShortsUseCase, extractSubtitlesAudioUseCase, scoreShortsUseCase, shortsApi } from '@ui/shorts/composition'
 
 export type ImproveSubtitlesState = 'idle' | 'loading' | 'success' | 'error'
 export type CreateShortsState = 'idle' | 'extracting_audio' | 'detecting' | 'scoring' | 'success' | 'error'
@@ -50,7 +45,7 @@ export function useShorts(): UseShortsResult {
   const improveSubtitles = useCallback(async (segments: SubtitleSegment[], userContext?: string) => {
     setImproveState('loading')
     setImproveError(null)
-    const result = await improveSubtitlesUseCase.execute(segments, userContext)
+    const result = await shortsApi.improveSubtitles(segments, userContext)
     if (!result.ok) {
       setImproveError(result.error.code)
       setImproveState('error')
