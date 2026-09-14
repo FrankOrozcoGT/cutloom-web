@@ -9,6 +9,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [entitlements, setEntitlements] = useState<UserEntitlement[]>([])
+  const [youtubeConnected, setYoutubeConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const authApi = useRef(new AuthApiAdapter(httpClient)).current
 
@@ -16,6 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setOrganizationId(null)
     setEntitlements([])
+    setYoutubeConnected(false)
   }, [])
 
   // Único lugar que consulta /auth/me y aplica el resultado al estado.
@@ -31,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userResult.value.user)
       setOrganizationId(userResult.value.organizationId)
       setEntitlements(userResult.value.entitlements)
+      setYoutubeConnected(userResult.value.youtubeConnected)
       return null
     },
     [authApi],
@@ -102,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       organizationId,
       entitlements,
+      youtubeConnected,
       isAuthenticated: user !== null,
       isLoading,
       login,
@@ -110,7 +114,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasActiveFeature,
       refreshEntitlements,
     }),
-    [user, organizationId, entitlements, isLoading, login, register, logout, hasActiveFeature, refreshEntitlements],
+    [
+      user,
+      organizationId,
+      entitlements,
+      youtubeConnected,
+      isLoading,
+      login,
+      register,
+      logout,
+      hasActiveFeature,
+      refreshEntitlements,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

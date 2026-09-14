@@ -30,6 +30,7 @@ export interface CurrentUser {
   user: User
   organizationId: string | null
   entitlements: UserEntitlement[]
+  youtubeConnected: boolean
 }
 
 export type AuthErrorCode =

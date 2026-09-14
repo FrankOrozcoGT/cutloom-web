@@ -6,6 +6,7 @@ export interface AuthContextValue {
   user: User | null
   organizationId: string | null
   entitlements: UserEntitlement[]
+  youtubeConnected: boolean
   isAuthenticated: boolean
   isLoading: boolean
   login: (credentials: AuthCredentials) => Promise<AuthError | null>

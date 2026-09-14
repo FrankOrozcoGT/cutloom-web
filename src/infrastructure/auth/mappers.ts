@@ -27,6 +27,7 @@ export interface CurrentUserDto {
   user: UserDto
   organizationId: string | null
   entitlements: UserEntitlementDto[]
+  youtubeConnected: boolean
 }
 
 export function mapUser(dto: UserDto): User {
@@ -61,6 +62,7 @@ export function mapCurrentUser(dto: CurrentUserDto): CurrentUser {
     user: mapUser(dto.user),
     organizationId: dto.organizationId,
     entitlements: dto.entitlements.map(mapUserEntitlement),
+    youtubeConnected: dto.youtubeConnected,
   }
 }
 
