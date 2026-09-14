@@ -11,6 +11,31 @@ export interface ExportOptions {
   height: number
 }
 
+/** Extensión de archivo para el formato exportado — único punto de verdad reusado por descarga manual y publicación en YouTube. */
+export function fileExtensionFor(format: VideoFormat): string {
+  return format === 'video/mp4' ? 'mp4' : 'webm'
+}
+
+/** Export landscape por defecto — usado para el video completo del timeline (descarga manual y publicación del item 'long'). */
+export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
+  format: 'video/webm',
+  fps: 30,
+  width: 1280,
+  height: 720,
+}
+
+// Formato estándar de shorts verticales (YouTube Shorts, TikTok, Reels):
+// 1080x1920 9:16. El compositor de export rellena con blur el espacio que
+// deja el video horizontal original en vez de recortarlo o deformarlo.
+// Único punto de verdad — ShortCard (descarga manual) y usePublishYouTube
+// (publicar en YouTube) deben producir el mismo recorte para el mismo short.
+export const SHORT_EXPORT_OPTIONS: ExportOptions = {
+  format: 'video/mp4',
+  fps: 30,
+  width: 1080,
+  height: 1920,
+}
+
 export interface ClipRenderSegment {
   kind: 'clip'
   clipId: string

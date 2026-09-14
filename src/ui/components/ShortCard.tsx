@@ -4,21 +4,11 @@ import type { Timeline } from '@domain/timeline'
 import { estimateMaxCharsForCue, splitLongSubtitleCues, type SubtitleSegment } from '@domain/subtitles'
 import type { ShortScore } from '@domain/shorts'
 import type { VideoAsset } from '@domain/video'
-import type { ExportOptions } from '@application/video/exportTypes'
+import { SHORT_EXPORT_OPTIONS } from '@application/video/exportTypes'
 import { Button } from '@ui/components/Button'
 import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
 import { useExport } from '@ui/hooks/useExport'
-
-// Formato estándar de shorts verticales (YouTube Shorts, TikTok, Reels):
-// 1080x1920 9:16. El compositor de export rellena con blur el espacio que
-// deja el video horizontal original en vez de recortarlo o deformarlo.
-const SHORT_EXPORT_OPTIONS: ExportOptions = {
-  format: 'video/mp4',
-  fps: 30,
-  width: 1080,
-  height: 1920,
-}
 
 const STAR_COUNT = 5
 // Los scores reales del backend caen casi siempre en 0.4-1.0 — mapear ese

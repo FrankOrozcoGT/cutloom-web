@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ExportError, ExportOptions, ExportPhase } from '@application/video/exportTypes'
+import {
+  DEFAULT_EXPORT_OPTIONS,
+  fileExtensionFor,
+  type ExportError,
+  type ExportOptions,
+  type ExportPhase,
+} from '@application/video/exportTypes'
 import type { ExportWorkerMessage, ExportWorkerResponse } from '@infrastructure/video/export.worker'
 
 const PHASE_LABELS: Record<ExportPhase, string> = {
@@ -8,13 +14,6 @@ const PHASE_LABELS: Record<ExportPhase, string> = {
   encoding: 'Codificando video…',
   muxing: 'Generando archivo…',
   done: 'Exportación completada',
-}
-
-const DEFAULT_OPTIONS: ExportOptions = {
-  format: 'video/webm',
-  fps: 30,
-  width: 1280,
-  height: 720,
 }
 
 const ALTERNATIVE_FORMAT: Record<ExportOptions['format'], ExportOptions['format']> = {
@@ -44,10 +43,31 @@ function isExportError(value: string): value is ExportError {
   return (EXPORT_ERROR_CODES as string[]).includes(value)
 }
 
-function errorMessage(error: string, options: ExportOptions, alreadyRetried: boolean): string {
-  if (!isExportError(error)) {
-    return `Ocurrió un error inesperado durante la exportación: ${error}`
-  }
+// String literal (no unique symbol): TypeScript no angosta uniones
+// discriminadas por symbol de forma consistente (issues #36463/#23135), y la
+// comunidad usa string literals derivados de un objeto as const como patrón
+// estándar (action types) — mismo objeto-constante, sin el problema de narrowing.
+export const ExportFailureKind = { Known: 'Known', Unknown: 'Unknown' } as const
+
+const RunExportModeKind = { Download: 'Download', Blob: 'Blob' } as const
+
+// El worker mezcla códigos conocidos (ExportError) con mensajes libres de
+// crasheo real (INIT_FAILED/UNCAUGHT/UNHANDLED_REJECTION, ver export.worker.ts)
+// — son dos vocabularios distintos y honestos, no un descuido de tipado.
+// ExportFailure preserva esa distinción para quien consuma exportProjectToBlob,
+// en vez de degradar todo a un string plano indiferenciado.
+export type ExportFailure =
+  | { kind: typeof ExportFailureKind.Known; code: ExportError }
+  | { kind: typeof ExportFailureKind.Unknown; message: string }
+
+function toExportFailure(raw: string): ExportFailure {
+  return isExportError(raw)
+    ? { kind: ExportFailureKind.Known, code: raw }
+    : { kind: ExportFailureKind.Unknown, message: raw }
+}
+
+/** Mensaje legible para un ExportError conocido — reusado por cualquier consumidor de exportProjectToBlob (ej. usePublishYouTube) además de este hook, para no duplicar el switch. */
+export function exportErrorCodeMessage(error: ExportError): string {
   switch (error) {
     case 'EMPTY_TIMELINE':
       return 'El timeline no tiene clips para exportar.'
@@ -55,17 +75,8 @@ function errorMessage(error: string, options: ExportOptions, alreadyRetried: boo
       return 'Un clip hace referencia a un video que ya no existe.'
     case 'UNSUPPORTED_API':
       return 'Este navegador no soporta la exportación de video (WebCodecs).'
-    case 'UNSUPPORTED_CODEC': {
-      // Si ya se reintentó con el formato alternativo (ver runExport) y
-      // también falló, no queda un tercer formato que sugerir — options acá
-      // ya ES el fallback, así que ALTERNATIVE_FORMAT[options.format]
-      // apuntaría de vuelta al formato original ya descartado.
-      if (alreadyRetried) {
-        return 'Este navegador no soporta ningún formato de video disponible para exportar.'
-      }
-      const extension = ALTERNATIVE_FORMAT[options.format] === 'video/mp4' ? 'MP4' : 'WebM'
-      return `El formato solicitado no está disponible en este navegador. Prueba exportar en ${extension}.`
-    }
+    case 'UNSUPPORTED_CODEC':
+      return 'El formato solicitado no está disponible en este navegador.'
     case 'MUX_FAILED':
       return 'No se pudo generar el archivo de video.'
     case 'ENCODING_ERROR':
@@ -77,6 +88,25 @@ function errorMessage(error: string, options: ExportOptions, alreadyRetried: boo
     case 'ABORTED':
       return 'Exportación cancelada.'
   }
+}
+
+/** Mensaje legible para el estado interno del hook — agrega el detalle de reintento de formato y el mensaje libre de crasheo, específicos de este flujo (descarga/export en curso). */
+function errorMessage(error: string, options: ExportOptions, alreadyRetried: boolean): string {
+  if (!isExportError(error)) {
+    return `Ocurrió un error inesperado durante la exportación: ${error}`
+  }
+  if (error === 'UNSUPPORTED_CODEC') {
+    // Si ya se reintentó con el formato alternativo (ver runExport) y también
+    // falló, no queda un tercer formato que sugerir — options acá ya ES el
+    // fallback, así que ALTERNATIVE_FORMAT[options.format] apuntaría de
+    // vuelta al formato original ya descartado.
+    if (alreadyRetried) {
+      return 'Este navegador no soporta ningún formato de video disponible para exportar.'
+    }
+    const extension = ALTERNATIVE_FORMAT[options.format] === 'video/mp4' ? 'MP4' : 'WebM'
+    return `El formato solicitado no está disponible en este navegador. Prueba exportar en ${extension}.`
+  }
+  return exportErrorCodeMessage(error)
 }
 
 export function useExport() {
@@ -107,6 +137,10 @@ export function useExport() {
     }
   }, [])
 
+  type RunExportMode =
+    | { kind: typeof RunExportModeKind.Download }
+    | { kind: typeof RunExportModeKind.Blob; resolve: (result: { ok: true; blob: Blob } | { ok: false; error: ExportFailure }) => void }
+
   const runExport = useCallback(
     (
       projectId: string,
@@ -115,6 +149,7 @@ export function useExport() {
       range: { startMs: number; endMs: number } | undefined,
       cropOffsetX: number | undefined,
       isRetry: boolean,
+      mode: RunExportMode,
     ) => {
       const worker = new Worker(new URL('@infrastructure/video/export.worker.ts', import.meta.url), {
         type: 'module',
@@ -128,6 +163,15 @@ export function useExport() {
       setCompleted(false)
       setDownloadedFileName(null)
       setAborting(false)
+
+      const finishExport = () => {
+        setProgress(100)
+        setPhaseLabel('')
+        setExporting(false)
+        setCompleted(true)
+        worker.terminate()
+        workerRef.current = null
+      }
 
       worker.onmessage = (event: MessageEvent<ExportWorkerResponse>) => {
         const message = event.data
@@ -149,7 +193,7 @@ export function useExport() {
             worker.terminate()
             workerRef.current = null
             const fallbackOptions = { ...options, format: ALTERNATIVE_FORMAT[options.format] }
-            runExport(projectId, projectName, fallbackOptions, range, cropOffsetX, true)
+            runExport(projectId, projectName, fallbackOptions, range, cropOffsetX, true, mode)
             return
           }
           if (message.error !== 'ABORTED') {
@@ -161,12 +205,20 @@ export function useExport() {
           setAborting(false)
           worker.terminate()
           workerRef.current = null
+          if (mode.kind === RunExportModeKind.Blob) {
+            mode.resolve({ ok: false, error: toExportFailure(message.error) })
+          }
+          return
+        }
+
+        if (mode.kind === RunExportModeKind.Blob) {
+          finishExport()
+          mode.resolve({ ok: true, blob: message.blob })
           return
         }
 
         const url = URL.createObjectURL(message.blob)
-        const extension = options.format === 'video/mp4' ? 'mp4' : 'webm'
-        const fileName = `${toFileName(projectName, projectId)}.${extension}`
+        const fileName = `${toFileName(projectName, projectId)}.${fileExtensionFor(options.format)}`
         const link = document.createElement('a')
         link.href = url
         link.download = fileName
@@ -175,13 +227,8 @@ export function useExport() {
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
 
-        setProgress(100)
-        setPhaseLabel('')
-        setExporting(false)
-        setCompleted(true)
+        finishExport()
         setDownloadedFileName(fileName)
-        worker.terminate()
-        workerRef.current = null
       }
 
       worker.onerror = (event) => {
@@ -192,6 +239,9 @@ export function useExport() {
         setAborting(false)
         worker.terminate()
         workerRef.current = null
+        if (mode.kind === RunExportModeKind.Blob) {
+          mode.resolve({ ok: false, error: { kind: ExportFailureKind.Unknown, message: event.message } })
+        }
       }
 
       const request: ExportWorkerMessage = { type: 'export', projectId, options, range, cropOffsetX }
@@ -204,11 +254,26 @@ export function useExport() {
     (
       projectId: string,
       projectName?: string,
-      options: ExportOptions = DEFAULT_OPTIONS,
+      options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
       range?: { startMs: number; endMs: number },
       cropOffsetX?: number,
     ) => {
-      runExport(projectId, projectName, options, range, cropOffsetX, false)
+      runExport(projectId, projectName, options, range, cropOffsetX, false, { kind: RunExportModeKind.Download })
+    },
+    [runExport],
+  )
+
+  const exportProjectToBlob = useCallback(
+    (
+      projectId: string,
+      projectName?: string,
+      options: ExportOptions = DEFAULT_EXPORT_OPTIONS,
+      range?: { startMs: number; endMs: number },
+      cropOffsetX?: number,
+    ): Promise<{ ok: true; blob: Blob } | { ok: false; error: ExportFailure }> => {
+      return new Promise((resolve) => {
+        runExport(projectId, projectName, options, range, cropOffsetX, false, { kind: RunExportModeKind.Blob, resolve })
+      })
     },
     [runExport],
   )
@@ -229,6 +294,7 @@ export function useExport() {
     downloadedFileName,
     aborting,
     exportProject,
+    exportProjectToBlob,
     abortExport,
   }
 }
