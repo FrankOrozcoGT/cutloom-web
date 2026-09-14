@@ -31,6 +31,10 @@ export interface CurrentUser {
   organizationId: string | null
   entitlements: UserEntitlement[]
   youtubeConnected: boolean
+  /** null aunque youtubeConnected sea true si la conexión se hizo con el scope viejo (antes de pedir email/canal) — hace falta reconectar para que aparezca. */
+  youtubeGoogleEmail: string | null
+  /** Mismo caso de null que youtubeGoogleEmail. */
+  youtubeChannelTitle: string | null
 }
 
 export type AuthErrorCode =

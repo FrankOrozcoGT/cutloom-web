@@ -10,6 +10,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [entitlements, setEntitlements] = useState<UserEntitlement[]>([])
   const [youtubeConnected, setYoutubeConnected] = useState(false)
+  const [youtubeGoogleEmail, setYoutubeGoogleEmail] = useState<string | null>(null)
+  const [youtubeChannelTitle, setYoutubeChannelTitle] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const authApi = useRef(new AuthApiAdapter(httpClient)).current
 
@@ -18,6 +20,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOrganizationId(null)
     setEntitlements([])
     setYoutubeConnected(false)
+    setYoutubeGoogleEmail(null)
+    setYoutubeChannelTitle(null)
   }, [])
 
   // Único lugar que consulta /auth/me y aplica el resultado al estado.
@@ -34,6 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setOrganizationId(userResult.value.organizationId)
       setEntitlements(userResult.value.entitlements)
       setYoutubeConnected(userResult.value.youtubeConnected)
+      setYoutubeGoogleEmail(userResult.value.youtubeGoogleEmail)
+      setYoutubeChannelTitle(userResult.value.youtubeChannelTitle)
       return null
     },
     [authApi],
@@ -106,6 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organizationId,
       entitlements,
       youtubeConnected,
+      youtubeGoogleEmail,
+      youtubeChannelTitle,
       isAuthenticated: user !== null,
       isLoading,
       login,
@@ -119,6 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organizationId,
       entitlements,
       youtubeConnected,
+      youtubeGoogleEmail,
+      youtubeChannelTitle,
       isLoading,
       login,
       register,

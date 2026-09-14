@@ -3,7 +3,7 @@ import { Button } from '@ui/components/Button'
 import { startYouTubeOAuth } from '@ui/publishing/oauth'
 
 export function ProfilePage() {
-  const { isAuthenticated, user, youtubeConnected } = useAuth()
+  const { isAuthenticated, user, youtubeConnected, youtubeChannelTitle } = useAuth()
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
@@ -13,14 +13,16 @@ export function ProfilePage() {
           <p className="text-text-muted">{user?.name ?? user?.email}</p>
           {youtubeConnected ? (
             <div className="flex items-center gap-3">
-              <p className="text-sm text-text-muted">YouTube conectado.</p>
+              <p className="text-sm text-text-muted">
+                {youtubeChannelTitle ? `Conectado a YouTube como ${youtubeChannelTitle}` : 'Conectado a YouTube'}
+              </p>
               <Button
                 type="button"
                 variant="secondary"
                 className="w-fit"
                 onClick={() => void startYouTubeOAuth('/profile')}
               >
-                Reconectar YouTube
+                {youtubeChannelTitle ? 'Reconectar YouTube' : 'Reconectar para ver detalles'}
               </Button>
             </div>
           ) : (
