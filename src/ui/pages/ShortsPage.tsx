@@ -127,6 +127,12 @@ export function ShortsPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <h1 className="text-lg font-semibold text-text-strong">Shorts</h1>
+        <Link
+          to={`/projects/${projectId}/publish`}
+          className="ml-auto rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-strong hover:bg-surface-hover"
+        >
+          Publicar en YouTube
+        </Link>
       </div>
 
       {persistError && <ErrorBanner>{persistError}</ErrorBanner>}

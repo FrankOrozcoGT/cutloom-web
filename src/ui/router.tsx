@@ -5,9 +5,11 @@ import { FullscreenLoader } from '@ui/components/FullscreenLoader'
 import { LoginPage } from '@ui/pages/LoginPage'
 import { RegisterPage } from '@ui/pages/RegisterPage'
 import { GoogleCallbackPage } from '@ui/pages/GoogleCallbackPage'
+import { YouTubeCallbackPage } from '@ui/pages/YouTubeCallbackPage'
 import { EditorPage } from '@ui/pages/EditorPage'
 import { ProjectsPage } from '@ui/pages/ProjectsPage'
 import { ShortsPage } from '@ui/pages/ShortsPage'
+import { PublishingPage } from '@ui/pages/PublishingPage'
 import { ProfilePage } from '@ui/pages/ProfilePage'
 import { LandingPage } from '@ui/pages/LandingPage'
 import { BillingPage } from '@ui/pages/BillingPage'
@@ -34,9 +36,6 @@ function PublicOnlyRoute({ children }: { children: ReactNode }) {
 
 const router = createBrowserRouter([
   {
-    // TODO: volver a envolver con <ProtectedRoute> cuando el login sea
-    // requerido para usar la app. Por ahora la lista de proyectos es la
-    // pantalla principal y no depende de autenticación.
     element: <AppLayout />,
     children: [
       { path: '/', element: <LandingPage /> },
@@ -44,6 +43,7 @@ const router = createBrowserRouter([
       { path: '/profile', element: <ProfilePage /> },
       { path: '/projects/:projectId', element: <EditorPage /> },
       { path: '/projects/:projectId/shorts', element: <ShortsPage /> },
+      { path: '/projects/:projectId/publish', element: <PublishingPage /> },
       { path: '/billing', element: <BillingPage /> },
       {
         path: '/billing/credits',
@@ -80,6 +80,10 @@ const router = createBrowserRouter([
   {
     path: '/auth/callback',
     element: <GoogleCallbackPage />,
+  },
+  {
+    path: '/publishing/youtube/callback',
+    element: <YouTubeCallbackPage />,
   },
 ])
 
