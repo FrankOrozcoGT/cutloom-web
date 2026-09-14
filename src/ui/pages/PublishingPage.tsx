@@ -15,6 +15,7 @@ import { shortsStorage, projectUseCase } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 import { subtitlesStorage } from '@ui/subtitles/composition'
 import { startYouTubeOAuth } from '@ui/publishing/oauth'
+import { publishingStorage } from '@ui/publishing/composition'
 import type { Timeline } from '@domain/timeline'
 import type { ShortScore } from '@domain/shorts'
 import type { Subtitles } from '@domain/subtitles'
@@ -90,30 +91,33 @@ export function PublishingPage() {
             result: null,
           }
 
-          void shortsStorage.getByProject(projectId).then((shortsResult) => {
-            const projectShorts = shortsResult.ok ? shortsResult.value : null
-            const shortItems: PublishSeriesItem[] = (projectShorts?.shorts ?? []).map((short) => ({
-              sourceId: shortSourceId(projectId, short),
-              videoType: 'short',
-              score: short.score,
-              range: { startMs: short.startMs, endMs: short.endMs },
-              cropOffsetX: projectShorts?.cropOffsetXByShort?.[shortKey(short)],
-              context: {
-                ...toMetadataContext(subtitles, project?.description, { startMs: short.startMs, endMs: short.endMs }),
-                detectedReason: short.reason,
+          void Promise.all([shortsStorage.getByProject(projectId), publishingStorage.getByProject(projectId)]).then(
+            ([shortsResult, publishingResult]) => {
+              const projectShorts = shortsResult.ok ? shortsResult.value : null
+              const persisted = publishingResult.ok ? publishingResult.value?.bySourceId : undefined
+              const shortItems: PublishSeriesItem[] = (projectShorts?.shorts ?? []).map((short) => ({
+                sourceId: shortSourceId(projectId, short),
+                videoType: 'short',
                 score: short.score,
-              },
-              state: 'idle' as const,
-              revision: null,
-              error: null,
-              result: null,
-            }))
-            setShorts(projectShorts?.shorts ?? [])
-            const seriesItems = durationOk ? [longItem, ...shortItems] : shortItems
-            publishState.initItems(seriesItems)
-            // Por default se publica toda la serie — el usuario destilda lo que no quiera enviar.
-            setSelected(new Set(seriesItems.slice(0, MAX_ITEMS_PER_BULK).map((item) => item.sourceId)))
-          })
+                range: { startMs: short.startMs, endMs: short.endMs },
+                cropOffsetX: projectShorts?.cropOffsetXByShort?.[shortKey(short)],
+                context: {
+                  ...toMetadataContext(subtitles, project?.description, { startMs: short.startMs, endMs: short.endMs }),
+                  detectedReason: short.reason,
+                  score: short.score,
+                },
+                state: 'idle' as const,
+                revision: null,
+                error: null,
+                result: null,
+              }))
+              setShorts(projectShorts?.shorts ?? [])
+              const seriesItems = durationOk ? [longItem, ...shortItems] : shortItems
+              publishState.initItems(seriesItems, persisted)
+              // Por default se publica toda la serie — el usuario destilda lo que no quiera enviar.
+              setSelected(new Set(seriesItems.slice(0, MAX_ITEMS_PER_BULK).map((item) => item.sourceId)))
+            },
+          )
         },
       )
     })
@@ -127,6 +131,11 @@ export function PublishingPage() {
   const wizardRunning = publishState.metadataProgress !== null
   // Cualquier item seleccionado que todavía esté generando/regenerando metadata (individualmente, vía "Regenerar con feedback") bloquea publicar, no solo el wizard general.
   const anySelectedGenerating = [...selected].some((sourceId) => publishState.items[sourceId]?.state === 'generating')
+  // No se puede publicar si algún seleccionado no tiene metadata generada todavía — bloquea el botón, no solo el intento de submit.
+  const anySelectedWithoutMetadata = [...selected].some((sourceId) => !publishState.items[sourceId]?.revision)
+  const anySelectedAlreadyPublished = [...selected].some((sourceId) =>
+    ['uploaded', 'scheduled'].includes(publishState.items[sourceId]?.state ?? ''),
+  )
 
   function toggleSelected(sourceId: string) {
     setSelected((prev) => {
@@ -224,6 +233,12 @@ export function PublishingPage() {
         ))}
       </div>
 
+      {anySelectedWithoutMetadata && (
+        <ErrorBanner variant="warning">
+          Generá los metadatos de todos los videos seleccionados antes de publicar.
+        </ErrorBanner>
+      )}
+
       <Button
         type="button"
         disabled={
@@ -231,10 +246,16 @@ export function PublishingPage() {
           overLimit ||
           wizardRunning ||
           anySelectedGenerating ||
+          anySelectedWithoutMetadata ||
           publishState.isPublishing ||
           !youtubeConnected
         }
-        onClick={() => void publishState.publish([...selected])}
+        onClick={() => {
+          if (anySelectedAlreadyPublished && !window.confirm('Algunos videos seleccionados ya fueron publicados. ¿Querés volver a publicarlos?')) {
+            return
+          }
+          void publishState.publish([...selected])
+        }}
       >
         {publishState.isPublishing ? 'Publicando…' : `Publicar seleccionados (${selected.size})`}
       </Button>

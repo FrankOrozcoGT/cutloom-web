@@ -100,3 +100,26 @@ export interface BulkUploadParams {
 export interface BulkUploadResult {
   results: PublishItemResult[]
 }
+
+/**
+ * Registro persistido de un source (video largo o short) dentro de la serie
+ * de un proyecto — sobrevive a recargar PublishingPage, para poder mostrar
+ * "ya publicado" en vez de perder la metadata generada y el resultado de
+ * publicación cada vez que se sale de la pantalla.
+ */
+export interface PublishedSourceRecord {
+  sourceId: string
+  revision: MetadataRevision
+  result: PublishItemResult | null
+  updatedAt: string
+}
+
+/** Un proyecto = una serie (video largo + sus shorts) — bySourceId cubre ambos, keyed por sourceId (projectId para el largo, projectId::short::<key> para cada short). Vive en su propio storage, no en ProjectShorts, porque el video largo no es un short. */
+export interface ProjectPublishing {
+  projectId: string
+  bySourceId: Record<string, PublishedSourceRecord>
+}
+
+export function buildPublishedSourceRecord(sourceId: string, revision: MetadataRevision, result: PublishItemResult | null): PublishedSourceRecord {
+  return { sourceId, revision, result, updatedAt: new Date().toISOString() }
+}

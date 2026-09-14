@@ -1,16 +1,18 @@
 import { useCallback, useState } from 'react'
 import {
+  buildPublishedSourceRecord,
   PublishItemErrorKind,
   type BulkUploadVideo,
   type MetadataContext,
   type MetadataRevision,
+  type PublishedSourceRecord,
   type PublishItem,
   type PublishItemError,
   type PublishItemResult,
 } from '@domain/publishing'
 import type { PublishingErrorCode } from '@application/publishing/errors'
 import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
-import { publishingApi } from '@ui/publishing/composition'
+import { publishingApi, publishingStorage } from '@ui/publishing/composition'
 import { startYouTubeOAuth } from '@ui/publishing/oauth'
 import { useExport, type ExportFailure } from '@ui/hooks/useExport'
 import {
@@ -124,8 +126,21 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
     })
   }, [])
 
-  const initItems = useCallback((seriesItems: PublishSeriesItem[]) => {
-    setItems(Object.fromEntries(seriesItems.map((item) => [item.sourceId, item])))
+  // Aplica el registro persistido (metadata generada, resultado de un publish
+  // previo) sobre cada item recién armado — sin esto, recargar la pantalla
+  // pierde la metadata ya generada y no hay forma de saber si un source ya
+  // se publicó antes.
+  const initItems = useCallback((seriesItems: PublishSeriesItem[], persisted?: Record<string, PublishedSourceRecord>) => {
+    const withPersisted = seriesItems.map((item): PublishSeriesItem => {
+      const record = persisted?.[item.sourceId]
+      if (!record) return item
+      const state: PublishItemState = record.result?.status ?? 'ready'
+      if (item.videoType === 'long') {
+        return { ...item, revision: record.revision, result: record.result, state }
+      }
+      return { ...item, revision: record.revision, result: record.result, state }
+    })
+    setItems(Object.fromEntries(withPersisted.map((item) => [item.sourceId, item])))
   }, [])
 
   // Genera metadata para todos los sourceIds en secuencia (no en paralelo) con
@@ -133,6 +148,8 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
   // no un botón por item: el usuario llena topic/tone/additionalInstructions
   // una sola vez y estos se reenvían igual para cada item, dejando que el
   // backend infiera lo que falte a partir del context propio de cada uno.
+  // Cada resultado se persiste apenas llega (ver publishingStorage.upsertSource
+  // más abajo) para sobrevivir a recargar PublishingPage.
   const generateAllMetadata = useCallback(
     async (sourceIds: string[], input: MetadataWizardInput) => {
       setMetadataProgress({ done: 0, total: sourceIds.length })
@@ -153,6 +170,7 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
           setItem(sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Metadata, code: result.error.code } })
         } else {
           setItem(sourceId, { state: 'ready', revision: result.value, error: null })
+          await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(sourceId, result.value, item.result))
         }
 
         setMetadataProgress({ done: index + 1, total: sourceIds.length })
@@ -162,7 +180,7 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
       }
       setMetadataProgress(null)
     },
-    [items, setItem],
+    [items, projectId, setItem],
   )
 
   // Regenera un item puntual con feedback tras revisar el resultado del wizard — reenvía el mismo sourceId, el backend encadena sobre la última revisión.
@@ -176,8 +194,9 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
         return
       }
       setItem(sourceId, { state: 'ready', revision: result.value, error: null })
+      await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(sourceId, result.value, item?.result ?? null))
     },
-    [items, setItem],
+    [items, projectId, setItem],
   )
 
   const publish = useCallback(
@@ -247,6 +266,10 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
           result: itemResult,
           error: itemResult.error ? { kind: PublishItemFailureKind.Upload, error: itemResult.error } : null,
         })
+        const published = selected.find((item) => item.sourceId === itemResult.sourceId)
+        if (published?.revision) {
+          await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(itemResult.sourceId, published.revision, itemResult))
+        }
       }
 
       setIsPublishing(false)
