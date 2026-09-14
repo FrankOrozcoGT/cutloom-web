@@ -12,18 +12,18 @@ export function ProfilePage() {
         <>
           <p className="text-text-muted">{user?.name ?? user?.email}</p>
           {youtubeConnected ? (
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-text-muted">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-success">
+                <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
                 {youtubeChannelTitle ? `Conectado a YouTube como ${youtubeChannelTitle}` : 'Conectado a YouTube'}
               </p>
-              <Button
+              <button
                 type="button"
-                variant="secondary"
-                className="w-fit"
+                className="text-xs text-text-muted underline-offset-2 hover:text-text-strong hover:underline"
                 onClick={() => void startYouTubeOAuth('/profile')}
               >
-                {youtubeChannelTitle ? 'Reconectar YouTube' : 'Reconectar para ver detalles'}
-              </Button>
+                {youtubeChannelTitle ? 'Reconectar' : 'Reconectar para ver detalles'}
+              </button>
             </div>
           ) : (
             <Button type="button" className="w-fit" onClick={() => void startYouTubeOAuth('/profile')}>
