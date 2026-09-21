@@ -39,4 +39,14 @@ export class IndexedDBPublishingAdapter implements PublishingStoragePort {
       return err('STORAGE_ERROR')
     }
   }
+
+  async deleteByProject(projectId: string): Promise<Result<void, PublishingStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      await runTransaction(db, PUBLISHING_STORE, 'readwrite', (store) => store.delete(projectId))
+      return ok(undefined)
+    } catch {
+      return err('STORAGE_ERROR')
+    }
+  }
 }

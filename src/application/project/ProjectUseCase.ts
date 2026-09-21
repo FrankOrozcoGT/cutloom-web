@@ -4,6 +4,7 @@ import type { StorageError, VideoStorage } from '@application/video/ports'
 import type { TimelineStorage } from '@application/timeline/ports'
 import type { SubtitlesStoragePort } from '@application/subtitles/ports'
 import type { ShortsStoragePort } from '@application/shorts/ports'
+import type { PublishingStoragePort } from '@application/publishing/ports'
 import type { ProjectDeleteError, ProjectStorage, ProjectStorageError } from './ports'
 
 export class ProjectUseCase {
@@ -12,6 +13,7 @@ export class ProjectUseCase {
   private readonly timelines: TimelineStorage
   private readonly subtitles: SubtitlesStoragePort
   private readonly shorts: ShortsStoragePort
+  private readonly publishing: PublishingStoragePort
 
   constructor(
     projects: ProjectStorage,
@@ -19,12 +21,14 @@ export class ProjectUseCase {
     timelines: TimelineStorage,
     subtitles: SubtitlesStoragePort,
     shorts: ShortsStoragePort,
+    publishing: PublishingStoragePort,
   ) {
     this.projects = projects
     this.videos = videos
     this.timelines = timelines
     this.subtitles = subtitles
     this.shorts = shorts
+    this.publishing = publishing
   }
 
   create(name: string): Promise<Result<Project, ProjectStorageError>> {
@@ -45,13 +49,15 @@ export class ProjectUseCase {
 
   /**
    * Borra el proyecto y todo lo que le pertenece (videos, timeline,
-   * subtítulos, shorts). Sin esto, un timeline/subtítulos viejo queda
+   * subtítulos, shorts, publishing). Sin esto, un registro viejo queda
    * huérfano en IndexedDB bajo el mismo projectId si se reutiliza el id o
    * se reinicia el proyecto para pruebas — y getByProject solo lee el
    * primer registro del índice, así que ese huérfano puede reaparecer con
-   * clips fantasma. Cada paso se verifica: si cualquiera falla, se corta
-   * ahí (no se sigue borrando ni se llega a borrar el proyecto en sí) en
-   * vez de ignorar el error y reportar éxito con huérfanos parciales.
+   * clips fantasma o, en el caso de publishing, con sources marcados como
+   * ya publicados que en realidad pertenecen a un proyecto anterior. Cada
+   * paso se verifica: si cualquiera falla, se corta ahí (no se sigue
+   * borrando ni se llega a borrar el proyecto en sí) en vez de ignorar el
+   * error y reportar éxito con huérfanos parciales.
    */
   async delete(id: string): Promise<Result<void, ProjectDeleteError | StorageError>> {
     const deleteVideosResult = await this.videos.deleteByProject(id)
@@ -69,6 +75,10 @@ export class ProjectUseCase {
     const deleteShortsResult = await this.shorts.deleteByProject(id)
     if (!deleteShortsResult.ok) {
       return err('DELETE_SHORTS_FAILED')
+    }
+    const deletePublishingResult = await this.publishing.deleteByProject(id)
+    if (!deletePublishingResult.ok) {
+      return err('DELETE_PUBLISHING_FAILED')
     }
     return this.projects.delete(id)
   }

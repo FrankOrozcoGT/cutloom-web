@@ -17,6 +17,7 @@ const PROJECT_ERROR_MESSAGES: Record<ProjectDeleteError | StorageError, string> 
   DELETE_TIMELINE_FAILED: 'No se pudo eliminar el timeline del proyecto.',
   DELETE_SUBTITLES_FAILED: 'No se pudieron eliminar los subtítulos del proyecto.',
   DELETE_SHORTS_FAILED: 'No se pudieron eliminar los shorts del proyecto.',
+  DELETE_PUBLISHING_FAILED: 'No se pudo eliminar el estado de publicación del proyecto.',
 }
 
 // Dos mecanismos genuinamente distintos (navegar vs. ejecutar un handler in

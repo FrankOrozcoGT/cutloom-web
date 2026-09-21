@@ -9,6 +9,7 @@ import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubt
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { DurationReaderAdapter } from '@infrastructure/video/DurationReaderAdapter'
 import { ThumbnailGenerator } from '@infrastructure/video/ThumbnailGenerator'
+import { IndexedDBPublishingAdapter } from '@infrastructure/publishing/storageAdapter'
 
 export const filePicker = new FilePickerAdapter()
 export const videoStorage = new IndexedDBAdapter()
@@ -29,4 +30,5 @@ export const projectUseCase = new ProjectUseCase(
   new IndexedDBTimelineAdapter(),
   new IndexedDBSubtitlesAdapter(),
   shortsStorage,
+  new IndexedDBPublishingAdapter(),
 )

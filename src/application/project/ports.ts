@@ -9,6 +9,7 @@ export type ProjectDeleteError =
   | 'DELETE_TIMELINE_FAILED'
   | 'DELETE_SUBTITLES_FAILED'
   | 'DELETE_SHORTS_FAILED'
+  | 'DELETE_PUBLISHING_FAILED'
 
 export interface ProjectStorage {
   create(name: string): Promise<Result<Project, ProjectStorageError>>
