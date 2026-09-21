@@ -12,4 +12,6 @@ export interface AuthApi {
 export interface AuthState {
   getAccessToken(): string | null
   setAccessToken(token: string | null): void
+  refreshAccessToken(): Promise<{ accessToken: string } | null>
+  setSessionExpiredHandler(handler: (() => void) | null): void
 }
