@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { RemovedSegment, Timeline, TrimEdge } from '@domain/timeline'
 import type { Subtitles } from '@domain/subtitles'
+import type { Result } from '@application/result'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { arrangeUseCase } from './composition'
 import type { RemovedSegmentChip } from './Timeline'
@@ -112,59 +113,68 @@ export function useTimeline(
     [timeline, subtitlesBridge, removedChipsBridge],
   )
 
+  // Flujo compartido por toda acción que llama a arrangeUseCase y aplica el
+  // timeline resultante: éxito limpia el error y empuja el nuevo timeline al
+  // historial (applyNewTimeline); fallo solo setea el error, sin tocar el
+  // timeline en memoria. Antes cada callback repetía este if/else letra por
+  // letra — un cambio al manejo de errores (o a qué pasa applyNewTimeline)
+  // debía replicarse a mano en los 8 sitios, con riesgo real de que alguno
+  // quedara desincronizado. Los que necesitan algo más allá de esto
+  // (removeSegments devuelve un valor propio, deleteClip/clearAllClips
+  // también tocan selectedClipId) lo hacen con onSuccess, no reimplementando
+  // el flujo.
+  const runArrangeAction = useCallback(
+    async <T,>(
+      result: Result<T, ArrangeError>,
+      toTimelineUpdate: (value: T) => { timeline: Timeline; removedChips?: RemovedSegmentChip[] },
+      onSuccess?: (value: T) => void,
+    ): Promise<boolean> => {
+      if (!result.ok) {
+        setError(result.error)
+        return false
+      }
+      setError(null)
+      const { timeline: nextTimeline, removedChips } = toTimelineUpdate(result.value)
+      applyNewTimeline(nextTimeline, removedChips)
+      onSuccess?.(result.value)
+      return true
+    },
+    [applyNewTimeline],
+  )
+
   const addClip = useCallback(
     async (assetId: string, durationMs: number, trackId?: string, offsetPx?: number) => {
       const offsetMs = offsetPx !== undefined ? pxToMs(offsetPx) : undefined
       const result = await arrangeUseCase.addClip(projectId, assetId, durationMs, trackId, offsetMs)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }))
     },
-    [projectId, pxToMs, applyNewTimeline],
+    [projectId, pxToMs, runArrangeAction],
   )
 
   const moveClip = useCallback(
     async (clipId: string, trackId?: string, offsetPx?: number) => {
       const offsetMs = offsetPx !== undefined ? pxToMs(offsetPx) : undefined
       const result = await arrangeUseCase.moveClip(projectId, clipId, trackId, offsetMs)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }))
     },
-    [projectId, pxToMs, applyNewTimeline],
+    [projectId, pxToMs, runArrangeAction],
   )
 
   const resizeClip = useCallback(
     async (clipId: string, edge: TrimEdge, newBoundaryPx: number, sourceDurationMs: number) => {
       const newBoundaryMs = pxToMs(newBoundaryPx)
       const result = await arrangeUseCase.resizeClip(projectId, clipId, edge, newBoundaryMs, sourceDurationMs)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }))
     },
-    [projectId, pxToMs, applyNewTimeline],
+    [projectId, pxToMs, runArrangeAction],
   )
 
   const splitClip = useCallback(
     async (clipId: string, cutPointMs: number) => {
       const result = await arrangeUseCase.splitClip(projectId, clipId, cutPointMs)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }))
     },
-    [projectId, applyNewTimeline],
+    [projectId, runArrangeAction],
   )
 
   const removeSegments = useCallback(
@@ -174,71 +184,50 @@ export function useTimeline(
     ): Promise<RemovedSegment[]> => {
       if (cuts.length === 0) return []
       const result = await arrangeUseCase.removeSegments(projectId, cuts)
-      if (!result.ok) {
-        setError(result.error)
-        return []
-      }
-      setError(null)
-      const nextRemovedChips = computeNextRemovedChips?.(result.value.removed)
-      applyNewTimeline(result.value.timeline, nextRemovedChips)
-      return result.value.removed
+      const applied = await runArrangeAction(result, ({ timeline, removed }) => ({
+        timeline,
+        removedChips: computeNextRemovedChips?.(removed),
+      }))
+      return applied && result.ok ? result.value.removed : []
     },
-    [projectId, applyNewTimeline],
+    [projectId, runArrangeAction],
   )
 
   const reinsertSegment = useCallback(
     async (removed: RemovedSegment, atMs: number, nextRemovedChips?: RemovedSegmentChip[]) => {
       const result = await arrangeUseCase.reinsertSegment(projectId, removed, atMs)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value, nextRemovedChips)
+      await runArrangeAction(result, (timeline) => ({ timeline, removedChips: nextRemovedChips }))
     },
-    [projectId, applyNewTimeline],
+    [projectId, runArrangeAction],
   )
 
   const deleteClip = useCallback(
     async (clipId: string) => {
       const result = await arrangeUseCase.deleteClip(projectId, clipId)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      setSelectedClipId((current) => (current === clipId ? null : current))
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }), () => {
+        setSelectedClipId((current) => (current === clipId ? null : current))
+      })
     },
-    [projectId, applyNewTimeline],
+    [projectId, runArrangeAction],
   )
 
   const removeClipsByAsset = useCallback(
     async (assetId: string) => {
       const result = await arrangeUseCase.removeClipsByAsset(projectId, assetId)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      applyNewTimeline(result.value)
+      await runArrangeAction(result, (timeline) => ({ timeline }))
     },
-    [projectId, applyNewTimeline],
+    [projectId, runArrangeAction],
   )
 
   const clearAllClips = useCallback(async () => {
     const result = await arrangeUseCase.clearAllClips(projectId)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setError(null)
-    setSelectedClipId(null)
     // Vaciar deja el timeline sin silencios quitados que mostrar — los chips
     // previos quedan en la misma entrada de historial que empuja
     // applyNewTimeline, así que un undo los recupera.
-    applyNewTimeline(result.value, [])
-  }, [projectId, applyNewTimeline])
+    await runArrangeAction(result, (timeline) => ({ timeline, removedChips: [] }), () => {
+      setSelectedClipId(null)
+    })
+  }, [projectId, runArrangeAction])
 
   // undo y redo son el mismo viaje en el historial, solo con past/future
   // intercambiados — travel() concentra ese único flujo, parametrizado por
