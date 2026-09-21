@@ -18,15 +18,6 @@ interface UsePlaybackEngineArgs {
  * requestAnimationFrame de pared avanza playheadMs mientras isPlaying es
  * true, sin importar si el instante actual cae en un clip o en un hueco —
  * los <video> nunca son la fuente de verdad del tiempo, solo la siguen.
- *
- * El diseño anterior usaba dos relojes distintos (timeupdate del <video>
- * dentro de un clip, un rAF propio en los huecos) que había que coser en
- * cada transición clip↔hueco↔clip con swaps manuales de qué <video> es "el
- * activo" — cada transición era un caso especial nuevo y cada uno arrastraba
- * su propio bug (parpadeo al saltar entre subtítulos, reproducción trabada
- * al cruzar un hueco). Con un solo reloj no hay nada que coser: cada frame
- * simplemente pregunta "qué correspondería ahora" (computePlaybackSnapshot)
- * y sincroniza el DOM a eso.
  */
 export function usePlaybackEngine({
   timeline,
@@ -38,7 +29,6 @@ export function usePlaybackEngine({
 }: UsePlaybackEngineArgs) {
   const videoRefA = useRef<HTMLVideoElement>(null)
   const videoRefB = useRef<HTMLVideoElement>(null)
-  const activeIsA = useRef(true)
 
   // El reloj de abajo necesita distinguir "el playhead cambió porque yo lo
   // reporté" de "alguien más lo movió" (seek: clic en el timeline, en un
@@ -74,37 +64,19 @@ export function usePlaybackEngine({
   const snapshot = computePlaybackSnapshot(timeline, playheadMs)
   const { activeClip, waitingClip, durationMs, mode } = snapshot
 
-  // Qué slot pide qué clip, y cuál de los dos es "el activo" para efectos de
-  // reproducción, se deciden con el MISMO valor de rol (lastActiveIsA) dentro
-  // de este render — nunca se mezcla un rol con buffers pedidos bajo otro
-  // rol distinto. Antes se pedían los buffers con el rol viejo pero se
-  // exponía activeBuffer/activeVideoRef ya con el rol "corregido" de este
-  // mismo render: esos dos podían quedar desalineados un frame, así que
-  // activeBuffer.url terminaba siendo la URL que el OTRO slot estaba
-  // cargando/reemplazando ese instante — de ahí el ERR_FILE_NOT_FOUND al
-  // asignarla a un <video src>. El rol solo se corrige para el PRÓXIMO
-  // render, después de leer bufferA/bufferB ya resueltos con este rol.
-  const lastActiveIsA = activeIsA.current
-  const wantsA = lastActiveIsA
-    ? (activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null)
-    : (waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null)
-  const wantsB = lastActiveIsA
-    ? (waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null)
-    : (activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null)
+  const {
+    active: activeBuffer,
+    waiting: waitingBuffer,
+    activeIsSlotA,
+  } = usePlaybackBuffers(
+    assets,
+    activeClip ? { id: activeClip.id, assetId: activeClip.assetId } : null,
+    waitingClip ? { id: waitingClip.id, assetId: waitingClip.assetId } : null,
+  )
 
-  const { bufferA, bufferB } = usePlaybackBuffers(assets, wantsA, wantsB)
-
-  const activeBuffer = lastActiveIsA ? bufferA : bufferB
-  const waitingBuffer = lastActiveIsA ? bufferB : bufferA
-  const activeVideoRef = lastActiveIsA ? videoRefA : videoRefB
-  const waitingVideoRef = lastActiveIsA ? videoRefB : videoRefA
-
-  // Recién acá se corrige el rol, para el próximo render: si el slot activo
-  // ya no tiene cargado activeClip pero el que estaba en espera sí, el rol
-  // cambia de cara al siguiente ciclo.
-  if (activeClip && activeBuffer.clipId !== activeClip.id && waitingBuffer.clipId === activeClip.id) {
-    activeIsA.current = !lastActiveIsA
-  }
+  const activeVideoRef = activeIsSlotA ? videoRefA : videoRefB
+  const waitingVideoRef = activeIsSlotA ? videoRefB : videoRefA
+  const hasActiveVideo = activeClip !== null && activeBuffer.clipId === activeClip.id
 
   // Precarga el buffer en espera en el punto de inicio de su clip, listo para
   // un corte limpio cuando pase a ser el activo.
@@ -118,22 +90,26 @@ export function usePlaybackEngine({
   // corresponde según el playhead. Única fuente de "dónde debe estar
   // parado" el <video> — cubre seeks, cambios de clip y el avance normal.
   useEffect(() => {
+    if (!hasActiveVideo) return
     const video = activeVideoRef.current
-    if (!video || !activeClip || activeBuffer.clipId !== activeClip.id) return
+    if (!video || !activeClip) return
     const targetSeconds = activeClip.sourceTimeMs / 1000
     if (Math.abs(video.currentTime - targetSeconds) > 0.2) {
       video.currentTime = targetSeconds
     }
-  }, [activeClip, activeBuffer, activeVideoRef, playheadMs])
+  }, [hasActiveVideo, activeClip, activeVideoRef, playheadMs])
 
   // Mientras el <video> activo está resolviendo un seek grande (buscando el
   // keyframe, decodificando), el reloj de pared deja de acumular tiempo —
-  // ver isSeekingRef arriba.
+  // ver isSeekingRef arriba. También escucha 'ended': si el archivo fuente
+  // termina antes de que el reloj de pared cruce el borde del clip (deriva
+  // de precisión, redondeo), el <video> se detiene solo — sin este listener
+  // quedaría congelado y mudo aunque el reloj de pared siga corriendo,
+  // porque nada más vuelve a llamar .play() sobre él.
   useEffect(() => {
+    if (!hasActiveVideo) return
     const video = activeVideoRef.current
     if (!video) return
-    // El video activo cambió: cualquier estado de "buscando" que dejó
-    // colgado el video anterior ya no aplica al nuevo.
     isSeekingRef.current = false
     setIsSeeking(false)
     function handleSeeking() {
@@ -144,33 +120,33 @@ export function usePlaybackEngine({
       isSeekingRef.current = false
       setIsSeeking(false)
     }
+    function handleEnded() {
+      if (isPlaying) void video?.play().catch(() => {})
+    }
     video.addEventListener('seeking', handleSeeking)
     video.addEventListener('seeked', handleSeeked)
+    video.addEventListener('ended', handleEnded)
     return () => {
       video.removeEventListener('seeking', handleSeeking)
       video.removeEventListener('seeked', handleSeeked)
+      video.removeEventListener('ended', handleEnded)
     }
-    // activeVideoRef es un ref object estable (videoRefA/videoRefB nunca
-    // cambian de identidad) — sin lastActiveIsA en deps, este efecto no se
-    // re-suscribiría cuando el slot activo rota de A a B, dejando los
-    // listeners escuchando el <video> que pasó a estar en espera. Eso podía
-    // dejar isSeekingRef trabado en true tras un seek durante la
-    // reproducción, congelando tick() a mitad de avance.
-  }, [activeVideoRef, lastActiveIsA])
+  }, [hasActiveVideo, activeVideoRef, isPlaying])
 
   // Si el timeline indica un clip activo pero su asset ya no existe (se borró
   // el VideoAsset original mientras se reproducía), usePlaybackBuffers deja el
   // buffer vacío — acá se detiene la reproducción en vez de seguir "sonando"
   // sobre un <video> sin fuente.
   useEffect(() => {
-    if (activeClip && activeBuffer.clipId === null && isPlaying) {
+    if (activeClip && !hasActiveVideo && activeBuffer.clipId === null && isPlaying) {
       onPlayingChange(false)
     }
-  }, [activeClip, activeBuffer.clipId, isPlaying, onPlayingChange])
+  }, [activeClip, hasActiveVideo, activeBuffer.clipId, isPlaying, onPlayingChange])
 
   // Play/pause del video activo; el video en espera nunca reproduce sonido.
   useEffect(() => {
     waitingVideoRef.current?.pause()
+    if (!hasActiveVideo) return
     const video = activeVideoRef.current
     if (!video) return
     if (isPlaying && mode === 'clip') {
@@ -178,7 +154,7 @@ export function usePlaybackEngine({
     } else {
       video.pause()
     }
-  }, [isPlaying, mode, activeVideoRef, waitingVideoRef])
+  }, [isPlaying, mode, hasActiveVideo, activeVideoRef, waitingVideoRef])
 
   // Reloj de pared: única fuente de avance del playhead durante la
   // reproducción, dentro o fuera de un clip. Un seek externo (clic en el
@@ -237,12 +213,15 @@ export function usePlaybackEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
 
+  const bufferA = activeIsSlotA ? activeBuffer : waitingBuffer
+  const bufferB = activeIsSlotA ? waitingBuffer : activeBuffer
+
   return {
     videoRefA,
     videoRefB,
     bufferA,
     bufferB,
-    activeIsA: lastActiveIsA,
+    activeIsA: activeIsSlotA,
     hasContent: mode === 'clip',
     isSeeking,
   }
