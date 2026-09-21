@@ -7,7 +7,14 @@ type UpcomingClip = { id: string; assetId: string; sourceStartMs: number; offset
 export interface PlaybackSnapshot {
   mode: PlaybackMode
   durationMs: number
-  activeClip: { id: string; assetId: string; sourceTimeMs: number; offsetMs: number; durationMs: number } | null
+  activeClip: {
+    id: string
+    assetId: string
+    sourceTimeMs: number
+    sourceStartMs: number
+    offsetMs: number
+    durationMs: number
+  } | null
   /** Clip precargado en el slot en espera: el siguiente tras el activo (modo 'clip'), o el que sigue al hueco (modo 'gap'). */
   waitingClip: UpcomingClip | null
 }
@@ -44,6 +51,7 @@ export function computePlaybackSnapshot(timeline: Timeline, playheadMs: number):
       id: active.clip.id,
       assetId: active.clip.assetId,
       sourceTimeMs: active.sourceTimeMs,
+      sourceStartMs: active.clip.sourceStartMs,
       offsetMs: active.clip.offsetMs,
       durationMs: active.clip.durationMs,
     },

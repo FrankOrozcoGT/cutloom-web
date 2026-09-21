@@ -14,10 +14,24 @@ interface UsePlaybackEngineArgs {
 }
 
 /**
- * Motor de reproducción del timeline compuesto. Reloj único: un
- * requestAnimationFrame de pared avanza playheadMs mientras isPlaying es
- * true, sin importar si el instante actual cae en un clip o en un hueco —
- * los <video> nunca son la fuente de verdad del tiempo, solo la siguen.
+ * Motor de reproducción del timeline compuesto. Máquina de dos modos
+ * mutuamente excluyentes, nunca simultáneos, para evitar que dos escritores
+ * compitan por la misma variable (playheadMs):
+ *
+ * - Modo reproducción: el <video> activo reproduce solo (su propio decoder
+ *   de audio+video, sincronizado internamente por el navegador). Nadie
+ *   escribe currentTime. El evento nativo 'timeupdate' es la única fuente
+ *   que mueve playheadMs — solo lectura, nunca comando hacia el video.
+ * - Modo seek: un comando externo (entrar a un clip nuevo, clic del usuario
+ *   en el timeline/subtítulo) escribe video.currentTime una vez. Desde ese
+ *   instante y hasta que el navegador confirma 'seeked', se activa un lock
+ *   (isSeekingRef) que descarta cualquier 'timeupdate' que llegue mientras
+ *   tanto — sin el lock, un timeupdate ya en tránsito desde antes del seek
+ *   puede reportarse después y pisar el valor que el usuario acaba de fijar.
+ *
+ * El único tramo sin ningún <video> real reproduciendo es un hueco entre
+ * clips ('gap'): ahí, y solo ahí, un requestAnimationFrame propio avanza el
+ * playhead hasta el próximo clip o el final del timeline.
  */
 export function usePlaybackEngine({
   timeline,
@@ -30,36 +44,13 @@ export function usePlaybackEngine({
   const videoRefA = useRef<HTMLVideoElement>(null)
   const videoRefB = useRef<HTMLVideoElement>(null)
 
-  // El reloj de abajo necesita distinguir "el playhead cambió porque yo lo
-  // reporté" de "alguien más lo movió" (seek: clic en el timeline, en un
-  // subtítulo) para saber cuándo reiniciar su punto de partida. Detectar eso
-  // con un efecto separado (comparar playheadMs en un useEffect, forzar un
-  // "seekVersion" que recrea el efecto del reloj) tiene una carrera real: el
-  // rAF pendiente del reloj viejo puede ejecutarse entre el seek y el
-  // re-render que recrearía el efecto, reportando su propio avance y
-  // pisando el seek antes de que el nuevo efecto tome el control — no es
-  // parcheable porque el origen es la distancia de un ciclo de render entre
-  // "el estado cambió" y "el efecto reaccionó".
-  //
-  // Por eso lastKnownPlayheadRef se actualiza EN CADA RENDER (no en un
-  // efecto): synchronously, en el mismo tick de JS en que React procesa el
-  // nuevo playheadMs. tick() la lee en cada frame y, si no coincide con lo
-  // que el propio tick() reportó la última vez, sabe sin ambigüedad que hubo
-  // un seek externo y se realinea ahí mismo — sin esperar a que el efecto se
-  // vuelva a montar.
-  const lastKnownPlayheadRef = useRef(playheadMs)
-  const lastInternalPlayheadRef = useRef<number | null>(null)
-  lastKnownPlayheadRef.current = playheadMs
-
-  // Tras un seek grande, el <video> real tarda en decodificar hasta el nuevo
-  // punto (busca el keyframe más cercano) — el frame en pantalla queda
-  // congelado durante ese lapso. Si el reloj de pared ignora eso, la línea
-  // del timeline sigue avanzando como si el video ya estuviera ahí,
-  // desincronizándose del frame real que se ve. isSeekingRef lo marcan los
-  // listeners 'seeking'/'seeked' del <video> activo (más abajo) y tick() lo
-  // usa para pausar su propio avance mientras el video sigue buscando.
-  const isSeekingRef = useRef(false)
   const [isSeeking, setIsSeeking] = useState(false)
+  // Lock de exclusión mutua entre 'timeupdate' (video → playhead) y un seek
+  // en curso (comando → video). Se lee sincrónicamente dentro del listener,
+  // no como estado de React, porque debe tener efecto en el mismo tick en
+  // que se activa — un setState tarda un render en propagarse, dejando una
+  // ventana donde un timeupdate en tránsito todavía podría colarse.
+  const isSeekingRef = useRef(false)
 
   const snapshot = computePlaybackSnapshot(timeline, playheadMs)
   const { activeClip, waitingClip, durationMs, mode } = snapshot
@@ -86,37 +77,53 @@ export function usePlaybackEngine({
     video.currentTime = waitingClip.sourceStartMs / 1000
   }, [waitingClip, waitingBuffer, waitingVideoRef])
 
-  // Alinea currentTime del video activo con el punto del clip que le
-  // corresponde según el playhead. Única fuente de "dónde debe estar
-  // parado" el <video> — cubre seeks, cambios de clip y el avance normal.
+  // Comando de seek hacia el <video> activo: entrar a un clip nuevo, o un
+  // seek explícito del usuario (clic en el timeline/subtítulo) dentro del
+  // clip que ya está activo. Se distingue de la deriva normal de
+  // reproducción por la magnitud del salto (>0.75s = comando real, no ruido
+  // de latencia entre el evento nativo y el render de React). Activa el
+  // lock ANTES de escribir currentTime, para que ningún 'timeupdate' que
+  // llegue mientras el seek resuelve pueda pisar este valor.
   useEffect(() => {
-    if (!hasActiveVideo) return
-    const video = activeVideoRef.current
-    if (!video || !activeClip) return
-    // Si ya hay un seek en curso, escribir currentTime de nuevo reinicia la
-    // búsqueda del keyframe desde cero antes de que la anterior termine —
-    // en archivos grandes eso nunca converge (spinner de carga indefinido).
-    // Se espera a que 'seeked' resuelva antes de corregir drift de nuevo.
-    if (isSeekingRef.current) return
-    const targetSeconds = activeClip.sourceTimeMs / 1000
-    if (Math.abs(video.currentTime - targetSeconds) > 0.2) {
-      video.currentTime = targetSeconds
-    }
-  }, [hasActiveVideo, activeClip, activeVideoRef, playheadMs])
-
-  // Mientras el <video> activo está resolviendo un seek grande (buscando el
-  // keyframe, decodificando), el reloj de pared deja de acumular tiempo —
-  // ver isSeekingRef arriba. También escucha 'ended': si el archivo fuente
-  // termina antes de que el reloj de pared cruce el borde del clip (deriva
-  // de precisión, redondeo), el <video> se detiene solo — sin este listener
-  // quedaría congelado y mudo aunque el reloj de pared siga corriendo,
-  // porque nada más vuelve a llamar .play() sobre él.
-  useEffect(() => {
-    if (!hasActiveVideo) return
+    if (!hasActiveVideo || !activeClip) return
     const video = activeVideoRef.current
     if (!video) return
-    isSeekingRef.current = false
-    setIsSeeking(false)
+    // activeClip es un objeto nuevo en cada render (computePlaybackSnapshot
+    // lo reconstruye), así que este efecto se re-ejecuta en cada frame
+    // mientras reproduce, no solo al cambiar de clip. Sin este guard, si ya
+    // hay un seek en curso (isSeekingRef true) y el video todavía no llegó
+    // al punto pedido, cada re-ejecución reescribe currentTime de nuevo
+    // sobre el seek anterior — reiniciando la búsqueda antes de que el
+    // navegador la termine, así que nunca converge.
+    if (isSeekingRef.current) return
+    const targetSeconds = activeClip.sourceTimeMs / 1000
+    if (Math.abs(video.currentTime - targetSeconds) > 0.75) {
+      isSeekingRef.current = true
+      setIsSeeking(true)
+      video.currentTime = targetSeconds
+    }
+  }, [hasActiveVideo, activeClip, activeVideoRef])
+
+  // El <video> activo es la fuente de verdad del tiempo dentro de un clip:
+  // su propio 'timeupdate' nativo es lo único que mueve playheadMs mientras
+  // mode === 'clip' Y no hay un seek en curso (lock arriba). 'seeked'
+  // confirma que el navegador terminó de resolver el comando y libera el
+  // lock. 'ended' relanza .play() si el archivo fuente termina antes de que
+  // el clip del timeline debería terminar (deriva de precisión/redondeo),
+  // para no quedar congelado y mudo.
+  useEffect(() => {
+    if (!hasActiveVideo || !activeClip) return
+    const videoElement = activeVideoRef.current
+    if (!videoElement) return
+    const video: HTMLVideoElement = videoElement
+
+    function handleTimeUpdate() {
+      if (!activeClip) return
+      if (isSeekingRef.current) return
+      const elapsedInClipMs = video.currentTime * 1000 - activeClip.sourceStartMs
+      const clampedMs = Math.min(Math.max(0, elapsedInClipMs), activeClip.durationMs)
+      onPlayheadChange(activeClip.offsetMs + clampedMs)
+    }
     function handleSeeking() {
       isSeekingRef.current = true
       setIsSeeking(true)
@@ -126,17 +133,19 @@ export function usePlaybackEngine({
       setIsSeeking(false)
     }
     function handleEnded() {
-      if (isPlaying) void video?.play().catch(() => {})
+      if (isPlaying) void video.play().catch(() => {})
     }
+    video.addEventListener('timeupdate', handleTimeUpdate)
     video.addEventListener('seeking', handleSeeking)
     video.addEventListener('seeked', handleSeeked)
     video.addEventListener('ended', handleEnded)
     return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('seeking', handleSeeking)
       video.removeEventListener('seeked', handleSeeked)
       video.removeEventListener('ended', handleEnded)
     }
-  }, [hasActiveVideo, activeVideoRef, isPlaying])
+  }, [hasActiveVideo, activeClip, activeVideoRef, isPlaying, onPlayheadChange])
 
   // Si el timeline indica un clip activo pero su asset ya no existe (se borró
   // el VideoAsset original mientras se reproducía), usePlaybackBuffers deja el
@@ -149,58 +158,42 @@ export function usePlaybackEngine({
   }, [activeClip, hasActiveVideo, activeBuffer.clipId, isPlaying, onPlayingChange])
 
   // Play/pause del video activo; el video en espera nunca reproduce sonido.
+  // En un hueco (mode !== 'clip') no hay activeClip, así que hasActiveVideo
+  // es false — pero el <video> que reproducía el clip anterior sigue
+  // existiendo y con su audio corriendo si nadie le ordena pausar. Por eso
+  // se pausan explícitamente AMBOS slots físicos (A y B) cuando no
+  // corresponde reproducir, en vez de depender de activeVideoRef, que deja
+  // de apuntar a "el video que hay que pausar" apenas hasActiveVideo es
+  // false.
   useEffect(() => {
+    if (!isPlaying || mode !== 'clip' || !hasActiveVideo) {
+      videoRefA.current?.pause()
+      videoRefB.current?.pause()
+      return
+    }
     waitingVideoRef.current?.pause()
-    if (!hasActiveVideo) return
     const video = activeVideoRef.current
     if (!video) return
-    if (isPlaying && mode === 'clip') {
-      void video.play().catch(() => {})
-    } else {
-      video.pause()
-    }
+    void video.play().catch(() => {})
   }, [isPlaying, mode, hasActiveVideo, activeVideoRef, waitingVideoRef])
 
-  // Reloj de pared: única fuente de avance del playhead durante la
-  // reproducción, dentro o fuera de un clip. Un seek externo (clic en el
-  // timeline, en un subtítulo) se detecta DENTRO de tick(), comparando
-  // contra lastKnownPlayheadRef en cada frame — no recreando el efecto vía
-  // una dependencia de seek separada, que dejaría una ventana de un ciclo de
-  // render donde un tick() ya agendado podía reportar su propio avance y
-  // pisar el seek.
+  // Único tramo sin ningún <video> real reproduciendo: un hueco entre clips.
+  // Ahí, y solo ahí, un reloj de pared propio avanza el playhead hasta que
+  // aparece el próximo clip (que pasa a ser hasActiveVideo=true y el efecto
+  // de arriba toma el control) o se llega al final del timeline.
   useEffect(() => {
-    if (!isPlaying || mode === 'ended') return
+    if (!isPlaying || mode !== 'gap') return
 
     let rafId: number
     let lastTimestamp: number | null = null
     let currentPlayheadMs = playheadMs
-    lastInternalPlayheadRef.current = currentPlayheadMs
 
     function tick(timestamp: number) {
-      // Si el playhead real (prop, actualizado cada render) no coincide con
-      // lo último que este mismo reloj reportó, alguien más lo movió: se
-      // realinea el punto de partida en vez de seguir sumando sobre el
-      // avance viejo.
-      if (lastKnownPlayheadRef.current !== lastInternalPlayheadRef.current) {
-        currentPlayheadMs = lastKnownPlayheadRef.current
-        lastTimestamp = null
-      }
-
       if (lastTimestamp === null) lastTimestamp = timestamp
       const elapsedMs = timestamp - lastTimestamp
       lastTimestamp = timestamp
 
-      // No acumular mientras el <video> activo sigue buscando el frame del
-      // seek — si no, el playhead reportado se adelanta al frame que
-      // realmente se ve en pantalla.
-      if (isSeekingRef.current) {
-        rafId = requestAnimationFrame(tick)
-        return
-      }
-
       currentPlayheadMs = Math.min(currentPlayheadMs + elapsedMs, durationMs)
-      lastInternalPlayheadRef.current = currentPlayheadMs
-      lastKnownPlayheadRef.current = currentPlayheadMs
       onPlayheadChange(currentPlayheadMs)
       if (currentPlayheadMs >= durationMs) {
         onPlayingChange(false)
@@ -212,9 +205,9 @@ export function usePlaybackEngine({
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
     // Solo el primer valor de playheadMs importa (punto de partida del
-    // reloj): incluirlo en deps reiniciaría lastTimestamp en cada frame. Los
-    // seeks se detectan dentro de tick() vía lastKnownPlayheadRef, no
-    // recreando este efecto.
+    // reloj de este hueco específico): incluirlo en deps reiniciaría
+    // lastTimestamp en cada frame. Este efecto se remonta solo al entrar o
+    // salir de mode 'gap', o al pausar/reanudar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, mode, durationMs, onPlayheadChange, onPlayingChange])
 
