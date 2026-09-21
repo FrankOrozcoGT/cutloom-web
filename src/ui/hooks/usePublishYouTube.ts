@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import {
-  buildPublishedSourceRecord,
   PublishItemErrorKind,
   type BulkUploadVideo,
   type MetadataContext,
@@ -12,7 +11,7 @@ import {
 } from '@domain/publishing'
 import type { PublishingErrorCode } from '@application/publishing/errors'
 import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
-import { publishingApi, publishingStorage } from '@ui/publishing/composition'
+import { publishingUseCase } from '@ui/publishing/composition'
 import { startYouTubeOAuth } from '@ui/publishing/oauth'
 import { useExport, type ExportFailure } from '@ui/hooks/useExport'
 import {
@@ -160,18 +159,21 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
         if (!item) continue
 
         setItem(sourceId, { state: 'generating', error: null })
-        const result = await publishingApi.generateMetadata({
-          sourceId,
-          topic: input.topic.trim() || undefined,
-          tone: input.tone.trim() || undefined,
-          additionalInstructions: input.additionalInstructions.trim() || undefined,
-          context: item.context,
-        })
+        const result = await publishingUseCase.generateMetadata(
+          projectId,
+          {
+            sourceId,
+            topic: input.topic.trim() || undefined,
+            tone: input.tone.trim() || undefined,
+            additionalInstructions: input.additionalInstructions.trim() || undefined,
+            context: item.context,
+          },
+          item.result,
+        )
         if (!result.ok) {
           setItem(sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Metadata, code: result.error.code } })
         } else {
           setItem(sourceId, { state: 'ready', revision: result.value, error: null })
-          await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(sourceId, result.value, item.result))
         }
 
         setMetadataProgress({ done: index + 1, total: sourceIds.length })
@@ -189,13 +191,12 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
     async (sourceId: string, feedback: string) => {
       setItem(sourceId, { state: 'generating', error: null })
       const item = items[sourceId]
-      const result = await publishingApi.generateMetadata({ sourceId, feedback, context: item?.context })
+      const result = await publishingUseCase.generateMetadata(projectId, { sourceId, feedback, context: item?.context }, item?.result ?? null)
       if (!result.ok) {
         setItem(sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Metadata, code: result.error.code } })
         return
       }
       setItem(sourceId, { state: 'ready', revision: result.value, error: null })
-      await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(sourceId, result.value, item?.result ?? null))
     },
     [items, projectId, setItem],
   )
@@ -235,7 +236,7 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
       }
 
       const publishItems = selected.map(toPublishItem)
-      const result = await publishingApi.bulkUpload({
+      const result = await publishingUseCase.bulkUpload({
         seriesId: projectId,
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         longVideoPublishDay,
@@ -269,7 +270,7 @@ export function usePublishYouTube({ projectId, projectName }: UsePublishYouTubeP
         })
         const published = selected.find((item) => item.sourceId === itemResult.sourceId)
         if (published?.revision) {
-          await publishingStorage.upsertSource(projectId, buildPublishedSourceRecord(itemResult.sourceId, published.revision, itemResult))
+          await publishingUseCase.recordUploadResult(projectId, itemResult.sourceId, published.revision, itemResult)
         }
       }
 
