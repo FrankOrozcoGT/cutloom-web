@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { AudioWaveform, Eye, EyeOff, Minus, Pause, Play, Plus, Redo2, Scissors, Trash2, Undo2, X } from 'lucide-react'
-import { findClipById, getTimelineDurationMs, type RemovedSegment, type Timeline as TimelineModel, type TrimEdge } from '@domain/timeline'
+import {
+  canCutClip,
+  findClipById,
+  getTimelineDurationMs,
+  type RemovedSegment,
+  type Timeline as TimelineModel,
+  type TrimEdge,
+} from '@domain/timeline'
 import type { VideoAsset } from '@domain/video'
 import type { ArrangeError } from '@application/timeline/ArrangeClipsUseCase'
 import { useExport } from '@ui/hooks/useExport'
@@ -334,7 +341,7 @@ export function Timeline({
   const tracks = timeline.tracks.length > 0 ? timeline.tracks : [{ id: '__placeholder__', clips: [] }]
 
   const selectedClip = selectedClipId ? findClipById(timeline, selectedClipId) : null
-  const canCut = !!selectedClip && playheadMs > selectedClip.offsetMs && playheadMs < selectedClip.offsetMs + selectedClip.durationMs
+  const canCut = !!selectedClip && canCutClip(selectedClip, playheadMs)
 
   const containerWidthPx = scrollContainerRef.current?.clientWidth ?? 600
   const contentWidthPx = Math.max(

@@ -4,6 +4,9 @@ import type { RenderSegment } from '@application/video/exportTypes'
 
 export type AudioExtractError = 'NO_AUDIO_TRACK' | 'UNSUPPORTED_API' | 'DECODE_FAILED'
 
+/** Progreso incremental de la extracción: tiempo de timeline (ms) ya decodificado. */
+export type AudioExtractProgressListener = (extractedUntilMs: number) => void
+
 export interface AudioExtractorPort {
   /**
    * Decodifica y concatena el audio de cada segmento del timeline compuesto (en
@@ -11,7 +14,7 @@ export interface AudioExtractorPort {
    * como mono 16kHz — así los timestamps de Whisper ya quedan en tiempo de
    * timeline, sin necesitar remapeo por clip.
    */
-  extract(segments: RenderSegment[]): Promise<Result<Float32Array, AudioExtractError>>
+  extract(segments: RenderSegment[], onProgress?: AudioExtractProgressListener): Promise<Result<Float32Array, AudioExtractError>>
 }
 
 export interface WhisperRawSegment {

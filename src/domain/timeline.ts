@@ -118,6 +118,11 @@ export function getTimelineDurationMs(timeline: Timeline): number {
   return Math.max(0, ...timeline.tracks.flatMap((track) => track.clips.map(clipEnd)))
 }
 
+/** Un corte solo es válido estrictamente dentro del clip, nunca en sus bordes. */
+export function canCutClip(clip: Clip, playheadMs: number): boolean {
+  return playheadMs > clip.offsetMs && playheadMs < clipEnd(clip)
+}
+
 /** Busca un clip por id en cualquier pista del timeline. */
 export function findClipById(timeline: Timeline, clipId: string): Clip | null {
   return timeline.tracks.flatMap((track) => track.clips).find((clip) => clip.id === clipId) ?? null

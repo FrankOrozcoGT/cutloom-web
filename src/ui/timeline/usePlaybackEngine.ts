@@ -214,6 +214,12 @@ export function usePlaybackEngine({
   const bufferA = activeIsSlotA ? activeBuffer : waitingBuffer
   const bufferB = activeIsSlotA ? waitingBuffer : activeBuffer
 
+  // El clip activo cambió (ej. clic en un subtítulo) pero su buffer todavía
+  // no terminó de cargar la blob URL — el <video> no debe mostrar nada del
+  // clip anterior ni intentar reproducir sin fuente; se trata como loading,
+  // igual que un seek en curso, hasta que activeBuffer.clipId lo alcance.
+  const isBufferLoading = !!activeClip && activeBuffer.clipId !== activeClip.id
+
   return {
     videoRefA,
     videoRefB,
@@ -221,6 +227,6 @@ export function usePlaybackEngine({
     bufferB,
     activeIsA: activeIsSlotA,
     hasContent: mode === 'clip',
-    isSeeking,
+    isSeeking: isSeeking || isBufferLoading,
   }
 }

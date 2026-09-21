@@ -15,7 +15,7 @@ import type { SubtitlesStorageError } from '@application/subtitles/ports'
 import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
 import { extractSubtitlesAudioUseCase, subtitlesStorage } from '@ui/subtitles/composition'
 
-export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'success' | 'error'
+export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'finalizing' | 'success' | 'error'
 
 interface UseSubtitlesResult {
   state: SubtitlesState
@@ -109,7 +109,9 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
     // La extracción de audio depende de OfflineAudioContext (Web Audio API),
     // que no existe dentro de un Web Worker — corre acá en el hilo principal.
     // Solo la transcripción (Whisper, cómputo pesado) va al worker.
-    const extractResult = await extractSubtitlesAudioUseCase.execute(projectId)
+    const extractResult = await extractSubtitlesAudioUseCase.execute(projectId, (extractedUntilMs) => {
+      setProcessedUntilMs(extractedUntilMs)
+    })
     if (!extractResult.ok) {
       setError(extractResult.error)
       setState('error')
@@ -142,13 +144,19 @@ export function useSubtitles(projectId: string): UseSubtitlesResult {
           return
         }
 
+        // 'done' llega recién después de que Whisper termina de recortar los
+        // overlaps entre ventanas (_decode_asr) — un post-proceso que no emite
+        // progreso incremental propio. Sin este estado intermedio, la UI se
+        // queda sin nada visible entre el último 'progress' y el resultado
+        // final, aunque siga habiendo trabajo real en curso (acá, el guardado).
+        setState('finalizing')
+        setProcessedUntilMs(null)
         void persist(message.result.subtitles).then((persisted) => {
           // persist ya deja error/state en 'error' si el guardado falló — acá
           // solo se marca 'success' cuando realmente se persistió.
           if (persisted) {
             setState('success')
           }
-          setProcessedUntilMs(null)
           worker.terminate()
           workerRef.current = null
           resolve()

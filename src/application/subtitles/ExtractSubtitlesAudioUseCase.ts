@@ -2,7 +2,7 @@ import { err, ok, type Result } from '@application/result'
 import type { TimelineStorage } from '@application/timeline/ports'
 import { buildRenderSegments, loadTimelineAndAssets } from '@application/video/exportTypes'
 import type { VideoStorage } from '@application/video/ports'
-import type { AudioExtractorPort } from './ports'
+import type { AudioExtractorPort, AudioExtractProgressListener } from './ports'
 
 export type ExtractSubtitlesAudioError = 'EMPTY_TIMELINE' | 'MISSING_ASSET' | 'NO_SPEECH' | 'UNSUPPORTED_API' | 'UNKNOWN_ERROR'
 
@@ -24,7 +24,10 @@ export class ExtractSubtitlesAudioUseCase {
     this.audioExtractor = audioExtractor
   }
 
-  async execute(projectId: string): Promise<Result<Float32Array, ExtractSubtitlesAudioError>> {
+  async execute(
+    projectId: string,
+    onProgress?: AudioExtractProgressListener,
+  ): Promise<Result<Float32Array, ExtractSubtitlesAudioError>> {
     const loadResult = await loadTimelineAndAssets(this.timelineStorage, this.videoStorage, projectId)
     if (!loadResult.ok) {
       return err(loadResult.error === 'STORAGE_ERROR' ? 'UNKNOWN_ERROR' : 'EMPTY_TIMELINE')
@@ -36,7 +39,7 @@ export class ExtractSubtitlesAudioUseCase {
       return err(segmentsResult.error)
     }
 
-    const extractResult = await this.audioExtractor.extract(segmentsResult.value)
+    const extractResult = await this.audioExtractor.extract(segmentsResult.value, onProgress)
     if (!extractResult.ok) {
       return err(this.mapAudioError(extractResult.error))
     }

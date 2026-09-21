@@ -1,5 +1,12 @@
-import { useCallback, useRef } from 'react'
-import { isLanguageCode, toSrt, type LanguageCode, type SubtitleParseError, type Subtitles } from '@domain/subtitles'
+import { useCallback, useRef, useState } from 'react'
+import {
+  isLanguageCode,
+  toPlainText,
+  toSrt,
+  type LanguageCode,
+  type SubtitleParseError,
+  type Subtitles,
+} from '@domain/subtitles'
 import type { ExtractSubtitlesAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
 import type { SubtitlesError } from '@application/subtitles/GenerateSubtitlesUseCase'
 import type { SubtitlesStorageError } from '@application/subtitles/ports'
@@ -31,9 +38,17 @@ const ERROR_MESSAGES: Record<string, string> = {
 }
 
 function generateButtonLabel(state: SubtitlesState, hasSubtitles: boolean): string {
-  if (state === 'extracting_audio') return 'Extrayendo audio…'
+  if (state === 'extracting_audio') return 'Separando audio…'
   if (state === 'transcribing') return 'Transcribiendo (Whisper)…'
+  if (state === 'finalizing') return 'Finalizando…'
   return hasSubtitles ? 'Regenerar subtítulos' : 'Generar subtítulos'
+}
+
+function statusBannerLabel(state: SubtitlesState): string | null {
+  if (state === 'extracting_audio') return 'Separando el audio del video…'
+  if (state === 'transcribing') return 'Transcribiendo con Whisper…'
+  if (state === 'finalizing') return 'Finalizando…'
+  return null
 }
 
 function toggleSegmentsLabel(segmentsVisible: boolean, segmentCount: number): string {
@@ -69,11 +84,20 @@ export function SubtitlePanel({
   projectName,
 }: SubtitlePanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const isBusy = state === 'extracting_audio' || state === 'transcribing'
+  const isBusy = state === 'extracting_audio' || state === 'transcribing' || state === 'finalizing'
+  const statusLabel = statusBannerLabel(state)
+  const [copied, setCopied] = useState(false)
 
   const handleGenerate = useCallback(() => {
     void generate()
   }, [generate])
+
+  const handleCopyScript = useCallback(async () => {
+    if (!subtitles) return
+    await navigator.clipboard.writeText(toPlainText(subtitles.segments))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [subtitles])
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click()
@@ -132,6 +156,12 @@ export function SubtitlePanel({
         {generateButtonLabel(state, !!subtitles)}
       </Button>
 
+      {statusLabel && (
+        <div role="status" className="rounded-lg bg-accent-bg px-3 py-2 text-sm text-text-strong">
+          {statusLabel}
+        </div>
+      )}
+
       {state === 'error' && error && <ErrorBanner>{ERROR_MESSAGES[error] ?? error}</ErrorBanner>}
 
       <Button variant="secondary" onClick={handleImportClick} className="w-auto">
@@ -141,15 +171,17 @@ export function SubtitlePanel({
       <input ref={fileInputRef} type="file" accept=".srt,.vtt" className="hidden" onChange={(event) => void handleFileSelected(event)} />
 
       {subtitles && subtitles.segments.length > 0 && (
-        <Button variant="secondary" onClick={handleExport} className="w-auto">
-          Exportar SRT
-        </Button>
-      )}
-
-      {subtitles && subtitles.segments.length > 0 && (
-        <Button variant="secondary" onClick={onToggleSegments} className="w-auto">
-          {toggleSegmentsLabel(segmentsVisible, subtitles.segments.length)}
-        </Button>
+        <>
+          <Button variant="secondary" onClick={handleExport} className="w-auto">
+            Exportar SRT
+          </Button>
+          <Button variant="secondary" onClick={onToggleSegments} className="w-auto">
+            {toggleSegmentsLabel(segmentsVisible, subtitles.segments.length)}
+          </Button>
+          <Button variant="secondary" onClick={() => void handleCopyScript()} className="w-auto">
+            {copied ? 'Copiado ✓' : 'Copiar guion'}
+          </Button>
+        </>
       )}
     </div>
   )

@@ -79,8 +79,10 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       return err('MODEL_LOAD_FAILED')
     }
 
+    const audioDurationSeconds = audio.length / 16000
+
     try {
-      const streamer = onProgress ? this.createStreamer(transcriber, onProgress) : undefined
+      const streamer = onProgress ? this.createStreamer(transcriber, onProgress, audioDurationSeconds) : undefined
 
       const output = await transcriber(audio, {
         language: LANGUAGE_NAMES[options.language],
@@ -116,7 +118,11 @@ export class WhisperAdapter implements WhisperTranscriberPort {
    * cambio de ventana: el offset absoluto es windowIndex * WINDOW_ADVANCE_SECONDS
    * (el mismo paso con que el pipeline solapa las ventanas).
    */
-  private createStreamer(transcriber: AutomaticSpeechRecognitionPipeline, onProgress: WhisperProgressListener) {
+  private createStreamer(
+    transcriber: AutomaticSpeechRecognitionPipeline,
+    onProgress: WhisperProgressListener,
+    audioDurationSeconds: number,
+  ) {
     let windowIndex = 0
     let chunkStart = 0
     let chunkText = ''
@@ -134,8 +140,14 @@ export class WhisperAdapter implements WhisperTranscriberPort {
       on_chunk_end: (time: number) => {
         const text = chunkText.trim()
         if (!text) return
-        // Ruido del modelo aparte, un segmento nunca termina antes de empezar.
-        const end = Math.max(windowIndex * WINDOW_ADVANCE_SECONDS + time, chunkStart)
+        // La última ventana de generate() se rellena con silencio hasta
+        // completar chunk_length_s aunque el audio real ya haya terminado —
+        // sin este clamp, el offset calculado (windowIndex * avance + time)
+        // podía superar la duración real del audio, haciendo que la barra de
+        // progreso (que usa este valor) se llenara antes de que la
+        // transcripción real terminara. El resultado final (result.chunks) no
+        // sufre esto porque _decode_asr recorta el padding por su cuenta.
+        const end = Math.min(Math.max(windowIndex * WINDOW_ADVANCE_SECONDS + time, chunkStart), audioDurationSeconds)
         // Las ventanas se solapan (30s de largo, 20s de avance) y el audio del
         // borde se transcribe dos veces. Para que el progreso no retroceda se
         // descartan los segmentos ya cubiertos por la ventana anterior y se

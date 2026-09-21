@@ -398,7 +398,10 @@ export function EditorPage() {
     return null
   }
 
-  const subtitlesProgressUntilMs = subtitlesState.state === 'transcribing' ? subtitlesState.processedUntilMs : null
+  const subtitlesProgressUntilMs =
+    subtitlesState.state === 'transcribing' || subtitlesState.state === 'extracting_audio'
+      ? subtitlesState.processedUntilMs
+      : null
   const activeSubtitleSegment = subtitlesState.subtitles?.segments.find((segment) => segment.id === activeSegmentId) ?? null
   const activeSubtitleRangeMs = activeSubtitleSegment
     ? { startMs: activeSubtitleSegment.startMs, endMs: activeSubtitleSegment.endMs }

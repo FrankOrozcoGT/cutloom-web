@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { VideoAsset } from '@domain/video'
+import { acquireBlobUrl, releaseBlobUrl } from './blobUrlPool'
 
 export interface PlaybackBuffer {
   clipId: string | null
+  assetId: string | null
   url: string
 }
 
-const EMPTY_BUFFER: PlaybackBuffer = { clipId: null, url: '' }
+const EMPTY_BUFFER: PlaybackBuffer = { clipId: null, assetId: null, url: '' }
 
 interface ClipRef {
   id: string
@@ -20,43 +22,63 @@ export interface PlaybackSlots {
   activeIsSlotA: boolean
 }
 
-function loadBuffer(prev: PlaybackBuffer, clip: ClipRef | null, assets: Record<string, VideoAsset>): PlaybackBuffer {
-  if (!clip) return prev
-  const asset = assets[clip.assetId]
-  if (!asset) return EMPTY_BUFFER
-  if (prev.clipId === clip.id) return prev
-  return { clipId: clip.id, url: URL.createObjectURL(asset.blob) }
-}
-
 /**
- * Revoca `url` un tick después de que React ya haya commiteado el nuevo
- * valor al DOM (efecto separado, corre después del render) — revocar en el
- * mismo cálculo que produce el buffer nuevo puede invalidar la blob URL
- * mientras el <video> todavía apunta a ella (net::ERR_FILE_NOT_FOUND).
+ * Un slot del doble buffer: pide/suelta su blob URL al pool compartido
+ * (blobUrlPool) por assetId, nunca crea/revoca directamente — así nunca
+ * puede revocar algo que otro slot todavía referencia. clipId se guarda
+ * aparte porque usePlaybackEngine lo necesita para saber qué slot sirve a
+ * qué clip; cortar un clip (splitClip) le da un id nuevo sin cambiar de
+ * archivo, así que solo se pide/suelta del pool cuando cambia el assetId.
  */
-function useRevokeOnChange(url: string): void {
-  const prevUrl = useRef<string | null>(null)
+function useBufferSlot(assets: Record<string, VideoAsset>, wants: ClipRef | null): PlaybackBuffer {
+  const [buffer, setBuffer] = useState<PlaybackBuffer>(EMPTY_BUFFER)
+  const heldAssetIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (prevUrl.current && prevUrl.current !== url) {
-      URL.revokeObjectURL(prevUrl.current)
+    if (!wants) return
+    const asset = assets[wants.assetId]
+
+    if (!asset) {
+      if (heldAssetIdRef.current) {
+        releaseBlobUrl(heldAssetIdRef.current)
+        heldAssetIdRef.current = null
+      }
+      setBuffer(EMPTY_BUFFER)
+      return
     }
-    prevUrl.current = url || null
-  }, [url])
+
+    if (heldAssetIdRef.current === wants.assetId) {
+      setBuffer((prev) => (prev.clipId === wants.id ? prev : { ...prev, clipId: wants.id }))
+      return
+    }
+
+    const url = acquireBlobUrl(wants.assetId, asset.blob)
+    const previousAssetId = heldAssetIdRef.current
+    heldAssetIdRef.current = wants.assetId
+    setBuffer({ clipId: wants.id, assetId: wants.assetId, url })
+    if (previousAssetId) {
+      releaseBlobUrl(previousAssetId)
+    }
+  }, [wants, assets])
 
   useEffect(() => {
     return () => {
-      if (prevUrl.current) URL.revokeObjectURL(prevUrl.current)
+      if (heldAssetIdRef.current) {
+        releaseBlobUrl(heldAssetIdRef.current)
+        heldAssetIdRef.current = null
+      }
     }
   }, [])
+
+  return buffer
 }
 
 /**
- * Gestiona los dos buffers físicos (blob URLs) del doble buffer de
- * reproducción, y decide qué slot físico (A/B) sirve el clip activo vs. el
- * que se está precargando — todo en un único lugar, con acceso directo al
- * estado ya commiteado de ambos slots (no una copia externa que pueda
- * desincronizarse un render).
+ * Gestiona los dos buffers físicos (blob URLs, vía el pool compartido) del
+ * doble buffer de reproducción, y decide qué slot físico (A/B) sirve el
+ * clip activo vs. el que se está precargando — todo en un único lugar, con
+ * acceso directo al estado ya commiteado de ambos slots (no una copia
+ * externa que pueda desincronizarse un render).
  *
  * Regla de asignación, pura y sin memoria de "quién era el rol antes": el
  * slot que YA tiene cargado el clip activo se queda sirviéndolo — nunca se
@@ -72,30 +94,28 @@ export function usePlaybackBuffers(
   activeClip: ClipRef | null,
   waitingClip: ClipRef | null,
 ): PlaybackSlots {
-  const [bufferA, setBufferA] = useState<PlaybackBuffer>(EMPTY_BUFFER)
-  const [bufferB, setBufferB] = useState<PlaybackBuffer>(EMPTY_BUFFER)
+  // slotAClipId/slotBClipId reflejan qué clipId tiene cargado cada slot
+  // FÍSICO ahora mismo (estado del render anterior, vía el useState interno
+  // de useBufferSlot) — se leen antes de decidir qué pedirle a cada uno, así
+  // la asignación de roles no depende de un ref corregido para el próximo
+  // render, que dejaría una ventana de un frame con el rol desalineado.
+  const slotAHeldRef = useRef<string | null>(null)
+  const slotBHeldRef = useRef<string | null>(null)
 
-  const activeIsSlotA = activeClip === null || bufferB.clipId !== activeClip.id
+  const activeIsSlotA = activeClip === null || slotBHeldRef.current !== activeClip.id
 
   const wantsA = activeIsSlotA ? activeClip : waitingClip
   const wantsB = activeIsSlotA ? waitingClip : activeClip
 
-  useEffect(() => {
-    setBufferA((prev) => loadBuffer(prev, wantsA, assets))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantsA?.id, assets])
+  const slotA = useBufferSlot(assets, wantsA)
+  const slotB = useBufferSlot(assets, wantsB)
 
-  useEffect(() => {
-    setBufferB((prev) => loadBuffer(prev, wantsB, assets))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantsB?.id, assets])
-
-  useRevokeOnChange(bufferA.url)
-  useRevokeOnChange(bufferB.url)
+  slotAHeldRef.current = slotA.clipId
+  slotBHeldRef.current = slotB.clipId
 
   return {
-    active: activeIsSlotA ? bufferA : bufferB,
-    waiting: activeIsSlotA ? bufferB : bufferA,
+    active: activeIsSlotA ? slotA : slotB,
+    waiting: activeIsSlotA ? slotB : slotA,
     activeIsSlotA,
   }
 }
