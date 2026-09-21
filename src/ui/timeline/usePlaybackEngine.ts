@@ -93,6 +93,11 @@ export function usePlaybackEngine({
     if (!hasActiveVideo) return
     const video = activeVideoRef.current
     if (!video || !activeClip) return
+    // Si ya hay un seek en curso, escribir currentTime de nuevo reinicia la
+    // búsqueda del keyframe desde cero antes de que la anterior termine —
+    // en archivos grandes eso nunca converge (spinner de carga indefinido).
+    // Se espera a que 'seeked' resuelva antes de corregir drift de nuevo.
+    if (isSeekingRef.current) return
     const targetSeconds = activeClip.sourceTimeMs / 1000
     if (Math.abs(video.currentTime - targetSeconds) > 0.2) {
       video.currentTime = targetSeconds
