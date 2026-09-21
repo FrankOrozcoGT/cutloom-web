@@ -3,13 +3,8 @@ import type { PublishingBackendPort } from '@application/publishing/ports'
 import { PublishingError } from '@application/publishing/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
-import {
-  mapBulkUploadResult,
-  mapMetadataRevision,
-  mapPublishingError,
-  type BulkUploadResponseDto,
-  type GenerateMetadataResponseDto,
-} from './mappers'
+import { parseErrorBody, parseJson } from '@infrastructure/http/parseJson'
+import { bulkUploadResponseSchema, generateMetadataResponseSchema, mapBulkUploadResult, mapMetadataRevision, mapPublishingError } from './mappers'
 
 export class PublishingApiAdapter implements PublishingBackendPort {
   private readonly http: HttpClient
@@ -23,7 +18,7 @@ export class PublishingApiAdapter implements PublishingBackendPort {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as GenerateMetadataResponseDto
+    const body = await parseJson(response, generateMetadataResponseSchema)
     return ok(mapMetadataRevision(body))
   }
 
@@ -48,16 +43,12 @@ export class PublishingApiAdapter implements PublishingBackendPort {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as BulkUploadResponseDto
+    const body = await parseJson(response, bulkUploadResponseSchema)
     return ok(mapBulkUploadResult(body))
   }
 
   private async parseError(response: Response): Promise<PublishingError> {
-    try {
-      const body = (await response.json()) as { error?: string; message?: string }
-      return mapPublishingError(body.error ?? 'UNKNOWN_ERROR', body.message)
-    } catch {
-      return mapPublishingError('UNKNOWN_ERROR')
-    }
+    const body = await parseErrorBody(response)
+    return mapPublishingError(body?.error ?? 'UNKNOWN_ERROR', body?.message)
   }
 }

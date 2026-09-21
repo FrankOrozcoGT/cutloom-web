@@ -3,7 +3,8 @@ import type { AuthApi } from '@application/auth/ports'
 import { AuthError } from '@application/auth/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
-import { mapAuthError, mapAuthSession, mapCurrentUser, type AuthSessionDto, type CurrentUserDto } from './mappers'
+import { parseErrorBody, parseJson } from '@infrastructure/http/parseJson'
+import { authSessionSchema, currentUserSchema, mapAuthError, mapAuthSession, mapCurrentUser } from './mappers'
 
 export class AuthApiAdapter implements AuthApi {
   private readonly http: HttpClient
@@ -39,7 +40,7 @@ export class AuthApiAdapter implements AuthApi {
       const error = await this.parseError(response)
       return err(error)
     }
-    const body = (await response.json()) as CurrentUserDto
+    const body = await parseJson(response, currentUserSchema)
     return ok(mapCurrentUser(body))
   }
 
@@ -48,16 +49,12 @@ export class AuthApiAdapter implements AuthApi {
       const error = await this.parseError(response)
       return err(error)
     }
-    const body = (await response.json()) as AuthSessionDto
+    const body = await parseJson(response, authSessionSchema)
     return ok(mapAuthSession(body))
   }
 
   private async parseError(response: Response): Promise<AuthError> {
-    try {
-      const body = (await response.json()) as { error?: string; message?: string }
-      return mapAuthError(body.error ?? 'UNKNOWN_ERROR', body.message)
-    } catch {
-      return mapAuthError('UNKNOWN_ERROR')
-    }
+    const body = await parseErrorBody(response)
+    return mapAuthError(body?.error ?? 'UNKNOWN_ERROR', body?.message)
   }
 }

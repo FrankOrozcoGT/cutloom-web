@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   toPublishItemError,
   type BulkUploadResult,
@@ -10,33 +11,33 @@ import type { PublishingErrorCode } from '@application/publishing/errors'
 import { PublishingError } from '@application/publishing/errors'
 import { mapKnownError } from '@infrastructure/errors'
 
-export interface MetadataDto {
-  title: string
-  description: string
-  tags: string[]
-  categoryId: string
-  thumbnailIdeas: string[]
-}
+const metadataSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  tags: z.array(z.string()),
+  categoryId: z.string(),
+  thumbnailIdeas: z.array(z.string()),
+})
 
-export interface GenerateMetadataResponseDto {
-  revisionId: string
-  version: number
-  metadata: MetadataDto
-}
+export const generateMetadataResponseSchema = z.object({
+  revisionId: z.string(),
+  version: z.number(),
+  metadata: metadataSchema,
+})
+export type GenerateMetadataResponseDto = z.infer<typeof generateMetadataResponseSchema>
 
-export interface PublishItemResultDto {
-  sourceId: string
-  status: string
-  youtubeVideoId: string | null
-  url: string | null
-  error: string | null
-}
+const publishItemResultSchema = z.object({
+  sourceId: z.string(),
+  status: z.string(),
+  youtubeVideoId: z.string().nullable(),
+  url: z.string().nullable(),
+  error: z.string().nullable(),
+})
 
-export interface BulkUploadResponseDto {
-  results: PublishItemResultDto[]
-}
+export const bulkUploadResponseSchema = z.object({ results: z.array(publishItemResultSchema) })
+export type BulkUploadResponseDto = z.infer<typeof bulkUploadResponseSchema>
 
-function mapMetadata(dto: MetadataDto): YouTubeMetadata {
+function mapMetadata(dto: z.infer<typeof metadataSchema>): YouTubeMetadata {
   return {
     title: dto.title,
     description: dto.description,
@@ -61,7 +62,7 @@ function mapPublishItemStatus(status: string): PublishItemStatus {
   return match ?? 'unknown'
 }
 
-function mapPublishItemResult(dto: PublishItemResultDto): PublishItemResult {
+function mapPublishItemResult(dto: z.infer<typeof publishItemResultSchema>): PublishItemResult {
   return {
     sourceId: dto.sourceId,
     status: mapPublishItemStatus(dto.status),

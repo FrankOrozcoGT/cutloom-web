@@ -4,15 +4,16 @@ import type { AudioClip, ShortsBackendPort } from '@application/shorts/ports'
 import { ShortsError } from '@application/shorts/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
+import { parseErrorBody, parseJson } from '@infrastructure/http/parseJson'
 import {
+  detectResultSchema,
+  improveResultSchema,
   mapDetectResult,
   mapImproveResult,
   mapScoreResult,
   mapShortsError,
+  scoreResultSchema,
   toDetectedCandidateDto,
-  type DetectResultDto,
-  type ImproveResultDto,
-  type ScoreResultDto,
 } from './mappers'
 
 export class ShortsApiAdapter implements ShortsBackendPort {
@@ -30,7 +31,7 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as ImproveResultDto
+    const body = await parseJson(response, improveResultSchema)
     return ok(mapImproveResult(body))
   }
 
@@ -42,7 +43,7 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as DetectResultDto
+    const body = await parseJson(response, detectResultSchema)
     return ok(mapDetectResult(body))
   }
 
@@ -66,7 +67,7 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as ScoreResultDto
+    const body = await parseJson(response, scoreResultSchema)
     return ok(mapScoreResult(body))
   }
 
@@ -74,11 +75,7 @@ export class ShortsApiAdapter implements ShortsBackendPort {
     if (response.status === 413) {
       return mapShortsError('PAYLOAD_TOO_LARGE', 'El contenido enviado es demasiado grande para procesarlo.')
     }
-    try {
-      const body = (await response.json()) as { error?: string; message?: string }
-      return mapShortsError(body.error ?? 'UNKNOWN_ERROR', body.message)
-    } catch {
-      return mapShortsError('UNKNOWN_ERROR')
-    }
+    const body = await parseErrorBody(response)
+    return mapShortsError(body?.error ?? 'UNKNOWN_ERROR', body?.message)
   }
 }

@@ -1,5 +1,9 @@
+import { z } from 'zod'
+import { parseJson } from './parseJson'
+
 const BASE_URL = import.meta.env.VITE_API_URL as string
 
+const refreshResponseSchema = z.object({ accessToken: z.string() })
 type RefreshResult = { accessToken: string } | null
 
 export class HttpClient {
@@ -85,8 +89,7 @@ export class HttpClient {
     if (!response.ok) {
       return null
     }
-    const body = (await response.json()) as { accessToken: string }
-    return body
+    return parseJson(response, refreshResponseSchema)
   }
 
   get(path: string, init: RequestInit = {}): Promise<Response> {

@@ -1,47 +1,50 @@
+import { z } from 'zod'
 import type { DetectedCandidate, DetectResult, ImprovedSubtitle, ImproveResult, ScoreResult, ShortScore } from '@domain/shorts'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import { ShortsError } from '@application/shorts/errors'
 import { mapKnownError } from '@infrastructure/errors'
 
 /** Wire format real de POST /api/shorts/detect (respuesta) y de POST /api/shorts/score (candidates del request) — start/end en segundos, no ms. id se reenvía a /score tal cual, sin recalcularlo. */
-export interface DetectedCandidateDto {
-  id: string
-  start: number
-  end: number
-  confidence: number
-  reason: string
-}
+const detectedCandidateSchema = z.object({
+  id: z.string(),
+  start: z.number(),
+  end: z.number(),
+  confidence: z.number(),
+  reason: z.string(),
+})
+export type DetectedCandidateDto = z.infer<typeof detectedCandidateSchema>
 
-export interface ImprovedSubtitleDto {
-  start: number
-  end: number
-  original: string
-  corrected: string
-}
+const improvedSubtitleSchema = z.object({
+  start: z.number(),
+  end: z.number(),
+  original: z.string(),
+  corrected: z.string(),
+})
 
 /** Wire format real de la respuesta de POST /api/shorts/score — start/end en segundos, no ms, igual que detect. */
-export interface ShortScoreDto {
-  start: number
-  end: number
-  confidence: number
-  reason: string
-  emotion: string | null
-  score: number
-}
+const shortScoreSchema = z.object({
+  start: z.number(),
+  end: z.number(),
+  confidence: z.number(),
+  reason: z.string(),
+  emotion: z.string().nullable(),
+  score: z.number(),
+})
 
-export interface DetectResultDto {
-  candidates: DetectedCandidateDto[]
-}
+export const detectResultSchema = z.object({ candidates: z.array(detectedCandidateSchema) })
+export type DetectResultDto = z.infer<typeof detectResultSchema>
 
-export interface ScoreResultDto {
-  shorts: ShortScoreDto[]
-  warnings: string[]
-}
+export const scoreResultSchema = z.object({
+  shorts: z.array(shortScoreSchema),
+  warnings: z.array(z.string()),
+})
+export type ScoreResultDto = z.infer<typeof scoreResultSchema>
 
-export interface ImproveResultDto {
-  summary: string
-  correctedSubtitles: ImprovedSubtitleDto[]
-}
+export const improveResultSchema = z.object({
+  summary: z.string(),
+  correctedSubtitles: z.array(improvedSubtitleSchema),
+})
+export type ImproveResultDto = z.infer<typeof improveResultSchema>
 
 export function mapDetectedCandidate(dto: DetectedCandidateDto): DetectedCandidate {
   return {
@@ -64,12 +67,11 @@ export function toDetectedCandidateDto(candidate: DetectedCandidate): DetectedCa
   }
 }
 
-
 export function mapDetectResult(dto: DetectResultDto): DetectResult {
   return { candidates: dto.candidates.map(mapDetectedCandidate) }
 }
 
-export function mapImprovedSubtitle(dto: ImprovedSubtitleDto): ImprovedSubtitle {
+export function mapImprovedSubtitle(dto: z.infer<typeof improvedSubtitleSchema>): ImprovedSubtitle {
   return { startMs: dto.start, endMs: dto.end, original: dto.original, corrected: dto.corrected }
 }
 
@@ -77,7 +79,7 @@ export function mapImproveResult(dto: ImproveResultDto): ImproveResult {
   return { summary: dto.summary, correctedSubtitles: dto.correctedSubtitles.map(mapImprovedSubtitle) }
 }
 
-export function mapShortScore(dto: ShortScoreDto): ShortScore {
+export function mapShortScore(dto: z.infer<typeof shortScoreSchema>): ShortScore {
   return {
     startMs: Math.round(dto.start * 1000),
     endMs: Math.round(dto.end * 1000),

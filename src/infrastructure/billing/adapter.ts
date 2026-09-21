@@ -11,7 +11,13 @@ import type { BillingApi } from '@application/billing/ports'
 import { BillingError } from '@application/billing/errors'
 import { err, ok, type Result } from '@application/result'
 import type { HttpClient } from '@infrastructure/http/client'
+import { parseErrorBody, parseJson } from '@infrastructure/http/parseJson'
 import {
+  cancelSubscriptionResultSchema,
+  changePlanResultSchema,
+  checkoutLinkSchema,
+  creditBalanceSchema,
+  donationLinkSchema,
   mapBillingError,
   mapCancelSubscriptionResult,
   mapChangePlanResult,
@@ -20,13 +26,8 @@ import {
   mapDonationLink,
   mapPlan,
   mapSubscription,
-  type CancelSubscriptionResultDto,
-  type ChangePlanResultDto,
-  type CheckoutLinkDto,
-  type CreditBalanceDto,
-  type DonationLinkDto,
-  type PlanDto,
-  type SubscriptionDto,
+  plansResponseSchema,
+  subscriptionResponseSchema,
 } from './mappers'
 
 export class BillingApiAdapter implements BillingApi {
@@ -41,7 +42,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as { plans: PlanDto[] }
+    const body = await parseJson(response, plansResponseSchema)
     return ok(body.plans.map(mapPlan))
   }
 
@@ -50,7 +51,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as { subscription: SubscriptionDto | null }
+    const body = await parseJson(response, subscriptionResponseSchema)
     return ok(body.subscription ? mapSubscription(body.subscription) : null)
   }
 
@@ -59,7 +60,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CreditBalanceDto
+    const body = await parseJson(response, creditBalanceSchema)
     return ok(mapCreditBalance(body))
   }
 
@@ -68,7 +69,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CheckoutLinkDto
+    const body = await parseJson(response, checkoutLinkSchema)
     return ok(mapCheckoutLink(body))
   }
 
@@ -77,7 +78,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CancelSubscriptionResultDto
+    const body = await parseJson(response, cancelSubscriptionResultSchema)
     return ok(mapCancelSubscriptionResult(body))
   }
 
@@ -86,7 +87,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as ChangePlanResultDto
+    const body = await parseJson(response, changePlanResultSchema)
     return ok(mapChangePlanResult(body))
   }
 
@@ -95,7 +96,7 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as CheckoutLinkDto
+    const body = await parseJson(response, checkoutLinkSchema)
     return ok(mapCheckoutLink(body))
   }
 
@@ -104,16 +105,12 @@ export class BillingApiAdapter implements BillingApi {
     if (!response.ok) {
       return err(await this.parseError(response))
     }
-    const body = (await response.json()) as DonationLinkDto
+    const body = await parseJson(response, donationLinkSchema)
     return ok(mapDonationLink(body))
   }
 
   private async parseError(response: Response): Promise<BillingError> {
-    try {
-      const body = (await response.json()) as { error?: string; message?: string }
-      return mapBillingError(body.error ?? 'UNKNOWN_ERROR', body.message)
-    } catch {
-      return mapBillingError('UNKNOWN_ERROR')
-    }
+    const body = await parseErrorBody(response)
+    return mapBillingError(body?.error ?? 'UNKNOWN_ERROR', body?.message)
   }
 }

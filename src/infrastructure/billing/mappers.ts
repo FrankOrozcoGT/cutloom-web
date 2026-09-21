@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type {
   CancelSubscriptionResult,
   ChangePlanResult,
@@ -7,67 +8,71 @@ import type {
   Plan,
   PlanFeature,
   Subscription,
-  SubscriptionStatus,
 } from '@domain/billing'
 import type { BillingErrorCode } from '@application/billing/errors'
 import { BillingError } from '@application/billing/errors'
 import { mapKnownError } from '@infrastructure/errors'
 
-export interface PlanFeatureDto {
-  feature: string
-  usageLimit: number | null
-}
+const subscriptionStatusSchema = z.enum(['active', 'past_due', 'inactive'])
 
-export interface PlanDto {
-  id: string
-  name: string
-  amountInCents: number
-  currency: string
-  interval: string
-  features: PlanFeatureDto[]
-}
+const planFeatureSchema = z.object({
+  feature: z.string(),
+  usageLimit: z.number().nullable(),
+})
 
-export interface SubscriptionDto {
-  planId: string | null
-  status: SubscriptionStatus
-  currentPeriodStart: string
-  currentPeriodEnd: string
-  cancelAtPeriodEnd: boolean
-}
+const planSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  amountInCents: z.number(),
+  currency: z.string(),
+  interval: z.string(),
+  features: z.array(planFeatureSchema),
+})
 
-export interface ChangePlanResultDto {
-  status: SubscriptionStatus
-  planId: string
-  currentPeriodStart: string
-  currentPeriodEnd: string
-  proratedAmountInCents: number
-}
+export const plansResponseSchema = z.object({ plans: z.array(planSchema) })
 
-export interface CreditBalanceDto {
-  balance: number
-}
+const subscriptionSchema = z.object({
+  planId: z.string().nullable(),
+  status: subscriptionStatusSchema,
+  currentPeriodStart: z.string(),
+  currentPeriodEnd: z.string(),
+  cancelAtPeriodEnd: z.boolean(),
+})
 
-export interface CheckoutLinkDto {
-  checkoutUrl: string
-}
+export const subscriptionResponseSchema = z.object({ subscription: subscriptionSchema.nullable() })
 
-export interface DonationLinkDto {
-  donationUrl: string
-}
+export const changePlanResultSchema = z.object({
+  status: subscriptionStatusSchema,
+  planId: z.string(),
+  currentPeriodStart: z.string(),
+  currentPeriodEnd: z.string(),
+  proratedAmountInCents: z.number(),
+})
+export type ChangePlanResultDto = z.infer<typeof changePlanResultSchema>
 
-export interface CancelSubscriptionResultDto {
-  cancelAtPeriodEnd: boolean
-  currentPeriodEnd: string
-}
+export const creditBalanceSchema = z.object({ balance: z.number() })
+export type CreditBalanceDto = z.infer<typeof creditBalanceSchema>
 
-export function mapPlanFeature(dto: PlanFeatureDto): PlanFeature {
+export const checkoutLinkSchema = z.object({ checkoutUrl: z.string() })
+export type CheckoutLinkDto = z.infer<typeof checkoutLinkSchema>
+
+export const donationLinkSchema = z.object({ donationUrl: z.string() })
+export type DonationLinkDto = z.infer<typeof donationLinkSchema>
+
+export const cancelSubscriptionResultSchema = z.object({
+  cancelAtPeriodEnd: z.boolean(),
+  currentPeriodEnd: z.string(),
+})
+export type CancelSubscriptionResultDto = z.infer<typeof cancelSubscriptionResultSchema>
+
+export function mapPlanFeature(dto: z.infer<typeof planFeatureSchema>): PlanFeature {
   return {
     feature: dto.feature,
     usageLimit: dto.usageLimit,
   }
 }
 
-export function mapPlan(dto: PlanDto): Plan {
+export function mapPlan(dto: z.infer<typeof planSchema>): Plan {
   return {
     id: dto.id,
     name: dto.name,
@@ -78,7 +83,7 @@ export function mapPlan(dto: PlanDto): Plan {
   }
 }
 
-export function mapSubscription(dto: SubscriptionDto): Subscription {
+export function mapSubscription(dto: z.infer<typeof subscriptionSchema>): Subscription {
   return {
     planId: dto.planId,
     status: dto.status,

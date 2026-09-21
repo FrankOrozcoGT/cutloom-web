@@ -1,38 +1,41 @@
+import { z } from 'zod'
 import type { AuthErrorCode, AuthSession, CurrentUser, User, UserEntitlement } from '@domain/auth'
 import { AuthError } from '@application/auth/errors'
 import { mapKnownError } from '@infrastructure/errors'
 
-interface UserDto {
-  id: string
-  email: string
-  name: string
-  authType: 'local' | 'google'
-  createdAt: string
-}
+const userSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  authType: z.enum(['local', 'google']),
+  createdAt: z.string(),
+})
 
-export interface AuthSessionDto {
-  user: UserDto
-  accessToken: string
-  isNewUser: boolean
-}
+export const authSessionSchema = z.object({
+  user: userSchema,
+  accessToken: z.string(),
+  isNewUser: z.boolean(),
+})
+export type AuthSessionDto = z.infer<typeof authSessionSchema>
 
-interface UserEntitlementDto {
-  feature: string
-  active: boolean
-  usageLimit: number | null
-  usageCount: number
-}
+const userEntitlementSchema = z.object({
+  feature: z.string(),
+  active: z.boolean(),
+  usageLimit: z.number().nullable(),
+  usageCount: z.number(),
+})
 
-export interface CurrentUserDto {
-  user: UserDto
-  organizationId: string | null
-  entitlements: UserEntitlementDto[]
-  youtubeConnected: boolean
-  youtubeGoogleEmail: string | null
-  youtubeChannelTitle: string | null
-}
+export const currentUserSchema = z.object({
+  user: userSchema,
+  organizationId: z.string().nullable(),
+  entitlements: z.array(userEntitlementSchema),
+  youtubeConnected: z.boolean(),
+  youtubeGoogleEmail: z.string().nullable(),
+  youtubeChannelTitle: z.string().nullable(),
+})
+export type CurrentUserDto = z.infer<typeof currentUserSchema>
 
-export function mapUser(dto: UserDto): User {
+export function mapUser(dto: z.infer<typeof userSchema>): User {
   return {
     id: dto.id,
     email: dto.email,
@@ -50,7 +53,7 @@ export function mapAuthSession(dto: AuthSessionDto): AuthSession {
   }
 }
 
-export function mapUserEntitlement(dto: UserEntitlementDto): UserEntitlement {
+export function mapUserEntitlement(dto: z.infer<typeof userEntitlementSchema>): UserEntitlement {
   return {
     feature: dto.feature,
     active: dto.active,
