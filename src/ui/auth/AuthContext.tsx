@@ -11,9 +11,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [entitlements, setEntitlements] = useState<UserEntitlement[]>([])
+  const [creditBalance, setCreditBalance] = useState(0)
   const [youtubeConnected, setYoutubeConnected] = useState(false)
   const [youtubeGoogleEmail, setYoutubeGoogleEmail] = useState<string | null>(null)
   const [youtubeChannelTitle, setYoutubeChannelTitle] = useState<string | null>(null)
+  const [tiktokConnected, setTiktokConnected] = useState(false)
+  const [tiktokDisplayName, setTiktokDisplayName] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const authUseCase = useRef(new AuthUseCase(new AuthApiAdapter(httpClient), httpClient)).current
 
@@ -21,9 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setOrganizationId(null)
     setEntitlements([])
+    setCreditBalance(0)
     setYoutubeConnected(false)
     setYoutubeGoogleEmail(null)
     setYoutubeChannelTitle(null)
+    setTiktokConnected(false)
+    setTiktokDisplayName(null)
   }, [])
 
   const applyCurrentUser = useCallback((current: Result<CurrentUser, AuthError>): AuthError | null => {
@@ -31,9 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(current.value.user)
     setOrganizationId(current.value.organizationId)
     setEntitlements(current.value.entitlements)
+    setCreditBalance(current.value.creditBalance)
     setYoutubeConnected(current.value.youtubeConnected)
     setYoutubeGoogleEmail(current.value.youtubeGoogleEmail)
     setYoutubeChannelTitle(current.value.youtubeChannelTitle)
+    setTiktokConnected(current.value.tiktokConnected)
+    setTiktokDisplayName(current.value.tiktokDisplayName)
     return null
   }, [])
 
@@ -79,9 +88,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       organizationId,
       entitlements,
+      creditBalance,
       youtubeConnected,
       youtubeGoogleEmail,
       youtubeChannelTitle,
+      tiktokConnected,
+      tiktokDisplayName,
       isAuthenticated: user !== null,
       isLoading,
       login,
@@ -94,9 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       organizationId,
       entitlements,
+      creditBalance,
       youtubeConnected,
       youtubeGoogleEmail,
       youtubeChannelTitle,
+      tiktokConnected,
+      tiktokDisplayName,
       isLoading,
       login,
       register,

@@ -5,7 +5,7 @@ import { FullscreenLoader } from '@ui/components/FullscreenLoader'
 import { LoginPage } from '@ui/pages/LoginPage'
 import { RegisterPage } from '@ui/pages/RegisterPage'
 import { GoogleCallbackPage } from '@ui/pages/GoogleCallbackPage'
-import { YouTubeCallbackPage } from '@ui/pages/YouTubeCallbackPage'
+import { PlatformCallbackPage } from '@ui/pages/PlatformCallbackPage'
 import { EditorPage } from '@ui/pages/EditorPage'
 import { ProjectsPage } from '@ui/pages/ProjectsPage'
 import { ShortsPage } from '@ui/pages/ShortsPage'
@@ -82,8 +82,8 @@ const router = createBrowserRouter([
     element: <GoogleCallbackPage />,
   },
   {
-    path: '/publishing/youtube/callback',
-    element: <YouTubeCallbackPage />,
+    path: '/publishing/:platform/callback',
+    element: <PlatformCallbackPage />,
   },
 ])
 

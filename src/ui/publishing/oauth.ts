@@ -1,25 +1,36 @@
+import type { PublishingPlatform } from '@domain/platform'
 import { httpClient } from '@infrastructure/http/client'
 import { resolveReturnTo } from '@ui/auth/returnTo'
 
-export const YOUTUBE_CALLBACK_PATH = '/publishing/youtube/callback'
+export function platformCallbackPath(platform: PublishingPlatform): string {
+  return `/publishing/${platform}/callback`
+}
 
-const YOUTUBE_OAUTH_ERROR_CODES = [
+const PLATFORM_OAUTH_ERROR_CODES = [
   'STATE_MISMATCH',
   'CONSENT_DENIED',
-  'GOOGLE_OAUTH_ERROR',
+  'YOUTUBE_OAUTH_ERROR',
+  'TIKTOK_OAUTH_ERROR',
   'MISSING_AUTHORIZATION_CODE',
   'YOUTUBE_AUTH_FAILED',
+  'TIKTOK_AUTH_FAILED',
   'UNEXPECTED_ERROR',
 ] as const
 
-export type YouTubeOAuthErrorCode = (typeof YOUTUBE_OAUTH_ERROR_CODES)[number]
+export type PlatformOAuthErrorCode = (typeof PLATFORM_OAUTH_ERROR_CODES)[number]
 
-/** Único punto de entrada para clasificar el ?error= crudo del redirect del backend — ningún consumidor debe comparar contra el string crudo directamente. */
-export function toYouTubeOAuthErrorCode(raw: string): YouTubeOAuthErrorCode | null {
-  return (YOUTUBE_OAUTH_ERROR_CODES as readonly string[]).includes(raw) ? (raw as YouTubeOAuthErrorCode) : null
+// YouTube usaba GOOGLE_OAUTH_ERROR/GOOGLE_AUTH_FAILED antes del contrato genérico por :platform.
+// Se toleran durante la transición para no romper si el entorno está a medio migrar.
+const LEGACY_YOUTUBE_ERROR_ALIASES: Record<string, PlatformOAuthErrorCode> = {
+  GOOGLE_OAUTH_ERROR: 'YOUTUBE_OAUTH_ERROR',
+  GOOGLE_AUTH_FAILED: 'YOUTUBE_AUTH_FAILED',
 }
 
-const YOUTUBE_AUTH_START_PATH = '/api/publishing/youtube/auth/start'
+/** Único punto de entrada para clasificar el ?error= crudo del redirect del backend — ningún consumidor debe comparar contra el string crudo directamente. */
+export function toPlatformOAuthErrorCode(_platform: PublishingPlatform, raw: string): PlatformOAuthErrorCode | null {
+  if ((PLATFORM_OAUTH_ERROR_CODES as readonly string[]).includes(raw)) return raw as PlatformOAuthErrorCode
+  return LEGACY_YOUTUBE_ERROR_ALIASES[raw] ?? null
+}
 
 /**
  * Un redirect de página completa no lleva el header Authorization, así que
@@ -30,15 +41,15 @@ const YOUTUBE_AUTH_START_PATH = '/api/publishing/youtube/auth/start'
  * forma de leer el Location de un redirect real. Recién con la URL en el
  * body se navega con window.location.assign. El backend debe reenviar el
  * mismo returnTo como query param al redirigir de vuelta a
- * /publishing/youtube/callback, igual que ya hace para /auth/callback.
+ * /publishing/:platform/callback, igual que ya hace para /auth/callback.
  */
-export async function startYouTubeOAuth(returnTo: string): Promise<void> {
+export async function startPlatformOAuth(platform: PublishingPlatform, returnTo: string): Promise<void> {
   const validatedReturnTo = resolveReturnTo(returnTo)
   const response = await httpClient.get(
-    `${YOUTUBE_AUTH_START_PATH}?json=true&returnTo=${encodeURIComponent(validatedReturnTo)}`,
+    `/api/publishing/${platform}/auth/start?json=true&returnTo=${encodeURIComponent(validatedReturnTo)}`,
   )
   if (!response.ok) {
-    throw new Error('No se pudo obtener la URL de autorización de YouTube.')
+    throw new Error(`No se pudo obtener la URL de autorización de ${platform}.`)
   }
   const body = (await response.json()) as { url: string }
   window.location.assign(body.url)

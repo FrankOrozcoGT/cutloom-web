@@ -6,9 +6,12 @@ export interface AuthContextValue {
   user: User | null
   organizationId: string | null
   entitlements: UserEntitlement[]
+  creditBalance: number
   youtubeConnected: boolean
   youtubeGoogleEmail: string | null
   youtubeChannelTitle: string | null
+  tiktokConnected: boolean
+  tiktokDisplayName: string | null
   isAuthenticated: boolean
   isLoading: boolean
   login: (credentials: AuthCredentials) => Promise<AuthError | null>

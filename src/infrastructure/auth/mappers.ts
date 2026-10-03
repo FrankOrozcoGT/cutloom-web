@@ -21,17 +21,19 @@ export type AuthSessionDto = z.infer<typeof authSessionSchema>
 const userEntitlementSchema = z.object({
   feature: z.string(),
   active: z.boolean(),
-  usageLimit: z.number().nullable(),
-  usageCount: z.number(),
+  planBalance: z.number().nullable(),
 })
 
 export const currentUserSchema = z.object({
   user: userSchema,
   organizationId: z.string().nullable(),
   entitlements: z.array(userEntitlementSchema),
+  creditBalance: z.number(),
   youtubeConnected: z.boolean(),
   youtubeGoogleEmail: z.string().nullable(),
   youtubeChannelTitle: z.string().nullable(),
+  tiktokConnected: z.boolean(),
+  tiktokDisplayName: z.string().nullable(),
 })
 export type CurrentUserDto = z.infer<typeof currentUserSchema>
 
@@ -57,8 +59,7 @@ export function mapUserEntitlement(dto: z.infer<typeof userEntitlementSchema>): 
   return {
     feature: dto.feature,
     active: dto.active,
-    usageLimit: dto.usageLimit,
-    usageCount: dto.usageCount,
+    planBalance: dto.planBalance,
   }
 }
 
@@ -67,9 +68,12 @@ export function mapCurrentUser(dto: CurrentUserDto): CurrentUser {
     user: mapUser(dto.user),
     organizationId: dto.organizationId,
     entitlements: dto.entitlements.map(mapUserEntitlement),
+    creditBalance: dto.creditBalance,
     youtubeConnected: dto.youtubeConnected,
     youtubeGoogleEmail: dto.youtubeGoogleEmail,
     youtubeChannelTitle: dto.youtubeChannelTitle,
+    tiktokConnected: dto.tiktokConnected,
+    tiktokDisplayName: dto.tiktokDisplayName,
   }
 }
 
