@@ -1,11 +1,17 @@
 import { AuthProvider } from '@ui/auth/AuthContext'
+import { NotificationsProvider } from '@ui/notifications/NotificationsContext'
+import { ToastProvider } from '@ui/toasts/ToastProvider'
 import { AppRouter } from '@ui/router'
 
 function App() {
   return (
-    <AuthProvider>
-      <AppRouter />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <NotificationsProvider>
+          <AppRouter />
+        </NotificationsProvider>
+      </AuthProvider>
+    </ToastProvider>
   )
 }
 
