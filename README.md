@@ -1,8 +1,8 @@
-# CutLoom Web
+# ClipCopilot Web
 
 Editor de video en el navegador: sube clips, agrúpalos, córtalos con vista de timeline, agrega subtítulos automáticos y detecta los mejores momentos para shorts.
 
-Frontend de CutLoom — la contraparte backend vive en [FrankOrozcoGT/cutloom-api](https://github.com/FrankOrozcoGT/cutloom-api).
+Frontend de ClipCopilot — la contraparte backend vive en [FrankOrozcoGT/cutloom-api](https://github.com/FrankOrozcoGT/cutloom-api).
 
 ## Stack
 

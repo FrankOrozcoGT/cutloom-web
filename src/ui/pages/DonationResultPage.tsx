@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { APP_NAME } from '@ui/branding'
 
 interface DonationResultPageProps {
   result: 'success' | 'cancel'
@@ -10,7 +11,7 @@ export function DonationResultPage({ result }: DonationResultPageProps) {
       {result === 'success' ? (
         <>
           <h1 className="text-2xl font-semibold text-text-strong">¡Gracias por el café! ☕</h1>
-          <p className="text-text-muted">Tu donación ayuda a mantener CutLoom gratis.</p>
+          <p className="text-text-muted">Tu donación ayuda a mantener {APP_NAME} gratis.</p>
         </>
       ) : (
         <>

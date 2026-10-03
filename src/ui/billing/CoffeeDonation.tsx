@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@ui/components/Button'
+import { APP_NAME } from '@ui/branding'
 import { billingApi } from './composition'
 
 const PRESET_AMOUNTS_QTZ = [10, 20, 40]
@@ -42,7 +43,7 @@ export function CoffeeDonation({ onClose }: CoffeeDonationProps) {
       >
         <h2 className="text-lg font-semibold text-text-strong">Invitar un café ☕</h2>
         <p className="mt-1 text-sm text-text-muted">
-          Si CutLoom te resultó útil, podés apoyar el proyecto con una donación.
+          Si {APP_NAME} te resultó útil, podés apoyar el proyecto con una donación.
         </p>
 
         <div className="mt-4 flex items-stretch gap-2">

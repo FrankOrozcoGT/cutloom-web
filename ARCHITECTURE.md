@@ -1,4 +1,4 @@
-# Arquitectura general — CutLoom Web
+# Arquitectura general — ClipCopilot Web
 
 Este documento cubre lo que siempre debe saberse sobre este repo: principios, capas y reglas generales. No describe features concretas (eso vive en la capa de navegación/planning) ni implementación (eso vive en el código).
 
