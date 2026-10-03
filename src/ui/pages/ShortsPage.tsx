@@ -131,7 +131,7 @@ export function ShortsPage() {
           to={`/projects/${projectId}/publish`}
           className="ml-auto rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-text-strong hover:bg-surface-hover"
         >
-          Publicar en YouTube
+          Publicar
         </Link>
       </div>
 
