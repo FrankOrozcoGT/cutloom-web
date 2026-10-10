@@ -40,7 +40,7 @@ export function CreditsResultPage({ result }: CreditsResultPageProps) {
             {isRefetching ? 'Confirmando tu recarga…' : '¡Créditos recargados!'}
           </h1>
           <p className="text-text-muted">
-            {balance === null ? 'Confirmando tu balance…' : `Balance actual: Q${(balance / 100).toFixed(2)}`}
+            {balance === null ? 'Confirmando tu balance…' : `Balance actual: ${balance} minutos disponibles`}
           </p>
         </>
       ) : (

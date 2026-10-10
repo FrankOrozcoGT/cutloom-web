@@ -6,7 +6,6 @@ import type {
   CreditBalance,
   DonationLink,
   Plan,
-  PlanFeature,
   Subscription,
 } from '@domain/billing'
 import type { BillingErrorCode } from '@application/billing/errors'
@@ -15,18 +14,14 @@ import { mapKnownError } from '@infrastructure/errors'
 
 const subscriptionStatusSchema = z.enum(['active', 'past_due', 'inactive'])
 
-const planFeatureSchema = z.object({
-  feature: z.string(),
-  usageLimit: z.number().nullable(),
-})
-
 const planSchema = z.object({
   id: z.string(),
   name: z.string(),
   amountInCents: z.number(),
   currency: z.string(),
   interval: z.string(),
-  features: z.array(planFeatureSchema),
+  features: z.array(z.string()),
+  creditsPerCycle: z.number(),
 })
 
 export const plansResponseSchema = z.object({ plans: z.array(planSchema) })
@@ -65,13 +60,6 @@ export const cancelSubscriptionResultSchema = z.object({
 })
 export type CancelSubscriptionResultDto = z.infer<typeof cancelSubscriptionResultSchema>
 
-export function mapPlanFeature(dto: z.infer<typeof planFeatureSchema>): PlanFeature {
-  return {
-    feature: dto.feature,
-    usageLimit: dto.usageLimit,
-  }
-}
-
 export function mapPlan(dto: z.infer<typeof planSchema>): Plan {
   return {
     id: dto.id,
@@ -79,7 +67,8 @@ export function mapPlan(dto: z.infer<typeof planSchema>): Plan {
     amountInCents: dto.amountInCents,
     currency: dto.currency,
     interval: dto.interval,
-    features: dto.features.map(mapPlanFeature),
+    features: dto.features,
+    creditsPerCycle: dto.creditsPerCycle,
   }
 }
 

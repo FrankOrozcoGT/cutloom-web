@@ -15,12 +15,10 @@ export function PlanCard({ plan, footer }: PlanCardProps) {
         {formatPlanAmount(plan.amountInCents, plan.currency)}
         <span className="text-sm font-normal text-text-muted"> / {plan.interval}</span>
       </p>
+      <p className="text-sm text-text-muted">{plan.creditsPerCycle} créditos/{plan.interval} para usar en:</p>
       <ul className="flex flex-col gap-1 text-sm text-text-muted">
         {plan.features.map((feature) => (
-          <li key={feature.feature}>
-            • {feature.feature}
-            {feature.usageLimit !== null && ` (${feature.usageLimit}/mes)`}
-          </li>
+          <li key={feature}>• {feature}</li>
         ))}
       </ul>
       {footer}

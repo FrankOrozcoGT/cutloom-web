@@ -22,15 +22,13 @@ export interface AuthCredentials {
 export interface UserEntitlement {
   feature: string
   active: boolean
-  /** Unidades restantes del plan en este ciclo de facturación, para esta feature. null = sin tope (acceso ilimitado). Se recarga en cada renovación/cambio de plan. */
-  planBalance: number | null
 }
 
 export interface CurrentUser {
   user: User
   organizationId: string | null
   entitlements: UserEntitlement[]
-  /** Unidades de crédito comprado, libres, sin asociar a ninguna feature — se consumen cuando planBalance de una feature llega a 0. No es dinero, son las mismas unidades que planBalance (hoy: minutos). */
+  /** Pozo único de crédito compartido entre todas las features (plan + comprado juntos) — ya no hay saldo por feature (ver UserEntitlement). No es dinero, son unidades de uso (hoy: minutos). */
   creditBalance: number
   youtubeConnected: boolean
   /** null aunque youtubeConnected sea true si la conexión se hizo con el scope viejo (antes de pedir email/canal) — hace falta reconectar para que aparezca. */

@@ -21,7 +21,6 @@ export type AuthSessionDto = z.infer<typeof authSessionSchema>
 const userEntitlementSchema = z.object({
   feature: z.string(),
   active: z.boolean(),
-  planBalance: z.number().nullable(),
 })
 
 export const currentUserSchema = z.object({
@@ -59,7 +58,6 @@ export function mapUserEntitlement(dto: z.infer<typeof userEntitlementSchema>): 
   return {
     feature: dto.feature,
     active: dto.active,
-    planBalance: dto.planBalance,
   }
 }
 

@@ -1,17 +1,15 @@
 export type SubscriptionStatus = 'active' | 'past_due' | 'inactive'
 
-export interface PlanFeature {
-  feature: string
-  usageLimit: number | null
-}
-
 export interface Plan {
   id: string
   name: string
   amountInCents: number
   currency: string
   interval: string
-  features: PlanFeature[]
+  /** Features que habilita el plan — ya no trae tope por feature (ver creditsPerCycle: ahora hay un pozo único de crédito compartido entre todas). */
+  features: string[]
+  /** Total de créditos que el plan otorga por ciclo de facturación, a repartir libremente entre las features habilitadas — reemplaza el tope por feature que antes vivía en cada PlanFeature. */
+  creditsPerCycle: number
 }
 
 export interface Subscription {

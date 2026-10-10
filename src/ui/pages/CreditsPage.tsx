@@ -43,7 +43,7 @@ export function CreditsPage() {
     <div className="mx-auto flex max-w-xl flex-col gap-6 p-6">
       <h1 className="text-2xl font-semibold text-text-strong">Créditos por uso</h1>
       <p className="text-text-muted">
-        Balance actual: <span className="text-text-strong">{balance === null ? '—' : `Q${(balance / 100).toFixed(2)}`}</span>
+        Balance actual: <span className="text-text-strong">{balance === null ? '—' : `${balance} minutos disponibles`}</span>
       </p>
 
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-6">
