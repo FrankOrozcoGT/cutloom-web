@@ -160,8 +160,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** context.subtitles es obligatorio y no vacío para el backend (400 MISSING_SUBTITLES si falta) — se valida acá antes de llamar para no gastar una request inválida y para que el item quede marcado con el mismo código de error tipado que devolvería el backend. */
-function hasRequiredSubtitles(item: PublishSeriesItem): boolean {
+/** context.subtitles es obligatorio y no vacío para el backend (400 MISSING_SUBTITLES si falta) — se valida acá antes de llamar para no gastar una request inválida y para que el item quede marcado con el mismo código de error tipado que devolvería el backend. Type guard (no solo boolean) para que el caller no necesite castear item.context luego de este chequeo. */
+function hasRequiredSubtitles(item: PublishSeriesItem): item is PublishSeriesItem & { context: MetadataContext } {
   return !!item.context?.subtitles && item.context.subtitles.length > 0
 }
 
@@ -277,7 +277,7 @@ export function usePublish({ projectId, projectName }: UsePublishParams) {
           topic: input.topic.trim() || undefined,
           tone: input.tone.trim() || undefined,
           additionalInstructions: input.additionalInstructions.trim() || undefined,
-          context: item.context as MetadataContext,
+          context: item.context,
         })
         if (!result.ok) {
           setItem(sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Metadata, code: result.error.code } })
@@ -308,7 +308,7 @@ export function usePublish({ projectId, projectName }: UsePublishParams) {
       const result = await publishingUseCase.generateMetadata(projectId, {
         sourceId,
         feedback,
-        context: item.context as MetadataContext,
+        context: item.context,
       })
       if (!result.ok) {
         setItem(sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Metadata, code: result.error.code } })

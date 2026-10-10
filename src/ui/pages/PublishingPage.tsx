@@ -17,10 +17,9 @@ import { useTikTokCapabilities } from '@ui/hooks/useTikTokCapabilities'
 import { shortsStorage, projectUseCase } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 import { subtitlesStorage } from '@ui/subtitles/composition'
-import { startPlatformOAuth } from '@ui/publishing/oauth'
+import { useConnectPlatform } from '@ui/publishing/useConnectPlatform'
 import { publishingStorage, publishingUseCase } from '@ui/publishing/composition'
 import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
-import { useToast } from '@ui/toasts/useToast'
 import { useNotifications } from '@ui/notifications/useNotifications'
 import type { Timeline } from '@domain/timeline'
 import type { ShortScore } from '@domain/shorts'
@@ -105,7 +104,7 @@ export function PublishingPage() {
   // cancelBulkUpload/getBulkUploadStatus que sí usan seriesId).
   const [failedBulkUploadId, setFailedBulkUploadId] = useState<string | null>(null)
   const [isRetryingFailed, setIsRetryingFailed] = useState(false)
-  const { showToast } = useToast()
+  const connectPlatform = useConnectPlatform(`/projects/${projectId}/publish`)
 
   // Recuerda la última URL manual del video largo por proyecto (mismo storage del que se lee, ver
   // efecto de carga más abajo), para no tener que volver a pegarla cada vez que se publican shorts
@@ -268,14 +267,6 @@ export function PublishingPage() {
   const anyShortSelected = [...selected].some((sourceId) => publishState.items[sourceId]?.videoType === 'short')
   const longVideoSelected = selected.has(projectId)
   const needsManualLongVideoUrl = anyShortSelected && !longVideoSelected
-
-  async function connectPlatform(platform: PublishingPlatform) {
-    try {
-      await startPlatformOAuth(platform, `/projects/${projectId}/publish`)
-    } catch {
-      showToast(`No se pudo iniciar la conexión con ${platformLabel(platform)}. Intentá de nuevo.`)
-    }
-  }
 
   function toggleSelected(sourceId: string) {
     setSelected((prev) => {

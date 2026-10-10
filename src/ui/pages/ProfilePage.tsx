@@ -1,20 +1,10 @@
 import { useAuth } from '@ui/auth/useAuth'
 import { Button } from '@ui/components/Button'
-import { platformLabel, type PublishingPlatform } from '@domain/platform'
-import { startPlatformOAuth } from '@ui/publishing/oauth'
-import { useToast } from '@ui/toasts/useToast'
+import { useConnectPlatform } from '@ui/publishing/useConnectPlatform'
 
 export function ProfilePage() {
   const { isAuthenticated, user, youtubeConnected, youtubeChannelTitle, tiktokConnected, tiktokDisplayName } = useAuth()
-  const { showToast } = useToast()
-
-  const handleConnect = async (platform: PublishingPlatform) => {
-    try {
-      await startPlatformOAuth(platform, '/profile')
-    } catch {
-      showToast(`No se pudo iniciar la conexión con ${platformLabel(platform)}. Intentá de nuevo.`)
-    }
-  }
+  const handleConnect = useConnectPlatform('/profile')
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4 p-6">

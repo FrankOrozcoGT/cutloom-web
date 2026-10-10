@@ -1,14 +1,11 @@
 import { z } from 'zod'
 import {
-  toPublishItemError,
   type BulkUploadItemPlatformStatus,
   type BulkUploadItemUploadStatus,
   type BulkUploadOverallStatus,
   type BulkUploadPlanResult,
   type BulkUploadStatus,
   type MetadataRevision,
-  type PublishItemError,
-  type PublishItemStatus,
   type YouTubeMetadata,
 } from '@domain/publishing'
 import type { PublishingErrorCode } from '@application/publishing/errors'
@@ -102,27 +99,6 @@ export type BulkUploadStatusResponseDto = z.infer<typeof bulkUploadStatusRespons
 
 export function mapBulkUploadStatus(dto: BulkUploadStatusResponseDto): BulkUploadStatus {
   return dto
-}
-
-/** Clasifica el status crudo de una notificación de resultado — 'unknown' cubre un status que el backend agregó después de esta versión del frontend (ver PublishItemStatus). */
-const PUBLISH_ITEM_STATUSES: readonly PublishItemStatus[] = [
-  'uploading',
-  'awaiting_result',
-  'uploaded',
-  'scheduled',
-  'inbox',
-  'skipped',
-  'failed',
-  'unknown',
-]
-
-export function mapPublishItemStatus(status: string): PublishItemStatus {
-  const match = PUBLISH_ITEM_STATUSES.find((known) => known === status)
-  return match ?? 'unknown'
-}
-
-export function mapPublishItemResultError(raw: string | null): PublishItemError | null {
-  return raw ? toPublishItemError(raw) : null
 }
 
 const KNOWN_ERROR_CODES: readonly PublishingErrorCode[] = [
