@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { MetadataWizardInput } from '@ui/hooks/usePublishYouTube'
+import type { MetadataWizardInput } from '@ui/hooks/usePublish'
 import { Button } from '@ui/components/Button'
 import { Modal } from '@ui/components/Modal'
 

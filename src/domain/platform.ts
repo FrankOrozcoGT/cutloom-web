@@ -14,9 +14,3 @@ export interface PublishingCapabilities {
 export function isPublishableViaApi(capabilities: PublishingCapabilities): boolean {
   return capabilities.apiAvailable && capabilities.connected
 }
-
-export function platformVideoUrl(platform: PublishingPlatform, platformVideoId: string | null): string | null {
-  if (!platformVideoId) return null
-  if (platform === 'youtube') return `https://www.youtube.com/watch?v=${platformVideoId}`
-  return null
-}

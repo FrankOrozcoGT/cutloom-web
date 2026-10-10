@@ -27,7 +27,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
 // Formato estándar de shorts verticales (YouTube Shorts, TikTok, Reels):
 // 1080x1920 9:16. El compositor de export rellena con blur el espacio que
 // deja el video horizontal original en vez de recortarlo o deformarlo.
-// Único punto de verdad — ShortCard (descarga manual) y usePublishYouTube
+// Único punto de verdad — ShortCard (descarga manual) y usePublish
 // (publicar en YouTube) deben producir el mismo recorte para el mismo short.
 export const SHORT_EXPORT_OPTIONS: ExportOptions = {
   format: 'video/mp4',

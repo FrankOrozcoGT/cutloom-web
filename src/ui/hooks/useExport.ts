@@ -66,7 +66,7 @@ function toExportFailure(raw: string): ExportFailure {
     : { kind: ExportFailureKind.Unknown, message: raw }
 }
 
-/** Mensaje legible para un ExportError conocido — reusado por cualquier consumidor de exportProjectToBlob (ej. usePublishYouTube) además de este hook, para no duplicar el switch. */
+/** Mensaje legible para un ExportError conocido — reusado por cualquier consumidor de exportProjectToBlob (ej. usePublish) además de este hook, para no duplicar el switch. */
 export function exportErrorCodeMessage(error: ExportError): string {
   switch (error) {
     case 'EMPTY_TIMELINE':
@@ -137,6 +137,22 @@ export function useExport() {
     }
   }, [])
 
+  // Crea el Worker UNA sola vez y lo reutiliza entre exports — antes se creaba y mataba (terminate)
+  // en cada llamada a runExport, lo que con un bulk de varios shorts (ver usePublish.publish(), un
+  // export secuencial por item) forzaba al navegador a re-descargar y re-ejecutar desde cero todo el
+  // árbol de módulos del worker (mediabunny, VideoDecoderAdapter, VideoEncoderAdapter,
+  // OffscreenCanvasCompositor, etc.) una vez por cada short exportado. El worker es stateless entre
+  // mensajes 'export' (ver export.worker.ts: exportUseCase se construye una sola vez a nivel de
+  // módulo, currentAbortController se resetea en cada invocación) — no hay ningún motivo real para
+  // no reusarlo. Solo se destruye en el cleanup de desmontaje, o si el worker crashea con un error no
+  // controlado (su estado interno queda indeterminado, mejor recrearlo que seguir usándolo).
+  const getOrCreateWorker = useCallback((): Worker => {
+    if (workerRef.current) return workerRef.current
+    const worker = new Worker(new URL('@infrastructure/video/export.worker.ts', import.meta.url), { type: 'module' })
+    workerRef.current = worker
+    return worker
+  }, [])
+
   type RunExportMode =
     | { kind: typeof RunExportModeKind.Download }
     | { kind: typeof RunExportModeKind.Blob; resolve: (result: { ok: true; blob: Blob } | { ok: false; error: ExportFailure }) => void }
@@ -151,10 +167,7 @@ export function useExport() {
       isRetry: boolean,
       mode: RunExportMode,
     ) => {
-      const worker = new Worker(new URL('@infrastructure/video/export.worker.ts', import.meta.url), {
-        type: 'module',
-      })
-      workerRef.current = worker
+      const worker = getOrCreateWorker()
 
       setExporting(true)
       setProgress(0)
@@ -169,8 +182,6 @@ export function useExport() {
         setPhaseLabel('')
         setExporting(false)
         setCompleted(true)
-        worker.terminate()
-        workerRef.current = null
       }
 
       worker.onmessage = (event: MessageEvent<ExportWorkerResponse>) => {
@@ -190,8 +201,8 @@ export function useExport() {
           // un solo reintento automático con el formato alternativo evita que
           // el usuario tenga que darse cuenta y reintentar a mano.
           if (message.error === 'UNSUPPORTED_CODEC' && !isRetry) {
-            worker.terminate()
-            workerRef.current = null
+            // El worker en sí sigue sano (UNSUPPORTED_CODEC es una limitación del navegador, no un
+            // estado roto) — se reusa para el reintento con el formato alternativo en vez de matarlo.
             const fallbackOptions = { ...options, format: ALTERNATIVE_FORMAT[options.format] }
             runExport(projectId, projectName, fallbackOptions, range, cropOffsetX, true, mode)
             return
@@ -203,8 +214,6 @@ export function useExport() {
           setExporting(false)
           setPhaseLabel('')
           setAborting(false)
-          worker.terminate()
-          workerRef.current = null
           if (mode.kind === RunExportModeKind.Blob) {
             mode.resolve({ ok: false, error: toExportFailure(message.error) })
           }
@@ -247,7 +256,7 @@ export function useExport() {
       const request: ExportWorkerMessage = { type: 'export', projectId, options, range, cropOffsetX }
       worker.postMessage(request)
     },
-    [],
+    [getOrCreateWorker],
   )
 
   const exportProject = useCallback(

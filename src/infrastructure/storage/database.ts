@@ -1,5 +1,5 @@
 const DB_NAME = 'cutloom'
-const DB_VERSION = 8
+const DB_VERSION = 9
 
 export const PROJECTS_STORE = 'projects'
 export const VIDEOS_STORE = 'videos'
@@ -8,6 +8,8 @@ export const TIMELINE_STORE = 'timelines'
 export const SUBTITLES_STORE = 'subtitles'
 export const SHORTS_STORE = 'shorts'
 export const PUBLISHING_STORE = 'publishing'
+/** Blobs exportados en espera de subirse por TUS (ver usePublish.publish()) — keyed por sourceId. Vive en IndexedDB (disco), no en memoria JS, justamente para no retener todos los videos de un bulk a la vez en RAM en equipos con poca memoria. Se borra el registro apenas termina de subirse ese sourceId, sea éxito o fallo. */
+export const PUBLISH_BLOBS_STORE = 'publishBlobs'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -66,6 +68,10 @@ export function openCutloomDB(): Promise<IDBDatabase> {
 
         if (!db.objectStoreNames.contains(PUBLISHING_STORE)) {
           db.createObjectStore(PUBLISHING_STORE, { keyPath: 'projectId' })
+        }
+
+        if (!db.objectStoreNames.contains(PUBLISH_BLOBS_STORE)) {
+          db.createObjectStore(PUBLISH_BLOBS_STORE, { keyPath: 'sourceId' })
         }
       }
       request.onsuccess = () => resolve(request.result)

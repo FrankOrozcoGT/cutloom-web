@@ -96,6 +96,10 @@ export class HttpClient {
     return this.request(path, { ...init, method: 'GET' })
   }
 
+  delete(path: string, init: RequestInit = {}): Promise<Response> {
+    return this.request(path, { ...init, method: 'DELETE' })
+  }
+
   post(path: string, body?: unknown, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers)
     let requestBody: BodyInit | undefined
