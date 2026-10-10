@@ -152,6 +152,7 @@ export function PublishingPage() {
             revision: null,
             error: null,
             resultsByPlatform: {},
+            requestedPlatforms: [],
             uploadProgress: null,
           }
 
@@ -176,6 +177,7 @@ export function PublishingPage() {
                   revision: null,
                   error: null,
                   resultsByPlatform: {},
+                  requestedPlatforms: [],
                   uploadProgress: null,
                 }
               })

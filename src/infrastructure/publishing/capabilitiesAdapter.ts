@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { PublishingCapabilities, PublishingPlatform } from '@domain/platform'
-import { ok, type Result } from '@application/result'
+import { err, ok, type Result } from '@application/result'
 import { PublishingError } from '@application/publishing/errors'
 import type { HttpClient } from '@infrastructure/http/client'
 import { parseErrorBody, parseJson } from '@infrastructure/http/parseJson'
@@ -30,7 +30,7 @@ export class PublishingCapabilitiesAdapter implements PublishingCapabilitiesPort
       if (body?.error === 'MISSING_ORGANIZATION') {
         return ok({ apiAvailable: false, connected: false })
       }
-      return { ok: false, error: mapPublishingError(body?.error ?? 'UNKNOWN_ERROR', body?.message) }
+      return err(mapPublishingError(body?.error ?? 'UNKNOWN_ERROR', body?.message))
     }
     const body = await parseJson(response, capabilitiesResponseSchema)
     return ok({ apiAvailable: body.apiAvailable, connected: body.connected })

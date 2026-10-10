@@ -76,6 +76,8 @@ export interface PublishSeriesItemBase {
   error: PublishItemFailure | null
   /** Resultado de publicación por plataforma — una entrada por cada plataforma a la que se intentó publicar este sourceId (ver PublishedResultRecord, keyed por platform::sourceId en el storage). */
   resultsByPlatform: Partial<Record<PublishingPlatform, PublishItemResult>>
+  /** Plataformas que el plan vigente pidió para este sourceId — set por publish() antes de exportar/subir. Vacío si este item nunca entró en un plan (sin publicar todavía). Necesario para que PublishItemCard sepa cuántos resultsByPlatform debe esperar antes de considerar el item resuelto: Object.keys(resultsByPlatform) por sí solo solo contiene las plataformas que YA respondieron, no las pedidas. */
+  requestedPlatforms: PublishingPlatform[]
   /** 0–100, solo tiene sentido mientras state === 'uploading'/'exporting' — progreso real reportado por tus-js-client (onProgress) o por useExport, a diferencia del upload viejo (fetch+FormData) que no podía reportar nada. */
   uploadProgress: number | null
 }
@@ -347,7 +349,7 @@ export function usePublish({ projectId, projectName }: UsePublishParams) {
       setIsPublishing(true)
       const videoMetaBySourceId: Record<string, { fileName: string; size: number }> = {}
       for (const item of selected) {
-        setItem(item.sourceId, { state: 'exporting', uploadProgress: null })
+        setItem(item.sourceId, { state: 'exporting', uploadProgress: null, requestedPlatforms: platforms })
         const options = exportOptionsFor(item)
         const range = item.videoType === 'short' ? item.range : undefined
         const cropOffsetX = item.videoType === 'short' ? item.cropOffsetX : undefined

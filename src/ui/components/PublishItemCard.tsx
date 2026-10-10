@@ -34,24 +34,27 @@ function failureMessage(failure: PublishItemFailure): string {
   }
 }
 
-/** Todas las plataformas con un resultado ya resuelto (no 'uploading'/'awaiting_result' local, sino un status real devuelto por el backend) — true también cuando no hay ninguna plataforma registrada todavía, así que SIEMPRE hay que chequear junto con Object.keys(...).length > 0 en el caller. */
+/** Todas las plataformas PEDIDAS (item.requestedPlatforms, no solo las que ya respondieron) tienen ya un resultado resuelto (no 'uploading'/'awaiting_result' local, sino un status real devuelto por el backend) — false si requestedPlatforms está vacío (item nunca entró en un plan). */
 function allResultsResolved(item: PublishSeriesItem): boolean {
-  const results = Object.values(item.resultsByPlatform)
-  return results.length > 0 && results.every((result) => result.status !== 'unknown')
+  if (item.requestedPlatforms.length === 0) return false
+  return item.requestedPlatforms.every((platform) => {
+    const result = item.resultsByPlatform[platform]
+    return !!result && result.status !== 'unknown'
+  })
 }
 
 /**
  * 'awaiting_result' es la fase de pipeline local ("ya subí, espero que el backend confirme") — si
  * para cuando se renderiza ya llegó el resultado real (vía notificación SSE, ver
- * applyNotificationResult en usePublish) para todas las plataformas pedidas, mostrar el resultado
- * real en vez del label genérico de "esperando". uploadedPlatforms (ver domain/publishing) NO
- * resuelve esto por sí solo — solo evita volver a subir el binario, el resultado de publicación
- * siempre llega por notificación. Reutilizado por statusLabel y por los mapas de color (badge/borde)
- * para que ambos coincidan.
+ * applyNotificationResult en usePublish) para todas las plataformas pedidas (item.requestedPlatforms,
+ * ver publish() en usePublish), mostrar el resultado real en vez del label genérico de "esperando".
+ * uploadedPlatforms (ver domain/publishing) NO resuelve esto por sí solo — solo evita volver a subir
+ * el binario, el resultado de publicación siempre llega por notificación. Reutilizado por
+ * statusLabel y por los mapas de color (badge/borde) para que ambos coincidan.
  */
 function effectiveState(item: PublishSeriesItem): PublishItemState {
   if (item.state === 'awaiting_result' && allResultsResolved(item)) {
-    const results = Object.values(item.resultsByPlatform)
+    const results = item.requestedPlatforms.map((platform) => item.resultsByPlatform[platform]).filter((result): result is NonNullable<typeof result> => !!result)
     return results.every((result) => result.status === 'uploaded' || result.status === 'scheduled') ? 'uploaded' : 'failed'
   }
   return item.state
