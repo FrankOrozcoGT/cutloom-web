@@ -73,7 +73,7 @@ export class IndexedDBPublishingAdapter implements PublishingStoragePort {
         projectId,
         metadataBySourceId: existing?.metadataBySourceId ?? {},
         resultsByKey: existing?.resultsByKey ?? {},
-        ...(url ? { manualLongVideoUrl: url } : {}),
+        manualLongVideoUrl: url,
       }))
       return ok(undefined)
     } catch {
