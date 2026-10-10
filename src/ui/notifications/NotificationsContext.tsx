@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { Notification } from '@domain/notification'
+import { isPublishingResultNotification } from '@domain/publishing'
 import { useAuth } from '@ui/auth/useAuth'
+import { publishingUseCase } from '@ui/publishing/composition'
 import { notificationsUseCase, notificationsStream } from './composition'
 import { NotificationsContext, type NotificationsContextValue } from './notificationsContext'
 
@@ -9,6 +11,10 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+  const [latestNotification, setLatestNotification] = useState<Notification | null>(null)
+  // true por default (optimista) hasta el primer evento real — evita parpadear "desconectado" en el
+  // instante entre montar el provider y que el EventSource abra la conexión, que es el caso normal.
+  const [isStreamConnected, setIsStreamConnected] = useState(true)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -48,13 +54,21 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   // Se cierra al desloguear para evitar una conexión zombi.
   useEffect(() => {
     if (!isAuthenticated) return
-    const unsubscribe = notificationsStream.subscribe((notification) => {
-      setNotifications((prev) => {
-        if (prev.some((n) => n.id === notification.id)) return prev
-        return [notification, ...prev]
-      })
-      setUnreadCount((prev) => prev + 1)
-    })
+    setIsStreamConnected(true)
+    const unsubscribe = notificationsStream.subscribe(
+      (notification) => {
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === notification.id)) return prev
+          return [notification, ...prev]
+        })
+        setUnreadCount((prev) => prev + 1)
+        setLatestNotification(notification)
+        if (isPublishingResultNotification(notification)) {
+          void publishingUseCase.recordNotificationResult(notification)
+        }
+      },
+      (connected) => setIsStreamConnected(connected),
+    )
     return unsubscribe
   }, [isAuthenticated])
 
@@ -62,6 +76,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     notifications,
     unreadCount,
     isLoading,
+    latestNotification,
+    isStreamConnected,
     load,
     markRead,
     markAllRead,

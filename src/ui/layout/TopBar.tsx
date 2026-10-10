@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Project } from '@domain/project'
 import { useAuth } from '@ui/auth/useAuth'
 import { LogoutButton } from '@ui/components/LogoutButton'
+import { NotificationsBell } from '@ui/components/NotificationsBell'
 import { CoffeeDonation } from '@ui/billing/CoffeeDonation'
+import { APP_NAME } from '@ui/branding'
 import { projectUseCase } from '@ui/video/composition'
 import { useSidebar } from './useSidebar'
 
@@ -44,7 +46,7 @@ export function TopBar() {
           </svg>
         </button>
         <Link to={isAuthenticated ? '/projects' : '/'} className="text-sm font-semibold text-text-strong">
-          CutLoom
+          {APP_NAME}
         </Link>
         {projectId && projects.length > 0 && (
           <select
@@ -69,6 +71,7 @@ export function TopBar() {
         >
           ☕ Invitar un café
         </button>
+        {isAuthenticated && <NotificationsBell />}
         {isAuthenticated ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-text-strong">{user?.name ?? user?.email}</span>
