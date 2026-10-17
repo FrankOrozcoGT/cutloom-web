@@ -12,6 +12,8 @@ import { ShortsPage } from '@ui/pages/ShortsPage'
 import { PublishingPage } from '@ui/pages/PublishingPage'
 import { ProfilePage } from '@ui/pages/ProfilePage'
 import { LandingPage } from '@ui/pages/LandingPage'
+import { TermsPage } from '@ui/pages/TermsPage'
+import { PrivacyPage } from '@ui/pages/PrivacyPage'
 import { BillingPage } from '@ui/pages/BillingPage'
 import { CreditsPage } from '@ui/pages/CreditsPage'
 import { BillingResultPage } from '@ui/pages/BillingResultPage'
@@ -39,6 +41,8 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: '/', element: <LandingPage /> },
+      { path: '/legal/terms', element: <TermsPage /> },
+      { path: '/legal/privacy', element: <PrivacyPage /> },
       { path: '/projects', element: <ProjectsPage /> },
       { path: '/profile', element: <ProfilePage /> },
       { path: '/projects/:projectId', element: <EditorPage /> },
