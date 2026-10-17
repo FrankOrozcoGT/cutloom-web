@@ -67,8 +67,8 @@ export function PrivacyPage() {
         <h2 className="text-xl font-semibold text-text-strong">7. Contacto</h2>
         <p className="text-text-muted">
           Para consultas sobre privacidad o para solicitar la eliminación de tus datos, escribinos a{' '}
-          <a href="mailto:soporte@clipcopilot.app" className="text-accent hover:underline">
-            soporte@clipcopilot.app
+          <a href="mailto:frank.orozco.11.87@gmail.com" className="text-accent hover:underline">
+            frank.orozco.11.87@gmail.com
           </a>
           .
         </p>
