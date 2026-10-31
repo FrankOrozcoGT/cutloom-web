@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clapperboard, FileText, MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import { Captions, Clapperboard, FileText, MoreVertical, Pencil, Scissors, Send, Trash2, Upload } from 'lucide-react'
 import type { Project } from '@domain/project'
 import type { ProjectDeleteError } from '@application/project/ports'
 import type { StorageError } from '@application/video/ports'
+import { APP_NAME } from '@ui/branding'
 import { Button } from '@ui/components/Button'
 import { ConfirmDialog } from '@ui/components/ConfirmDialog'
 import { EditDescriptionDialog } from '@ui/components/EditDescriptionDialog'
 import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { FormField } from '@ui/components/FormField'
 import { projectUseCase, shortsStorage } from '@ui/video/composition'
+
+const WORKFLOW_STEPS = [
+  { icon: Upload, title: 'Subí tu video', description: 'El archivo se procesa en tu navegador — nunca se sube a un servidor en esta etapa.' },
+  { icon: Captions, title: 'Generá subtítulos', description: 'Transcripción automática con IA, corriendo localmente.' },
+  { icon: Scissors, title: 'Editá y recortá', description: 'Timeline simple para ajustar el corte final o detectar los mejores momentos como shorts.' },
+  { icon: Send, title: 'Publicá o exportá', description: 'Subí directo a YouTube/TikTok, o descargá el video final con subtítulos incrustados.' },
+]
 
 const PROJECT_ERROR_MESSAGES: Record<ProjectDeleteError | StorageError, string> = {
   UNKNOWN_ERROR: 'Ocurrió un error inesperado.',
@@ -144,6 +152,31 @@ export function ProjectsPage() {
   return (
     <div>
       <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+        <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+          <div>
+            <h1 className="text-lg font-semibold text-text-strong">Tus proyectos</h1>
+            <p className="text-sm text-text-muted">
+              {APP_NAME} edita video en tu navegador: subí un archivo, generá subtítulos con IA, recortá el video y
+              publicalo o descargalo. Nada se sube a un servidor hasta que elegís publicar.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {WORKFLOW_STEPS.map((step, index) => (
+              <div key={step.title} className="flex gap-3 rounded-lg border border-border bg-bg p-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-bg text-accent">
+                  <step.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-strong">
+                    {index + 1}. {step.title}
+                  </p>
+                  <p className="text-xs text-text-muted">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
 
         <div className="flex max-w-md flex-col gap-2 sm:flex-row sm:items-end">
@@ -162,7 +195,10 @@ export function ProjectsPage() {
         </div>
 
         {projects.length === 0 ? (
-          <p className="text-text-muted">No hay proyectos todavía.</p>
+          <p className="text-text-muted">
+            Todavía no creaste ningún proyecto. Escribí un nombre arriba y presioná "Crear" para empezar — vas a
+            poder subir tu video desde ahí.
+          </p>
         ) : (
           <ul className="flex flex-col gap-2">
             {projects.map((project) => {
