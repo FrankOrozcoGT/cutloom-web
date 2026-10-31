@@ -51,6 +51,14 @@ export function usePlaybackEngine({
   // que se activa — un setState tarda un render en propagarse, dejando una
   // ventana donde un timeupdate en tránsito todavía podría colarse.
   const isSeekingRef = useRef(false)
+  // Si el efecto de seek de abajo corre antes de que el <video> tenga datos
+  // suficientes (readyState < HAVE_FUTURE_DATA), escribir currentTime puede
+  // no disparar 'seeking'/'seeked' de forma confiable — el navegador
+  // descarta ese valor en silencio, dejando isSeekingRef trabado en true
+  // para siempre sin ningún evento que lo libere. Este contador, incrementado
+  // en 'loadeddata' (ver efecto de abajo), fuerza al efecto de seek a
+  // re-evaluarse apenas cada <video> esté listo para aceptar un seek real.
+  const [readyVersion, setReadyVersion] = useState(0)
 
   const snapshot = computePlaybackSnapshot(timeline, playheadMs)
   const { activeClip, waitingClip, durationMs, mode } = snapshot
@@ -68,6 +76,26 @@ export function usePlaybackEngine({
   const activeVideoRef = activeIsSlotA ? videoRefA : videoRefB
   const waitingVideoRef = activeIsSlotA ? videoRefB : videoRefA
   const hasActiveVideo = activeClip !== null && activeBuffer.clipId === activeClip.id
+
+  // Cualquiera de los dos <video> físicos puede ser el que está cargando en
+  // un momento dado (el activo recién montado, o el que se está precargando
+  // y va a pasar a activo) — se escuchan ambos siempre, no solo el activo
+  // actual, para no perderse el 'loadeddata' de uno que todavía no tiene rol.
+  useEffect(() => {
+    const videos = [videoRefA.current, videoRefB.current].filter((v): v is HTMLVideoElement => !!v)
+    if (videos.length === 0) return
+    function handleLoadedData() {
+      setReadyVersion((v) => v + 1)
+    }
+    for (const video of videos) {
+      video.addEventListener('loadeddata', handleLoadedData)
+    }
+    return () => {
+      for (const video of videos) {
+        video.removeEventListener('loadeddata', handleLoadedData)
+      }
+    }
+  }, [])
 
   // Precarga el buffer en espera en el punto de inicio de su clip, listo para
   // un corte limpio cuando pase a ser el activo.
@@ -96,13 +124,24 @@ export function usePlaybackEngine({
     // sobre el seek anterior — reiniciando la búsqueda antes de que el
     // navegador la termine, así que nunca converge.
     if (isSeekingRef.current) return
+    // Con readyState < HAVE_FUTURE_DATA el navegador puede no tener aún
+    // frames decodificados en esa posición — escribir currentTime acá no
+    // dispara 'seeking'/'seeked' de forma confiable (y en WebKit, hacerlo
+    // apenas en 'loadedmetadata' tiene bugs documentados: el seek se ignora
+    // en silencio, o el <video> directamente desaparece si el target es 0 —
+    // ver https://bugs.webkit.org/show_bug.cgi?id=261512 y
+    // https://bugs.webkit.org/show_bug.cgi?id=225963). El lock quedaría
+    // trabado para siempre sin este guard. Se espera a 'loadeddata' con
+    // readyState >= HAVE_FUTURE_DATA (ver readyVersion) antes de intentar
+    // el seek real.
+    if (video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return
     const targetSeconds = activeClip.sourceTimeMs / 1000
     if (Math.abs(video.currentTime - targetSeconds) > 0.75) {
       isSeekingRef.current = true
       setIsSeeking(true)
       video.currentTime = targetSeconds
     }
-  }, [hasActiveVideo, activeClip, activeVideoRef])
+  }, [hasActiveVideo, activeClip, activeVideoRef, readyVersion])
 
   // El <video> activo es la fuente de verdad del tiempo dentro de un clip:
   // su propio 'timeupdate' nativo es lo único que mueve playheadMs mientras

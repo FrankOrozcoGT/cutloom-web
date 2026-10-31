@@ -8,6 +8,7 @@ import { SHORT_EXPORT_OPTIONS } from '@application/video/exportTypes'
 import { Button } from '@ui/components/Button'
 import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { TimelinePlayer } from '@ui/timeline/TimelinePlayer'
+import { useTimelineFrame } from '@ui/timeline/useTimelineFrame'
 import { useExport } from '@ui/hooks/useExport'
 
 const STAR_COUNT = 5
@@ -102,6 +103,12 @@ export function ShortCard({
   const [isPlaying, setIsPlaying] = useState(false)
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
   const { exporting, progress, phaseLabel, error, exportProject } = useExport()
+  // Preview en reposo: un frame estático capturado una sola vez, en vez de
+  // montar el motor de reproducción completo (TimelinePlayer) para no hacer
+  // nada más que mostrar una imagen fija. Con varias ShortCard a la vez en
+  // pantalla, montar el motor pesado en cada una (doble buffer de <video>,
+  // locks de seek) sobrecarga al navegador — ver useTimelineFrame.
+  const previewFrameUrl = useTimelineFrame(timeline, assets, short.startMs)
 
   // Mismo cálculo que ExportProjectUseCase (estimateMaxCharsForCue) sobre las
   // mismas dimensiones de SHORT_EXPORT_OPTIONS — es una razón de aspecto, no
@@ -150,18 +157,29 @@ export function ShortCard({
         className="relative aspect-[9/16] w-full cursor-pointer overflow-hidden bg-black"
         onClick={() => setIsPlaying((prev) => !prev)}
       >
-        <TimelinePlayer
-          timeline={timeline}
-          assets={assets}
-          playheadMs={playheadMs}
-          isPlaying={isPlaying}
-          onPlayheadChange={handlePlayheadChange}
-          onPlayingChange={setIsPlaying}
-          segments={shortSubtitles}
-          containerClassName="absolute inset-0 h-full w-full overflow-hidden"
-          videoObjectFit="cover"
-          objectPositionX={cropOffsetX * 100}
-        />
+        {isPlaying ? (
+          <TimelinePlayer
+            timeline={timeline}
+            assets={assets}
+            playheadMs={playheadMs}
+            isPlaying={isPlaying}
+            onPlayheadChange={handlePlayheadChange}
+            onPlayingChange={setIsPlaying}
+            segments={shortSubtitles}
+            containerClassName="absolute inset-0 h-full w-full overflow-hidden"
+            videoObjectFit="cover"
+            objectPositionX={cropOffsetX * 100}
+          />
+        ) : (
+          previewFrameUrl && (
+            <img
+              src={previewFrameUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: `${cropOffsetX * 100}% center` }}
+            />
+          )
+        )}
 
         <div className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1">
           <ScoreStars score={short.score} />
