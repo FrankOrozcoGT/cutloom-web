@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import type { Render } from '@domain/render'
-import type { ShortIdeal } from '@domain/shorts'
+import type { AutoFrameKeyframe, NormalizedRect, ShortIdeal } from '@domain/shorts'
 import { shortKey } from '@domain/shorts'
 import { CreateShortsTool } from '@ui/components/CreateShortsTool'
 import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { useAuth } from '@ui/auth/useAuth'
 import { useShorts } from '@ui/hooks/useShorts'
 import { useSubtitles } from '@ui/hooks/useSubtitles'
+import { useAutoFraming } from '@ui/hooks/useAutoFraming'
 import { renderStorage, shortsStorage, projectUseCase } from '@ui/video/composition'
 import { saveShortsResultUseCase } from '@ui/shorts/composition'
 
@@ -35,7 +36,28 @@ export function ShortsPage() {
   const [render, setRender] = useState<Render | null>(null)
   const [projectName, setProjectName] = useState('')
   const [cropOffsetXByShort, setCropOffsetXByShort] = useState<Record<string, number>>({})
+  const [autoFrameEnabledByShort, setAutoFrameEnabledByShort] = useState<Record<string, boolean>>({})
+  const [autoFramingByShort, setAutoFramingByShort] = useState<Record<string, AutoFrameKeyframe[]>>({})
+  const [motionExcludeRect, setMotionExcludeRect] = useState<NormalizedRect | null>(null)
+  const [analyzingShortKey, setAnalyzingShortKey] = useState<string | null>(null)
   const [persistError, setPersistError] = useState<string | null>(null)
+  const { analyzeState, analyzeAndSave, setAutoFrameEnabled, setMotionExcludeRect: persistMotionExcludeRect } = useAutoFraming()
+
+  // Cambiar la región del avatar invalida cualquier trayectoria de
+  // auto-encuadre ya calculada (se calculó ignorando la región vieja, ya no
+  // es correcta) — updateMotionExcludeRect la descarta en la misma escritura
+  // (ver IndexedDBShortsAdapter), acá se refleja lo mismo en memoria. Los
+  // shorts con autoFrameEnabled siguen activados: solo les falta volver a
+  // calcularse (el botón de recalcular queda visible en cada ShortCard).
+  const handleChangeMotionExcludeRect = useCallback(
+    (rect: NormalizedRect | null) => {
+      if (!projectId) return
+      setMotionExcludeRect(rect)
+      setAutoFramingByShort({})
+      void persistMotionExcludeRect(projectId, rect)
+    },
+    [projectId, persistMotionExcludeRect],
+  )
 
   useEffect(() => {
     if (!projectId) return
@@ -60,6 +82,9 @@ export function ShortsPage() {
         const currentRenderId = renderResult.ok && renderResult.value ? renderResult.value.id : null
         shortsState.loadPersisted(shortsResult.value, currentRenderId)
         setCropOffsetXByShort(shortsResult.value.cropOffsetXByShort ?? {})
+        setAutoFrameEnabledByShort(shortsResult.value.autoFrameEnabledByShort ?? {})
+        setAutoFramingByShort(shortsResult.value.autoFramingByShort ?? {})
+        setMotionExcludeRect(shortsResult.value.motionExcludeRect ?? null)
       },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,6 +129,30 @@ export function ShortsPage() {
     [projectId],
   )
 
+  const handleToggleAutoFrame = useCallback(
+    (short: { startMs: number; endMs: number }, enabled: boolean) => {
+      if (!projectId) return
+      const key = shortKey(short)
+      setAutoFrameEnabledByShort((prev) => ({ ...prev, [key]: enabled }))
+      void setAutoFrameEnabled(projectId, key, enabled)
+    },
+    [projectId, setAutoFrameEnabled],
+  )
+
+  const handleAnalyzeAutoFrame = useCallback(
+    async (short: { startMs: number; endMs: number }) => {
+      if (!projectId || !render) return
+      const key = shortKey(short)
+      setAnalyzingShortKey(key)
+      const keyframes = await analyzeAndSave(projectId, key, render, short.startMs, short.endMs, motionExcludeRect)
+      setAnalyzingShortKey(null)
+      if (keyframes) {
+        setAutoFramingByShort((prev) => ({ ...prev, [key]: keyframes }))
+      }
+    },
+    [projectId, render, motionExcludeRect, analyzeAndSave],
+  )
+
   if (!projectId) {
     return null
   }
@@ -145,6 +194,14 @@ export function ShortsPage() {
         projectName={projectName}
         cropOffsetXByShort={cropOffsetXByShort}
         onUpdateCropOffset={handleUpdateCropOffset}
+        autoFrameEnabledByShort={autoFrameEnabledByShort}
+        autoFramingByShort={autoFramingByShort}
+        analyzingShortKey={analyzingShortKey}
+        analyzeState={analyzeState}
+        onToggleAutoFrame={handleToggleAutoFrame}
+        onAnalyzeAutoFrame={handleAnalyzeAutoFrame}
+        motionExcludeRect={motionExcludeRect}
+        onChangeMotionExcludeRect={handleChangeMotionExcludeRect}
       />
     </div>
   )

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Crop, Download, Play, Star, X } from 'lucide-react'
+import { Crop, Download, Loader2, Play, Sparkles, Star, X } from 'lucide-react'
 import type { Render } from '@domain/render'
 import { splitLongSubtitleCues, SUBTITLE_STYLE, estimateMaxCharsForCue, type SubtitleSegment } from '@domain/subtitles'
-import type { ShortScore } from '@domain/shorts'
-import { SHORT_HEIGHT, SHORT_WIDTH } from '@domain/shorts'
+import type { AutoFrameKeyframe, ShortScore } from '@domain/shorts'
+import { SHORT_HEIGHT, SHORT_WIDTH, interpolateCropOffsetX } from '@domain/shorts'
 import { Button } from '@ui/components/Button'
 import { ErrorBanner } from '@ui/components/ErrorBanner'
 import { useRenderFrame } from '@ui/timeline/useRenderFrame'
@@ -44,9 +44,16 @@ interface ShortCardProps {
   subtitleSegments: SubtitleSegment[]
   projectId: string
   projectName: string
-  /** 0-1: qué franja horizontal del video queda visible tras el crop-to-fill (0.5 = centrado). Ajustable manualmente porque el centro no siempre tiene el contenido relevante (ej. screen recording con webcam en una esquina). */
+  /** 0-1: qué franja horizontal del video queda visible tras el crop-to-fill (0.5 = centrado). Ajustable manualmente porque el centro no siempre tiene el contenido relevante (ej. screen recording con webcam en una esquina). Ignorado mientras autoFrameEnabled sea true. */
   cropOffsetX: number
   onUpdateCropOffset: (cropOffsetX: number) => void
+  /** true si este short usa la trayectoria de auto-encuadre (autoFrameKeyframes) en vez del offset fijo. */
+  autoFrameEnabled: boolean
+  onToggleAutoFrame: (enabled: boolean) => void
+  /** Trayectoria ya calculada (ver AnalyzeMotionFramingUseCase) — null si todavía no se analizó este short. */
+  autoFrameKeyframes: AutoFrameKeyframe[] | null
+  isAnalyzingAutoFrame: boolean
+  onAnalyzeAutoFrame: () => void
 }
 
 /**
@@ -56,26 +63,77 @@ interface ShortCardProps {
  * visible detrás mientras se mueve el slider, que es el único motivo de no
  * usar un modal acá: hace falta ver el resultado en vivo para decidir.
  */
-function CropOffsetControl({ cropOffsetX, onChange }: { cropOffsetX: number; onChange: (value: number) => void }) {
+function CropOffsetControl({
+  cropOffsetX,
+  onChange,
+  autoFrameEnabled,
+  onToggleAutoFrame,
+  hasAutoFrameData,
+  isAnalyzingAutoFrame,
+  onAnalyzeAutoFrame,
+}: {
+  cropOffsetX: number
+  onChange: (value: number) => void
+  autoFrameEnabled: boolean
+  onToggleAutoFrame: (enabled: boolean) => void
+  hasAutoFrameData: boolean
+  isAnalyzingAutoFrame: boolean
+  onAnalyzeAutoFrame: () => void
+}) {
   return (
     <div
-      className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-6"
+      className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-gradient-to-t from-black/80 to-transparent px-3 pb-2 pt-6"
       onClick={(event) => event.stopPropagation()}
     >
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.01}
-        value={cropOffsetX}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="w-full"
-      />
-      <div className="flex justify-between text-[10px] text-white/80">
-        <span>Izquierda</span>
-        <span>Centro</span>
-        <span>Derecha</span>
-      </div>
+      <label className="flex items-center justify-between gap-2 text-xs text-white">
+        <span className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5" />
+          Auto-encuadre
+        </span>
+        <input
+          type="checkbox"
+          checked={autoFrameEnabled}
+          onChange={(event) => onToggleAutoFrame(event.target.checked)}
+        />
+      </label>
+
+      {autoFrameEnabled && (
+        <button
+          type="button"
+          onClick={onAnalyzeAutoFrame}
+          disabled={isAnalyzingAutoFrame}
+          className="flex items-center justify-center gap-1.5 rounded bg-white/15 px-2 py-1 text-[11px] text-white hover:bg-white/25 disabled:opacity-60"
+        >
+          {isAnalyzingAutoFrame ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" /> Analizando movimiento…
+            </>
+          ) : hasAutoFrameData ? (
+            'Recalcular encuadre automático'
+          ) : (
+            'Calcular encuadre automático'
+          )}
+        </button>
+      )}
+
+      {!autoFrameEnabled && (
+        <>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={cropOffsetX}
+            onChange={(event) => onChange(Number(event.target.value))}
+            className="w-full"
+          />
+          <div className="flex justify-between text-[10px] text-white/80">
+            <span>Izquierda</span>
+            <span>Centro</span>
+            <span>Derecha</span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -96,12 +154,41 @@ export function ShortCard({
   projectName,
   cropOffsetX,
   onUpdateCropOffset,
+  autoFrameEnabled,
+  onToggleAutoFrame,
+  autoFrameKeyframes,
+  isAnalyzingAutoFrame,
+  onAnalyzeAutoFrame,
 }: ShortCardProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [activeSegment, setActiveSegment] = useState<SubtitleSegment | null>(null)
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
+  // Offset horizontal efectivo del frame actual mientras reproduce en modo
+  // auto-encuadre — se recalcula en cada timeupdate interpolando
+  // autoFrameKeyframes (ver domain/shorts.interpolateCropOffsetX), nunca un
+  // valor fijo como en modo manual.
+  const [liveAutoCropOffsetX, setLiveAutoCropOffsetX] = useState(0.5)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { exporting, progress, error, exportProject } = useExport()
+
+  const effectiveCropOffsetX =
+    autoFrameEnabled && autoFrameKeyframes
+      ? isPlaying
+        ? liveAutoCropOffsetX
+        : interpolateCropOffsetX(autoFrameKeyframes, 0)
+      : cropOffsetX
+
+  // Dispara el análisis solo: cuando el auto-encuadre queda activado sin
+  // trayectoria calculada todavía — pasa al activarlo a mano (igual que
+  // antes) y también cuando el valor por default ya viene en true (hay
+  // región de avatar marcada a nivel proyecto, ver CreateShortsTool) sin que
+  // el usuario haya tocado el checkbox de este short en particular.
+  useEffect(() => {
+    if (autoFrameEnabled && !autoFrameKeyframes && !isAnalyzingAutoFrame) {
+      onAnalyzeAutoFrame()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFrameEnabled, autoFrameKeyframes])
 
   const renderUrl = useObjectUrl(render.blob)
   // Preview en reposo: un frame estático capturado una sola vez, en vez de
@@ -142,20 +229,26 @@ export function ShortCard({
       }
       const segment = shortSubtitles.find((s) => video!.currentTime * 1000 >= s.startMs && video!.currentTime * 1000 < s.endMs)
       setActiveSegment(segment ?? null)
+      if (autoFrameEnabled && autoFrameKeyframes) {
+        const atMs = video!.currentTime * 1000 - short.startMs
+        setLiveAutoCropOffsetX(interpolateCropOffsetX(autoFrameKeyframes, atMs))
+      }
     }
 
     video.addEventListener('timeupdate', handleTimeUpdate)
     return () => video.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [isPlaying, short.startMs, short.endMs, shortSubtitles])
+  }, [isPlaying, short.startMs, short.endMs, shortSubtitles, autoFrameEnabled, autoFrameKeyframes])
 
   const handleDownload = useCallback(() => {
     exportProject(
       projectId,
       `${projectName}-short-${Math.round(short.startMs / 1000)}s`,
       { startMs: short.startMs, endMs: short.endMs },
-      cropOffsetX,
+      autoFrameEnabled && autoFrameKeyframes
+        ? { mode: 'auto', keyframes: autoFrameKeyframes }
+        : { mode: 'fixed', cropOffsetX },
     )
-  }, [exportProject, projectId, projectName, short.startMs, short.endMs, cropOffsetX])
+  }, [exportProject, projectId, projectName, short.startMs, short.endMs, cropOffsetX, autoFrameEnabled, autoFrameKeyframes])
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border">
@@ -172,14 +265,14 @@ export function ShortCard({
           src={renderUrl || undefined}
           muted={false}
           className="absolute inset-0 h-full w-full object-cover"
-          style={{ visibility: isPlaying ? 'visible' : 'hidden', objectPosition: `${cropOffsetX * 100}% center` }}
+          style={{ visibility: isPlaying ? 'visible' : 'hidden', objectPosition: `${effectiveCropOffsetX * 100}% center` }}
         />
         {!isPlaying && previewFrameUrl && (
           <img
             src={previewFrameUrl}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: `${cropOffsetX * 100}% center` }}
+            style={{ objectPosition: `${effectiveCropOffsetX * 100}% center` }}
           />
         )}
 
@@ -227,7 +320,17 @@ export function ShortCard({
           </div>
         )}
 
-        {isCropModalOpen && <CropOffsetControl cropOffsetX={cropOffsetX} onChange={onUpdateCropOffset} />}
+        {isCropModalOpen && (
+          <CropOffsetControl
+            cropOffsetX={cropOffsetX}
+            onChange={onUpdateCropOffset}
+            autoFrameEnabled={autoFrameEnabled}
+            onToggleAutoFrame={onToggleAutoFrame}
+            hasAutoFrameData={!!autoFrameKeyframes}
+            isAnalyzingAutoFrame={isAnalyzingAutoFrame}
+            onAnalyzeAutoFrame={onAnalyzeAutoFrame}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-2 p-3">
