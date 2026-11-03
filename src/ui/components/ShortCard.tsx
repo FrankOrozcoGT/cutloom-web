@@ -50,7 +50,7 @@ interface ShortCardProps {
   /** true si este short usa la trayectoria de auto-encuadre (autoFrameKeyframes) en vez del offset fijo. */
   autoFrameEnabled: boolean
   onToggleAutoFrame: (enabled: boolean) => void
-  /** Trayectoria ya calculada (ver AnalyzeMotionFramingUseCase) — null si todavía no se analizó este short. */
+  /** Trayectoria ya calculada (ver MotionFramingAnalyzerPort) — null si todavía no se analizó este short. */
   autoFrameKeyframes: AutoFrameKeyframe[] | null
   isAnalyzingAutoFrame: boolean
   onAnalyzeAutoFrame: () => void

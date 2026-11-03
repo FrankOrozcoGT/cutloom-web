@@ -8,6 +8,7 @@ import type {
   ProjectShorts,
   ShortIdeal,
 } from '@domain/shorts'
+import type { Render } from '@domain/render'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { Result } from '@application/result'
 import type { ShortsError } from './errors'
@@ -42,12 +43,50 @@ export interface ShortsStoragePort {
   updateCropOffset(projectId: string, shortKeyValue: string, cropOffsetX: number): Promise<Result<void, ShortsStorageError>>
   /** Activa o desactiva el auto-encuadre de un short sin pisar el resto del registro persistido. */
   updateAutoFrameEnabled(projectId: string, shortKeyValue: string, enabled: boolean): Promise<Result<void, ShortsStorageError>>
-  /** Guarda la trayectoria de auto-encuadre ya calculada (ver AnalyzeMotionFramingUseCase) de un short sin pisar el resto del registro persistido. */
+  /** Guarda la trayectoria de auto-encuadre ya calculada (ver MotionFramingAnalyzerPort) de un short sin pisar el resto del registro persistido. */
   updateAutoFraming(
     projectId: string,
     shortKeyValue: string,
     keyframes: AutoFrameKeyframe[],
   ): Promise<Result<void, ShortsStorageError>>
-  /** Guarda la región del avatar a excluir del análisis de movimiento (una sola por proyecto) y en la misma escritura descarta toda trayectoria de auto-encuadre ya calculada (autoFramingByShort) — quedaron calculadas contra la región vieja, ya no son válidas. No toca autoFrameEnabledByShort: el short sigue "queriendo" auto-encuadre, solo le falta volver a calcularlo. */
-  updateMotionExcludeRect(projectId: string, rect: NormalizedRect | null): Promise<Result<void, ShortsStorageError>>
+  /**
+   * Contrato: toda implementación DEBE descartar, en la misma escritura,
+   * cualquier trayectoria de auto-encuadre ya calculada (autoFramingByShort)
+   * — quedaron calculadas contra la región vieja, ya no son válidas contra
+   * la nueva. No toca autoFrameEnabledByShort: el short sigue "queriendo"
+   * auto-encuadre, solo le falta volver a calcularlo. El nombre del método
+   * refleja esto para que ningún caller necesite leer este comentario para
+   * confiar en la invalidación.
+   */
+  updateMotionExcludeRectAndClearAutoFraming(
+    projectId: string,
+    rect: NormalizedRect | null,
+  ): Promise<Result<void, ShortsStorageError>>
+}
+
+export type ExtractShortError = 'UNSUPPORTED_API' | 'ENCODING_ERROR' | 'MUX_FAILED'
+
+/** Encuadre horizontal a aplicar al recortar un short — fijo (un solo offset para todo el tramo) o automático (trayectoria ya calculada por análisis de movimiento, ver MotionFramingAnalyzerPort). */
+export type ShortFraming = { mode: 'fixed'; cropOffsetX: number } | { mode: 'auto'; keyframes: AutoFrameKeyframe[] }
+
+/** Recorta [startMs, endMs) del render vigente del proyecto con el encuadre vertical pedido — nunca vuelve a decodificar los VideoAsset originales. */
+export interface ShortExtractorPort {
+  extract(render: Render, startMs: number, endMs: number, framing: ShortFraming): Promise<Result<Blob, ExtractShortError>>
+}
+
+export type AnalyzeMotionFramingError = 'UNSUPPORTED_API' | 'DECODE_FAILED'
+
+export interface MotionFramingAnalyzerPort {
+  /**
+   * Analiza el movimiento dentro de [startMs, endMs) del render y devuelve una
+   * trayectoria de offsets horizontales (0-1) a aplicar como crop a lo largo
+   * del short, ignorando la región excludeRect (recuadro del avatar) si se
+   * provee. atMs de cada keyframe es relativo al propio inicio del short.
+   */
+  analyze(
+    render: Render,
+    startMs: number,
+    endMs: number,
+    excludeRect: NormalizedRect | null,
+  ): Promise<Result<AutoFrameKeyframe[], AnalyzeMotionFramingError>>
 }

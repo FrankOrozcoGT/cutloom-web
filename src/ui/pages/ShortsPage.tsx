@@ -41,22 +41,23 @@ export function ShortsPage() {
   const [motionExcludeRect, setMotionExcludeRect] = useState<NormalizedRect | null>(null)
   const [analyzingShortKey, setAnalyzingShortKey] = useState<string | null>(null)
   const [persistError, setPersistError] = useState<string | null>(null)
-  const { analyzeState, analyzeAndSave, setAutoFrameEnabled, setMotionExcludeRect: persistMotionExcludeRect } = useAutoFraming()
+  const { analyzeState, analyzeAndSave, setAutoFrameEnabled, setMotionExcludeRectAndClearAutoFraming } = useAutoFraming()
 
   // Cambiar la región del avatar invalida cualquier trayectoria de
   // auto-encuadre ya calculada (se calculó ignorando la región vieja, ya no
-  // es correcta) — updateMotionExcludeRect la descarta en la misma escritura
-  // (ver IndexedDBShortsAdapter), acá se refleja lo mismo en memoria. Los
-  // shorts con autoFrameEnabled siguen activados: solo les falta volver a
-  // calcularse (el botón de recalcular queda visible en cada ShortCard).
+  // es correcta) — setMotionExcludeRectAndClearAutoFraming la descarta en la
+  // misma escritura (ver su contrato en ShortsStoragePort), acá se refleja
+  // lo mismo en memoria. Los shorts con autoFrameEnabled siguen activados:
+  // solo les falta volver a calcularse (el botón de recalcular queda
+  // visible en cada ShortCard).
   const handleChangeMotionExcludeRect = useCallback(
     (rect: NormalizedRect | null) => {
       if (!projectId) return
       setMotionExcludeRect(rect)
       setAutoFramingByShort({})
-      void persistMotionExcludeRect(projectId, rect)
+      void setMotionExcludeRectAndClearAutoFraming(projectId, rect)
     },
-    [projectId, persistMotionExcludeRect],
+    [projectId, setMotionExcludeRectAndClearAutoFraming],
   )
 
   useEffect(() => {

@@ -144,7 +144,7 @@ export class IndexedDBShortsAdapter implements ShortsStoragePort {
     }
   }
 
-  async updateMotionExcludeRect(
+  async updateMotionExcludeRectAndClearAutoFraming(
     projectId: string,
     rect: NormalizedRect | null,
   ): Promise<Result<void, ShortsStorageError>> {

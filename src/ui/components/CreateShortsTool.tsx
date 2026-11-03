@@ -68,14 +68,22 @@ export function CreateShortsTool({
   const [isReframingAll, setIsReframingAll] = useState(false)
   const isCreating = state === 'detecting' || state === 'extracting_audio' || state === 'scoring'
 
+  // Sin preferencia explícita para un short, el default es auto-encuadre
+  // activado cuando el proyecto ya tiene una región de avatar marcada —
+  // tiene sentido aprovecharla de una vez en vez de forzar al usuario a
+  // activarla short por short. Si el usuario la desactivó a mano antes, esa
+  // elección (false explícito en el record) prevalece. Única fuente de
+  // verdad: usada tanto por "Reencuadrar todos" como por cada ShortCard, que
+  // deben operar sobre exactamente el mismo conjunto de shorts.
+  const isAutoFrameEffectivelyEnabled = (key: string): boolean => autoFrameEnabledByShort[key] ?? motionExcludeRect !== null
+
   // Secuencial (un short a la vez, no Promise.all) a propósito: cada análisis
   // decodifica el tramo completo del render — correrlos todos en paralelo
   // saturaría CPU/memoria sin necesidad, el usuario puede esperar un poco más.
   const handleReframeAll = async () => {
     setIsReframingAll(true)
     for (const short of shorts) {
-      const key = shortKey(short)
-      if (autoFrameEnabledByShort[key] ?? motionExcludeRect !== null) {
+      if (isAutoFrameEffectivelyEnabled(shortKey(short))) {
         await onAnalyzeAutoFrame(short)
       }
     }
@@ -162,13 +170,7 @@ export function CreateShortsTool({
                 projectName={projectName}
                 cropOffsetX={cropOffsetXByShort[key] ?? 0.5}
                 onUpdateCropOffset={(cropOffsetX) => onUpdateCropOffset(short, cropOffsetX)}
-                // Sin preferencia explícita para este short, el default es
-                // auto-encuadre activado cuando el proyecto ya tiene una
-                // región de avatar marcada — tiene sentido aprovecharla de
-                // una vez en vez de forzar al usuario a activarla short por
-                // short. Si el usuario la desactivó a mano antes, esa
-                // elección (false explícito en el record) prevalece.
-                autoFrameEnabled={autoFrameEnabledByShort[key] ?? motionExcludeRect !== null}
+                autoFrameEnabled={isAutoFrameEffectivelyEnabled(key)}
                 onToggleAutoFrame={(enabled) => onToggleAutoFrame(short, enabled)}
                 autoFrameKeyframes={autoFramingByShort[key] ?? null}
                 isAnalyzingAutoFrame={analyzingShortKey === key && analyzeState === 'analyzing'}

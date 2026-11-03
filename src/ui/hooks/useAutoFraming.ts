@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { Render } from '@domain/render'
 import type { AutoFrameKeyframe, NormalizedRect } from '@domain/shorts'
-import { analyzeMotionFramingUseCase } from '@ui/shorts/composition'
+import { motionFramingAnalyzer } from '@ui/shorts/composition'
 import { shortsStorage } from '@ui/video/composition'
 
 export type AnalyzeAutoFrameState = 'idle' | 'analyzing' | 'error'
@@ -18,10 +18,11 @@ interface UseAutoFramingResult {
     excludeRect: NormalizedRect | null,
   ) => Promise<AutoFrameKeyframe[] | null>
   setAutoFrameEnabled: (projectId: string, shortKeyValue: string, enabled: boolean) => Promise<void>
-  setMotionExcludeRect: (projectId: string, rect: NormalizedRect | null) => Promise<void>
+  /** Cambia la región del avatar — descarta, siempre en la misma escritura, toda trayectoria de auto-encuadre ya calculada (ver contrato en ShortsStoragePort.updateMotionExcludeRectAndClearAutoFraming). */
+  setMotionExcludeRectAndClearAutoFraming: (projectId: string, rect: NormalizedRect | null) => Promise<void>
 }
 
-/** Orquesta el análisis de movimiento y la persistencia del auto-encuadre de shorts — ver domain/shorts.ts (AutoFrameKeyframe, findMotionCenter, smoothMotionPath) y AnalyzeMotionFramingUseCase. */
+/** Orquesta el análisis de movimiento y la persistencia del auto-encuadre de shorts — ver domain/shorts.ts (AutoFrameKeyframe, findMotionCenter, smoothMotionPath) y MotionFramingAnalyzerPort. */
 export function useAutoFraming(): UseAutoFramingResult {
   const [analyzeState, setAnalyzeState] = useState<AnalyzeAutoFrameState>('idle')
 
@@ -35,7 +36,7 @@ export function useAutoFraming(): UseAutoFramingResult {
       excludeRect: NormalizedRect | null,
     ) => {
       setAnalyzeState('analyzing')
-      const result = await analyzeMotionFramingUseCase.execute(render, startMs, endMs, excludeRect)
+      const result = await motionFramingAnalyzer.analyze(render, startMs, endMs, excludeRect)
       if (!result.ok) {
         setAnalyzeState('error')
         return null
@@ -51,9 +52,9 @@ export function useAutoFraming(): UseAutoFramingResult {
     await shortsStorage.updateAutoFrameEnabled(projectId, shortKeyValue, enabled)
   }, [])
 
-  const setMotionExcludeRect = useCallback(async (projectId: string, rect: NormalizedRect | null) => {
-    await shortsStorage.updateMotionExcludeRect(projectId, rect)
+  const setMotionExcludeRectAndClearAutoFraming = useCallback(async (projectId: string, rect: NormalizedRect | null) => {
+    await shortsStorage.updateMotionExcludeRectAndClearAutoFraming(projectId, rect)
   }, [])
 
-  return { analyzeState, analyzeAndSave, setAutoFrameEnabled, setMotionExcludeRect }
+  return { analyzeState, analyzeAndSave, setAutoFrameEnabled, setMotionExcludeRectAndClearAutoFraming }
 }

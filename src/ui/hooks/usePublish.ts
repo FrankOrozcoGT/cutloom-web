@@ -14,7 +14,7 @@ import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
 import { publishingUseCase, publishBlobStorage } from '@ui/publishing/composition'
 import { startPlatformOAuth } from '@ui/publishing/oauth'
 import { useExport, type ExportFailure } from '@ui/hooks/useExport'
-import type { ShortFraming } from '@application/shorts/ExtractShortUseCase'
+import type { ShortFraming } from '@application/shorts/ports'
 
 /**
  * Tope de subidas simultáneas — subir TODOS los archivos de un bulk en

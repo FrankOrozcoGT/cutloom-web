@@ -1,8 +1,6 @@
 import { DetectShortsUseCase } from '@application/shorts/DetectShortsUseCase'
 import { ScoreShortsUseCase } from '@application/shorts/ScoreShortsUseCase'
 import { SaveShortsResultUseCase } from '@application/shorts/SaveShortsResultUseCase'
-import { ExtractShortUseCase } from '@application/shorts/ExtractShortUseCase'
-import { AnalyzeMotionFramingUseCase } from '@application/shorts/AnalyzeMotionFramingUseCase'
 import { EnsureRenderUseCase, GenerateRenderUseCase } from '@application/render/GenerateRenderUseCase'
 import { ShortsApiAdapter } from '@infrastructure/shorts/adapter'
 import { ShortExtractorAdapter } from '@infrastructure/shorts/ShortExtractorAdapter'
@@ -31,7 +29,7 @@ export const saveShortsResultUseCase = new SaveShortsResultUseCase(
   videoStorage,
   ensureRenderUseCase,
 )
-export const extractShortUseCase = new ExtractShortUseCase(new ShortExtractorAdapter())
-export const analyzeMotionFramingUseCase = new AnalyzeMotionFramingUseCase(new MotionFramingAnalyzerAdapter())
+export const shortExtractor = new ShortExtractorAdapter()
+export const motionFramingAnalyzer = new MotionFramingAnalyzerAdapter()
 
 export { extractSubtitlesAudioUseCase } from '@ui/subtitles/composition'
