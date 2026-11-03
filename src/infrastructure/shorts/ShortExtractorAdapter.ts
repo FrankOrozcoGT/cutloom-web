@@ -1,10 +1,10 @@
 import { BufferTarget, Conversion, Mp4OutputFormat, Output } from 'mediabunny'
 import type { CropRectangle, VideoSample } from 'mediabunny'
 import type { Render } from '@domain/render'
-import { SHORT_HEIGHT, SHORT_WIDTH, interpolateCropOffsetX } from '@domain/shorts'
+import { SHORT_HEIGHT, SHORT_WIDTH, interpolateCropOffsetX, type EffectiveShortFraming } from '@domain/shorts'
 import { AUDIO_ENCODE_CODEC } from '@domain/video'
 import { err, ok, type Result } from '@application/result'
-import type { ExtractShortError, ShortExtractorPort, ShortFraming } from '@application/shorts/ports'
+import type { ExtractShortError, ShortExtractorPort } from '@application/shorts/ports'
 import { describeError } from '@infrastructure/errors'
 import { openRenderVideoTrack } from './openRenderVideoTrack'
 
@@ -24,7 +24,7 @@ function verticalCropRect(sourceWidth: number, sourceHeight: number, cropOffsetX
 
 /** Recorta [startMs, endMs) del render ya existente y aplica el encuadre vertical — nunca decodifica los VideoAsset originales, trabaja siempre sobre el render ya aplanado. */
 export class ShortExtractorAdapter implements ShortExtractorPort {
-  async extract(render: Render, startMs: number, endMs: number, framing: ShortFraming): Promise<Result<Blob, ExtractShortError>> {
+  async extract(render: Render, startMs: number, endMs: number, framing: EffectiveShortFraming): Promise<Result<Blob, ExtractShortError>> {
     try {
       const { input, videoTrack } = await openRenderVideoTrack(render)
       if (!videoTrack) {

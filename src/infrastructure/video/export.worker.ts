@@ -1,14 +1,12 @@
 import { EnsureRenderUseCase, GenerateRenderUseCase } from '@application/render/GenerateRenderUseCase'
 import type { GenerateRenderError } from '@application/render/GenerateRenderUseCase'
-import type { ExtractShortError, ShortFraming } from '@application/shorts/ports'
+import type { ExtractShortError } from '@application/shorts/ports'
+import type { EffectiveShortFraming } from '@domain/shorts'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
 import { describeError } from '@infrastructure/errors'
-import { VideoDecoderAdapter } from './VideoDecoderAdapter'
-import { VideoEncoderAdapter } from './VideoEncoderAdapter'
-import { OffscreenCanvasCompositor } from './OffscreenCanvasCompositor'
-import { RenderEngineAdapter } from './RenderEngineAdapter'
+import { createRenderEngine } from './createRenderEngine'
 import { ShortExtractorAdapter } from '@infrastructure/shorts/ShortExtractorAdapter'
 
 export type ExportWorkerRequest = {
@@ -17,7 +15,7 @@ export type ExportWorkerRequest = {
   /** Acota la exportación a [startMs, endMs) del render — presente para exportar un short, ausente para el video completo. */
   range?: { startMs: number; endMs: number }
   /** Encuadre del short — ignorado si range no está presente. */
-  framing?: ShortFraming
+  framing?: EffectiveShortFraming
 }
 
 export type ExportWorkerAbortRequest = { type: 'abort' }
@@ -47,9 +45,7 @@ const timelineStorage = new IndexedDBTimelineAdapter()
 const videoStorage = new IndexedDBAdapter()
 const renderStorage = new IndexedDBRenderAdapter()
 
-const compositor = new OffscreenCanvasCompositor()
-const renderEngine = new RenderEngineAdapter(new VideoDecoderAdapter(), new VideoEncoderAdapter(compositor), compositor)
-const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(renderEngine, renderStorage))
+const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(createRenderEngine(), renderStorage))
 const shortExtractor = new ShortExtractorAdapter()
 
 // Un AbortController por export en curso — se recrea en cada mensaje 'export' nuevo, así que un 'abort' recibido después de que el export anterior ya terminó no afecta al siguiente.

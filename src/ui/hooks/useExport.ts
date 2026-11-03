@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ExportWorkerMessage, ExportWorkerResponse } from '@infrastructure/video/export.worker'
-import type { ShortFraming } from '@application/shorts/ports'
+import type { EffectiveShortFraming } from '@domain/shorts'
 
 function toFileName(projectName: string | undefined, projectId: string): string {
   const base = projectName?.trim() || projectId
@@ -79,7 +79,7 @@ export function useExport() {
       projectId: string,
       projectName: string | undefined,
       range: { startMs: number; endMs: number } | undefined,
-      framing: ShortFraming | undefined,
+      framing: EffectiveShortFraming | undefined,
       mode: RunExportMode,
     ) => {
       const worker = getOrCreateWorker()
@@ -152,7 +152,7 @@ export function useExport() {
   )
 
   const exportProject = useCallback(
-    (projectId: string, projectName?: string, range?: { startMs: number; endMs: number }, framing?: ShortFraming) => {
+    (projectId: string, projectName?: string, range?: { startMs: number; endMs: number }, framing?: EffectiveShortFraming) => {
       runExport(projectId, projectName, range, framing, { kind: RunExportModeKind.Download })
     },
     [runExport],
@@ -163,7 +163,7 @@ export function useExport() {
       projectId: string,
       projectName?: string,
       range?: { startMs: number; endMs: number },
-      framing?: ShortFraming,
+      framing?: EffectiveShortFraming,
     ): Promise<{ ok: true; blob: Blob } | { ok: false; error: ExportFailure }> => {
       return new Promise((resolve) => {
         runExport(projectId, projectName, range, framing, { kind: RunExportModeKind.Blob, resolve })

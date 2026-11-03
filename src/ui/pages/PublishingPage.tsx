@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
-import { shortKey } from '@domain/shorts'
+import { resolveShortFraming, shortKey } from '@domain/shorts'
 import { isPublishingResultNotification, toPublishItemResultFromNotification, type MetadataContext, type PublishItemStatus } from '@domain/publishing'
 import { platformLabel, isPublishableViaApi, type PublishingPlatform } from '@domain/platform'
 import { useAuth } from '@ui/auth/useAuth'
@@ -168,7 +168,7 @@ export function PublishingPage() {
                   videoType: 'short',
                   score: short.score,
                   range: { startMs: short.startMs, endMs: short.endMs },
-                  cropOffsetX: projectShorts?.cropOffsetXByShort?.[shortKey(short)],
+                  framing: projectShorts ? resolveShortFraming(projectShorts, shortKey(short)) : undefined,
                   // Sin subtítulos en este tramo no hay context válido (subtitles es obligatorio) —
                   // detectedReason/score solo se agregan si ya hay un context real que los sostenga.
                   context: shortContext ? { ...shortContext, detectedReason: short.reason, score: short.score } : undefined,

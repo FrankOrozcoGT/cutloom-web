@@ -130,6 +130,39 @@ export interface ProjectShorts {
   motionExcludeRect?: NormalizedRect
 }
 
+/** Encuadre efectivo de un short — fijo (un solo offset) o automático (trayectoria ya calculada). Misma forma que ShortFraming de application/shorts/ports.ts, pero vive en domain porque resolveShortFraming no puede depender de application. */
+export type EffectiveShortFraming = { mode: 'fixed'; cropOffsetX: number } | { mode: 'auto'; keyframes: AutoFrameKeyframe[] }
+
+/** Subconjunto de ProjectShorts que resolveShortFraming necesita — evita que sus callers tengan que construir un ProjectShorts completo (con projectId/renderId/shorts/etc.) solo para resolver un encuadre. */
+export type ShortFramingState = Pick<
+  ProjectShorts,
+  'cropOffsetXByShort' | 'autoFrameEnabledByShort' | 'autoFramingByShort' | 'motionExcludeRect'
+>
+
+/**
+ * Resuelve el encuadre efectivo de un short (identificado por su
+ * shortKeyValue, ver shortKey()) dado el estado persistido del proyecto —
+ * única fuente de verdad, usada tanto por la UI de edición (ShortCard, vía
+ * CreateShortsTool) como por el flujo de publicación (usePublish), para
+ * que un short publicado nunca quede con un encuadre distinto al que el
+ * usuario vio/descargó.
+ *
+ * Sin preferencia explícita por short, el default es auto si el proyecto
+ * ya tiene una región de avatar marcada (motionExcludeRect) — ver criterio
+ * en CreateShortsTool. El modo auto solo aplica si además hay una
+ * trayectoria ya calculada; si falta, cae a fixed con el offset manual
+ * (o 0.5 si tampoco hay ese).
+ */
+export function resolveShortFraming(state: ShortFramingState, shortKeyValue: string): EffectiveShortFraming {
+  const autoFrameEnabled = state.autoFrameEnabledByShort?.[shortKeyValue] ?? state.motionExcludeRect !== undefined
+  const keyframes = state.autoFramingByShort?.[shortKeyValue]
+
+  if (autoFrameEnabled && keyframes) {
+    return { mode: 'auto', keyframes }
+  }
+  return { mode: 'fixed', cropOffsetX: state.cropOffsetXByShort?.[shortKeyValue] ?? 0.5 }
+}
+
 export interface ImproveResult {
   summary: string
   correctedSubtitles: ImprovedSubtitle[]

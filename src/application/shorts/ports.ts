@@ -1,6 +1,7 @@
 import type {
   AutoFrameKeyframe,
   DetectResult,
+  EffectiveShortFraming,
   ImproveResult,
   NormalizedRect,
   ScoreResult,
@@ -66,12 +67,9 @@ export interface ShortsStoragePort {
 
 export type ExtractShortError = 'UNSUPPORTED_API' | 'ENCODING_ERROR' | 'MUX_FAILED'
 
-/** Encuadre horizontal a aplicar al recortar un short — fijo (un solo offset para todo el tramo) o automático (trayectoria ya calculada por análisis de movimiento, ver MotionFramingAnalyzerPort). */
-export type ShortFraming = { mode: 'fixed'; cropOffsetX: number } | { mode: 'auto'; keyframes: AutoFrameKeyframe[] }
-
-/** Recorta [startMs, endMs) del render vigente del proyecto con el encuadre vertical pedido — nunca vuelve a decodificar los VideoAsset originales. */
+/** Recorta [startMs, endMs) del render vigente del proyecto con el encuadre vertical pedido (ver domain/shorts.EffectiveShortFraming) — nunca vuelve a decodificar los VideoAsset originales. */
 export interface ShortExtractorPort {
-  extract(render: Render, startMs: number, endMs: number, framing: ShortFraming): Promise<Result<Blob, ExtractShortError>>
+  extract(render: Render, startMs: number, endMs: number, framing: EffectiveShortFraming): Promise<Result<Blob, ExtractShortError>>
 }
 
 export type AnalyzeMotionFramingError = 'UNSUPPORTED_API' | 'DECODE_FAILED'

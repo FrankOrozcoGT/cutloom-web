@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import type { Render } from '@domain/render'
 import type { SubtitleSegment } from '@domain/subtitles'
-import { shortKey, type AutoFrameKeyframe, type NormalizedRect, type ShortIdeal, type ShortScore } from '@domain/shorts'
+import {
+  resolveShortFraming,
+  shortKey,
+  type AutoFrameKeyframe,
+  type NormalizedRect,
+  type ShortFramingState,
+  type ShortIdeal,
+  type ShortScore,
+} from '@domain/shorts'
 import type { ShortsErrorCode } from '@application/shorts/errors'
 import type { CreateShortsState } from '@ui/hooks/useShorts'
 import type { AnalyzeAutoFrameState } from '@ui/hooks/useAutoFraming'
@@ -68,14 +76,19 @@ export function CreateShortsTool({
   const [isReframingAll, setIsReframingAll] = useState(false)
   const isCreating = state === 'detecting' || state === 'extracting_audio' || state === 'scoring'
 
-  // Sin preferencia explícita para un short, el default es auto-encuadre
-  // activado cuando el proyecto ya tiene una región de avatar marcada —
-  // tiene sentido aprovecharla de una vez en vez de forzar al usuario a
-  // activarla short por short. Si el usuario la desactivó a mano antes, esa
-  // elección (false explícito en el record) prevalece. Única fuente de
-  // verdad: usada tanto por "Reencuadrar todos" como por cada ShortCard, que
-  // deben operar sobre exactamente el mismo conjunto de shorts.
-  const isAutoFrameEffectivelyEnabled = (key: string): boolean => autoFrameEnabledByShort[key] ?? motionExcludeRect !== null
+  // Estado de encuadre del proyecto en la forma que necesita
+  // resolveShortFraming — única fuente de verdad del encuadre efectivo (ver
+  // domain/shorts.ts), compartida con usePublish para que un short
+  // publicado nunca quede con un encuadre distinto al que esta pantalla
+  // muestra/descarga.
+  const framingState: ShortFramingState = {
+    cropOffsetXByShort,
+    autoFrameEnabledByShort,
+    autoFramingByShort,
+    motionExcludeRect: motionExcludeRect ?? undefined,
+  }
+
+  const isAutoFrameEffectivelyEnabled = (key: string): boolean => resolveShortFraming(framingState, key).mode === 'auto'
 
   // Secuencial (un short a la vez, no Promise.all) a propósito: cada análisis
   // decodifica el tramo completo del render — correrlos todos en paralelo
