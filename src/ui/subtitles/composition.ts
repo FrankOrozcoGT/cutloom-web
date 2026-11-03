@@ -6,11 +6,9 @@ import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubt
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
 import { AudioExtractionAdapter } from '@infrastructure/video/AudioExtractionAdapter'
 import { WhisperAdapter } from '@infrastructure/subtitles/WhisperAdapter'
-import { VideoDecoderAdapter } from '@infrastructure/video/VideoDecoderAdapter'
-import { VideoEncoderAdapter } from '@infrastructure/video/VideoEncoderAdapter'
-import { OffscreenCanvasCompositor } from '@infrastructure/video/OffscreenCanvasCompositor'
-import { RenderEngineAdapter } from '@infrastructure/video/RenderEngineAdapter'
-import { timelineStorage, videoStorage } from '@ui/video/composition'
+import { createRenderEngine } from '@infrastructure/video/createRenderEngine'
+import { videoStorage } from '@ui/video/composition'
+import { timelineStorage } from '@ui/timeline/composition'
 
 export const subtitlesStorage = new IndexedDBSubtitlesAdapter()
 export const renderStorage = new IndexedDBRenderAdapter()
@@ -21,12 +19,9 @@ export const extractSubtitlesAudioUseCase = new ExtractSubtitlesAudioUseCase(
   new AudioExtractionAdapter(),
 )
 
-const compositor = new OffscreenCanvasCompositor()
-const renderEngine = new RenderEngineAdapter(new VideoDecoderAdapter(), new VideoEncoderAdapter(compositor), compositor)
-
 export const generateSubtitlesAndRenderUseCase = new GenerateSubtitlesAndRenderUseCase(
   new GenerateSubtitlesUseCase(new WhisperAdapter()),
-  new GenerateRenderUseCase(renderEngine, renderStorage),
+  new GenerateRenderUseCase(createRenderEngine(), renderStorage),
   timelineStorage,
   videoStorage,
   subtitlesStorage,

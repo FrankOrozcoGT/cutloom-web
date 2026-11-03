@@ -10,10 +10,7 @@ import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubtitlesAdapter'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
 import { WhisperAdapter } from './WhisperAdapter'
-import { VideoDecoderAdapter } from '@infrastructure/video/VideoDecoderAdapter'
-import { VideoEncoderAdapter } from '@infrastructure/video/VideoEncoderAdapter'
-import { OffscreenCanvasCompositor } from '@infrastructure/video/OffscreenCanvasCompositor'
-import { RenderEngineAdapter } from '@infrastructure/video/RenderEngineAdapter'
+import { createRenderEngine } from '@infrastructure/video/createRenderEngine'
 
 // Whisper en WASM (sin WebGPU) y el pipeline de render (decode/encode con
 // WebCodecs) son cómputo síncrono pesado: corriendo en el hilo principal
@@ -58,12 +55,9 @@ const videoStorage = new IndexedDBAdapter()
 const subtitlesStorage = new IndexedDBSubtitlesAdapter()
 const renderStorage = new IndexedDBRenderAdapter()
 
-const compositor = new OffscreenCanvasCompositor()
-const renderEngine = new RenderEngineAdapter(new VideoDecoderAdapter(), new VideoEncoderAdapter(compositor), compositor)
-
 const generateUseCase = new GenerateSubtitlesAndRenderUseCase(
   new GenerateSubtitlesUseCase(new WhisperAdapter()),
-  new GenerateRenderUseCase(renderEngine, renderStorage),
+  new GenerateRenderUseCase(createRenderEngine(), renderStorage),
   timelineStorage,
   videoStorage,
   subtitlesStorage,

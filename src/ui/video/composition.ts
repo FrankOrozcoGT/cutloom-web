@@ -4,7 +4,6 @@ import { ProjectUseCase } from '@application/project/ProjectUseCase'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBProxyAdapter } from '@infrastructure/storage/IndexedDBProxyAdapter'
 import { IndexedDBProjectAdapter } from '@infrastructure/storage/IndexedDBProjectAdapter'
-import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
 import { IndexedDBSubtitlesAdapter } from '@infrastructure/storage/IndexedDBSubtitlesAdapter'
 import { IndexedDBShortsAdapter } from '@infrastructure/storage/IndexedDBShortsAdapter'
@@ -13,11 +12,11 @@ import { DurationReaderAdapter } from '@infrastructure/video/DurationReaderAdapt
 import { ThumbnailGenerator } from '@infrastructure/video/ThumbnailGenerator'
 import { ProxyGeneratorAdapter } from '@infrastructure/video/ProxyGeneratorAdapter'
 import { FilePickerAdapter } from '@infrastructure/file/FilePickerAdapter'
+import { timelineStorage } from '@ui/timeline/composition'
 
 export const videoStorage = new IndexedDBAdapter()
 export const proxyStorage = new IndexedDBProxyAdapter()
 export const projectStorage = new IndexedDBProjectAdapter()
-export const timelineStorage = new IndexedDBTimelineAdapter()
 export const renderStorage = new IndexedDBRenderAdapter()
 export const subtitlesStorage = new IndexedDBSubtitlesAdapter()
 export const shortsStorage = new IndexedDBShortsAdapter()

@@ -7,10 +7,7 @@ import { ShortExtractorAdapter } from '@infrastructure/shorts/ShortExtractorAdap
 import { MotionFramingAnalyzerAdapter } from '@infrastructure/shorts/MotionFramingAnalyzerAdapter'
 import { httpClient } from '@infrastructure/http/client'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
-import { VideoDecoderAdapter } from '@infrastructure/video/VideoDecoderAdapter'
-import { VideoEncoderAdapter } from '@infrastructure/video/VideoEncoderAdapter'
-import { OffscreenCanvasCompositor } from '@infrastructure/video/OffscreenCanvasCompositor'
-import { RenderEngineAdapter } from '@infrastructure/video/RenderEngineAdapter'
+import { createRenderEngine } from '@infrastructure/video/createRenderEngine'
 import { shortsStorage, videoStorage } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 
@@ -19,9 +16,7 @@ export const detectShortsUseCase = new DetectShortsUseCase(shortsApi)
 export const scoreShortsUseCase = new ScoreShortsUseCase(shortsApi)
 
 const renderStorage = new IndexedDBRenderAdapter()
-const compositor = new OffscreenCanvasCompositor()
-const renderEngine = new RenderEngineAdapter(new VideoDecoderAdapter(), new VideoEncoderAdapter(compositor), compositor)
-const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(renderEngine, renderStorage))
+const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(createRenderEngine(), renderStorage))
 
 export const saveShortsResultUseCase = new SaveShortsResultUseCase(
   shortsStorage,
