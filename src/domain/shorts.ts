@@ -1,7 +1,11 @@
 import { err, ok, type Result } from '@application/result'
 
-/** Sample rate compartido con AudioExtractionAdapter — el audio del timeline ya se extrae mono a esta frecuencia. */
+/** Sample rate compartido con la extracción de audio del render — el audio del timeline ya se extrae mono a esta frecuencia. */
 export const TARGET_SAMPLE_RATE = 16000
+
+/** Formato estándar de shorts verticales (YouTube Shorts, TikTok, Reels) — 1080x1920 9:16. Único punto de verdad: ShortExtractorAdapter (recorte real) y la UI de preview/edición de encuadre deben usar la misma proporción. */
+export const SHORT_WIDTH = 1080
+export const SHORT_HEIGHT = 1920
 
 export interface ShortCandidateDetect {
   /** Id estable devuelto por /detect — se reenvía tal cual a /score (candidates y fieldname del audio audio_<id>), reemplaza la dependencia de la posición del candidato dentro del array. */
@@ -56,28 +60,28 @@ export function shortKey(short: Pick<ShortScore, 'startMs' | 'endMs'>): string {
 /** Arma el registro a persistir tras generar shorts nuevos — única forma válida de construir un ProjectShorts desde cero, para que no haya dos callers armando el shape por su cuenta. */
 export function buildProjectShorts(params: {
   projectId: string
+  renderId: string
   shorts: ShortScore[]
   warnings: string[]
-  timelineFingerprint?: string
 }): ProjectShorts {
   return {
     projectId: params.projectId,
+    renderId: params.renderId,
     shorts: params.shorts,
     warnings: params.warnings,
     createdAt: new Date().toISOString(),
-    timelineFingerprint: params.timelineFingerprint,
   }
 }
 
 /** Resultado de crear shorts para un proyecto, persistido para que el listado de proyectos sepa si ya tiene shorts generados sin tener que entrar al editor. */
 export interface ProjectShorts {
   projectId: string
+  /** Render (ver domain/render.ts) sobre el que se recortaron estos shorts — si no coincide con el render vigente del proyecto, el timeline cambió y se generó un render nuevo después, así que los startMs/endMs guardados ya no corresponden al contenido vigente. */
+  renderId: string
   shorts: ShortScore[]
   warnings: string[]
   shortIdeal?: ShortIdeal
   createdAt: string
-  /** Huella del timeline (ver domain/timeline.timelineFingerprint) al momento de generar estos shorts — si no coincide con la huella actual, el timeline cambió después y los startMs/endMs guardados ya no corresponden al contenido real. */
-  timelineFingerprint?: string
   /** Offset horizontal de crop manual por short (0 = borde izquierdo visible, 0.5 = centrado, 1 = borde derecho visible), keyed por shortKey(). Ausente o sin entrada = centrado (default). Preferencia de UI, no del backend — vive acá y no en ShortScore para no mezclarla con la respuesta del scoring. */
   cropOffsetXByShort?: Record<string, number>
 }

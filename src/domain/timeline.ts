@@ -72,9 +72,9 @@ export function createTimeline(projectId: string): Timeline {
 /**
  * Huella determinista del contenido editable del timeline (no de metadata
  * como ids de track) — cambia si se corta, mueve, inserta o borra un clip.
- * Se usa para detectar si un timeline cambió desde que se generaron unos
- * shorts, ya que sus startMs/endMs quedan fijados al momento de creación y
- * dejan de corresponder al contenido real si el timeline se edita después.
+ * Se usa para detectar si el render vigente del proyecto quedó obsoleto
+ * (ver domain/render.ts) y si unos shorts ya generados siguen correspondiendo
+ * al contenido real.
  */
 export function timelineFingerprint(timeline: Timeline): string {
   const clipsSignature = timeline.tracks
@@ -224,7 +224,6 @@ export function snapToNearestClip(
   let bestDistance = Infinity
 
   for (const point of candidates) {
-    // El clip puede alinear su borde inicial o su borde final con este punto.
     const startAligned = point
     const endAligned = point - durationMs
 
@@ -354,9 +353,6 @@ export function splitClip(
     return err('CUT_OUT_OF_BOUNDS')
   }
 
-  // Ambos fragmentos heredan el mismo originClipId — si clip ya tenía uno
-  // (viene de un split previo), se propaga tal cual; si no, clip.id mismo
-  // se convierte en el origen para esta y futuras divisiones de sus partes.
   const originClipId = clip.originClipId ?? clip.id
   const deltaMs = cutPointMs - clip.offsetMs
   const segment1: Clip = { ...clip, durationMs: deltaMs, originClipId }
@@ -506,12 +502,10 @@ function areContiguous(left: Clip, right: Clip): boolean {
 /**
  * Recose el clip recién reinsertado con cualquier otro fragmento del track
  * que comparta su origen (originClipId) y resulte contiguo tras la
- * reinserción — ya no se limita a los vecinos inmediatos: al comparar por
+ * reinserción — no se limita a los vecinos inmediatos: al comparar por
  * identidad de origen en vez de coincidencia numérica de offset/
  * sourceStartMs, dos clips ajenos entre sí que un usuario haya colocado
- * pegados a mano nunca pueden calzar por casualidad (nunca comparten
- * originClipId), así que recorrer todo el track ya no arriesga fusionar
- * material no relacionado.
+ * pegados a mano nunca pueden calzar por casualidad.
  */
 function mergeWithNeighbors(clips: Clip[], relocated: Clip): Clip[] {
   const sorted = [...clips, relocated].sort((a, b) => a.offsetMs - b.offsetMs)
@@ -519,11 +513,6 @@ function mergeWithNeighbors(clips: Clip[], relocated: Clip): Clip[] {
   let merged = relocated
   let survivors = sorted.filter((clip) => clip.id !== relocated.id)
 
-  // Se repite hasta que ningún otro fragmento del track sea contiguo con el
-  // resultado — una sola pasada alcanza para vecinos directos, pero
-  // encadenar hacia ambos lados requiere volver a intentar tras cada fusión
-  // (ej. A-B-C-D partidos en cuatro, reinsertando B: primero se funde con A,
-  // y el resultado A+B recién ahí puede calzar contra C).
   let mergedSomething = true
   while (mergedSomething) {
     mergedSomething = false
@@ -610,7 +599,7 @@ function findRawSilences(audio: Float32Array, sampleRate: number, thresholdAmpli
  * los editores reales (Descript, AutoCut, Premiere): analizar el volumen del
  * audio directamente, no depender de que exista una transcripción. audio es
  * mono a sampleRate (coherente con TARGET_SAMPLE_RATE de domain/shorts.ts,
- * que es lo que produce la extracción de audio del timeline).
+ * que es lo que produce la extracción de audio del render).
  *
  * Cada silencio detectado se acorta por paddingMs de cada lado antes de
  * devolverlo — el corte deja ese margen de silencio pegado a la voz en vez de

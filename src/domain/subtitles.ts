@@ -10,12 +10,8 @@ export interface SubtitleSegment {
 /**
  * Estilo del overlay de subtítulo, como fracciones del alto/ancho del
  * frame — única fuente de verdad consumida tanto por el preview en vivo
- * (TimelinePlayer, vía CSS con unidades relativas) como por el burn-in del
- * export (OffscreenCanvasCompositor, vía canvas con estos mismos ratios
- * multiplicados por las dimensiones reales). Antes cada uno tenía sus
- * propias constantes arbitrarias (un tamaño de fuente en px fijo en CSS vs.
- * un ratio del alto en el canvas) sin relación entre sí, por lo que el
- * resultado final descargado no se parecía al preview.
+ * (vía CSS con unidades relativas) como por el burn-in del render (vía
+ * canvas con estos mismos ratios multiplicados por las dimensiones reales).
  */
 export const SUBTITLE_STYLE = {
   fontSizeRatio: 0.045,
@@ -268,4 +264,3 @@ export function importSrt(content: string): Result<SubtitleSegment[], SubtitlePa
 export function importVtt(content: string): Result<SubtitleSegment[], SubtitleParseError> {
   return parseCues(content)
 }
-
