@@ -52,7 +52,7 @@ export class UploadVideoUseCase {
 
     const saveResult = await this.storage.save(file, projectId, durationResult.value)
     if (!saveResult.ok) {
-      return err(saveResult.error === 'STORAGE_FULL' ? 'STORAGE_FULL' : 'UNKNOWN_ERROR')
+      return err(saveResult.error)
     }
 
     const thumbnailResult = await this.thumbnailGenerator.generate(file)
@@ -67,7 +67,7 @@ export class UploadVideoUseCase {
 
     const saveProxyResult = await this.proxyStorage.save(proxyResult.value)
     if (!saveProxyResult.ok) {
-      return err(saveProxyResult.error === 'STORAGE_FULL' ? 'STORAGE_FULL' : 'UNKNOWN_ERROR')
+      return err(saveProxyResult.error)
     }
 
     return ok({ asset: saveResult.value, thumbnail: thumbnailResult.value, proxy: proxyResult.value })
