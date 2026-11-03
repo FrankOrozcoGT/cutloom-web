@@ -1,10 +1,16 @@
 const DB_NAME = 'cutloom'
-const DB_VERSION = 9
+const DB_VERSION = 10
 
 export const PROJECTS_STORE = 'projects'
 export const VIDEOS_STORE = 'videos'
 export const VIDEOS_BY_PROJECT_INDEX = 'projectId'
+/** Proxy liviano con índice de seek propio por VideoAsset — único soporte de la edición en vivo (timeline, scrubbing). */
+export const PROXIES_STORE = 'proxies'
+export const PROXIES_BY_VIDEO_ASSET_INDEX = 'videoAssetId'
+export const PROXIES_BY_PROJECT_INDEX = 'projectId'
 export const TIMELINE_STORE = 'timelines'
+/** Resultado aplanado del timeline a un único archivo, con subtítulos quemados — generado siempre al generar subtítulos; shorts y export siempre lo leen en vez de recomponer el timeline. */
+export const RENDERS_STORE = 'renders'
 export const SUBTITLES_STORE = 'subtitles'
 export const SHORTS_STORE = 'shorts'
 export const PUBLISHING_STORE = 'publishing'
@@ -31,6 +37,21 @@ export function openCutloomDB(): Promise<IDBDatabase> {
 
         if (!videos.indexNames.contains(VIDEOS_BY_PROJECT_INDEX)) {
           videos.createIndex(VIDEOS_BY_PROJECT_INDEX, 'projectId')
+        }
+
+        const proxies = db.objectStoreNames.contains(PROXIES_STORE)
+          ? transaction.objectStore(PROXIES_STORE)
+          : db.createObjectStore(PROXIES_STORE, { keyPath: 'id' })
+
+        if (!proxies.indexNames.contains(PROXIES_BY_VIDEO_ASSET_INDEX)) {
+          proxies.createIndex(PROXIES_BY_VIDEO_ASSET_INDEX, 'videoAssetId')
+        }
+        if (!proxies.indexNames.contains(PROXIES_BY_PROJECT_INDEX)) {
+          proxies.createIndex(PROXIES_BY_PROJECT_INDEX, 'projectId')
+        }
+
+        if (!db.objectStoreNames.contains(RENDERS_STORE)) {
+          db.createObjectStore(RENDERS_STORE, { keyPath: 'projectId' })
         }
 
         // TIMELINE_STORE pasaba de v6 a v7 de keyPath 'id' (buscado por
