@@ -53,7 +53,8 @@ interface ShortCardProps {
   /** Trayectoria ya calculada (ver MotionFramingAnalyzerPort) — null si todavía no se analizó este short. */
   autoFrameKeyframes: AutoFrameKeyframe[] | null
   isAnalyzingAutoFrame: boolean
-  onAnalyzeAutoFrame: () => void
+  /** Recibe el short entero (no un closure ya armado por el caller) para que ShortCard pueda memoizar un callback de identidad estable con useCallback — necesario porque el useEffect que dispara el análisis automático debe poder declararlo en sus deps sin re-ejecutarse en cada render del padre. */
+  onAnalyzeAutoFrame: (short: Pick<ShortScore, 'startMs' | 'endMs'>) => Promise<void>
 }
 
 /**
@@ -178,6 +179,12 @@ export function ShortCard({
         : interpolateCropOffsetX(autoFrameKeyframes, 0)
       : cropOffsetX
 
+  // Callback de identidad estable (solo cambia si short.startMs/endMs
+  // cambian) — permite declararlo en deps del useEffect de abajo sin que
+  // CreateShortsTool tenga que memoizar el wrapper que arma por short
+  // dentro de su .map (no puede: depende de la iteración).
+  const analyzeThisShort = useCallback(() => onAnalyzeAutoFrame(short), [onAnalyzeAutoFrame, short])
+
   // Dispara el análisis solo: cuando el auto-encuadre queda activado sin
   // trayectoria calculada todavía — pasa al activarlo a mano (igual que
   // antes) y también cuando el valor por default ya viene en true (hay
@@ -185,10 +192,9 @@ export function ShortCard({
   // el usuario haya tocado el checkbox de este short en particular.
   useEffect(() => {
     if (autoFrameEnabled && !autoFrameKeyframes && !isAnalyzingAutoFrame) {
-      onAnalyzeAutoFrame()
+      void analyzeThisShort()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFrameEnabled, autoFrameKeyframes])
+  }, [autoFrameEnabled, autoFrameKeyframes, isAnalyzingAutoFrame, analyzeThisShort])
 
   const renderUrl = useObjectUrl(render.blob)
   // Preview en reposo: un frame estático capturado una sola vez, en vez de
@@ -328,7 +334,7 @@ export function ShortCard({
             onToggleAutoFrame={onToggleAutoFrame}
             hasAutoFrameData={!!autoFrameKeyframes}
             isAnalyzingAutoFrame={isAnalyzingAutoFrame}
-            onAnalyzeAutoFrame={onAnalyzeAutoFrame}
+            onAnalyzeAutoFrame={analyzeThisShort}
           />
         )}
       </div>

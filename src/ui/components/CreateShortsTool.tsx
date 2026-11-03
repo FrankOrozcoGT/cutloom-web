@@ -187,7 +187,7 @@ export function CreateShortsTool({
                 onToggleAutoFrame={(enabled) => onToggleAutoFrame(short, enabled)}
                 autoFrameKeyframes={autoFramingByShort[key] ?? null}
                 isAnalyzingAutoFrame={analyzingShortKey === key && analyzeState === 'analyzing'}
-                onAnalyzeAutoFrame={() => onAnalyzeAutoFrame(short)}
+                onAnalyzeAutoFrame={onAnalyzeAutoFrame}
               />
             )
           })}
