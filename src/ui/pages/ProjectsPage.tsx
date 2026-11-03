@@ -22,7 +22,9 @@ const WORKFLOW_STEPS = [
 const PROJECT_ERROR_MESSAGES: Record<ProjectDeleteError | StorageError, string> = {
   UNKNOWN_ERROR: 'Ocurrió un error inesperado.',
   STORAGE_FULL: 'No hay espacio suficiente de almacenamiento.',
+  DELETE_PROXIES_FAILED: 'No se pudieron eliminar las copias livianas de edición del proyecto.',
   DELETE_TIMELINE_FAILED: 'No se pudo eliminar el timeline del proyecto.',
+  DELETE_RENDER_FAILED: 'No se pudo eliminar el video renderizado del proyecto.',
   DELETE_SUBTITLES_FAILED: 'No se pudieron eliminar los subtítulos del proyecto.',
   DELETE_SHORTS_FAILED: 'No se pudieron eliminar los shorts del proyecto.',
   DELETE_PUBLISHING_FAILED: 'No se pudo eliminar el estado de publicación del proyecto.',
