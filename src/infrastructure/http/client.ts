@@ -6,6 +6,14 @@ const BASE_URL = import.meta.env.VITE_API_URL as string
 const refreshResponseSchema = z.object({ accessToken: z.string() })
 type RefreshResult = { accessToken: string } | null
 
+/** fetch() rechaza (no devuelve una Response) cuando la request nunca llega a destino — backend caído, sin red, o bloqueo real de CORS. Lanzada por HttpClient.request para que cada adapter la distinga de una Response con status de error. */
+export class NetworkError extends Error {
+  constructor() {
+    super('No se pudo conectar con el servidor.')
+    this.name = 'NetworkError'
+  }
+}
+
 export class HttpClient {
   private accessToken: string | null = null
   private refreshPromise: Promise<RefreshResult> | null = null
@@ -40,11 +48,16 @@ export class HttpClient {
       headers.set('Authorization', `Bearer ${this.accessToken}`)
     }
 
-    const response = await fetch(`${BASE_URL}${path}`, {
-      ...init,
-      headers,
-      credentials: 'include',
-    })
+    let response: Response
+    try {
+      response = await fetch(`${BASE_URL}${path}`, {
+        ...init,
+        headers,
+        credentials: 'include',
+      })
+    } catch {
+      throw new NetworkError()
+    }
 
     if (response.status !== 401 || isRetry || path === '/api/auth/refresh') {
       return response
@@ -82,10 +95,15 @@ export class HttpClient {
   }
 
   private async doRefresh(): Promise<RefreshResult> {
-    const response = await fetch(`${BASE_URL}/api/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    })
+    let response: Response
+    try {
+      response = await fetch(`${BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+    } catch {
+      return null
+    }
     if (!response.ok) {
       return null
     }
