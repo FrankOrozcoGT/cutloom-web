@@ -1,11 +1,12 @@
-import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output } from 'mediabunny'
+import { BufferTarget, Conversion, Mp4OutputFormat, Output } from 'mediabunny'
 import type { CropRectangle, VideoSample } from 'mediabunny'
 import type { Render } from '@domain/render'
 import { SHORT_HEIGHT, SHORT_WIDTH, interpolateCropOffsetX } from '@domain/shorts'
 import { AUDIO_ENCODE_CODEC } from '@domain/video'
 import { err, ok, type Result } from '@application/result'
-import type { ExtractShortError, ShortExtractorPort, ShortFraming } from '@application/shorts/ExtractShortUseCase'
+import type { ExtractShortError, ShortExtractorPort, ShortFraming } from '@application/shorts/ports'
 import { describeError } from '@infrastructure/errors'
+import { openRenderVideoTrack } from './openRenderVideoTrack'
 
 /** Recorta el ancho fuente al aspect ratio vertical destino, deslizando la ventana horizontalmente según cropOffsetX (0 = borde izquierdo, 0.5 = centrado, 1 = borde derecho). */
 function verticalCropRect(sourceWidth: number, sourceHeight: number, cropOffsetX: number): CropRectangle {
@@ -25,8 +26,7 @@ function verticalCropRect(sourceWidth: number, sourceHeight: number, cropOffsetX
 export class ShortExtractorAdapter implements ShortExtractorPort {
   async extract(render: Render, startMs: number, endMs: number, framing: ShortFraming): Promise<Result<Blob, ExtractShortError>> {
     try {
-      const input = new Input({ source: new BlobSource(render.blob), formats: ALL_FORMATS })
-      const videoTrack = await input.getPrimaryVideoTrack()
+      const { input, videoTrack } = await openRenderVideoTrack(render)
       if (!videoTrack) {
         return err('UNSUPPORTED_API')
       }

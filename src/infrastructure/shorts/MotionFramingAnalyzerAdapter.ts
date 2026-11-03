@@ -1,4 +1,4 @@
-import { ALL_FORMATS, BlobSource, CanvasSink, Input } from 'mediabunny'
+import { CanvasSink } from 'mediabunny'
 import type { Render } from '@domain/render'
 import {
   findMotionCenter,
@@ -8,8 +8,9 @@ import {
   type NormalizedRect,
 } from '@domain/shorts'
 import { err, ok, type Result } from '@application/result'
-import type { AnalyzeMotionFramingError, MotionFramingAnalyzerPort } from '@application/shorts/AnalyzeMotionFramingUseCase'
+import type { AnalyzeMotionFramingError, MotionFramingAnalyzerPort } from '@application/shorts/ports'
 import { describeError } from '@infrastructure/errors'
+import { openRenderVideoTrack } from './openRenderVideoTrack'
 
 /**
  * Resolución de análisis — no hace falta el frame completo para detectar
@@ -66,8 +67,7 @@ export class MotionFramingAnalyzerAdapter implements MotionFramingAnalyzerPort {
     excludeRect: NormalizedRect | null,
   ): Promise<Result<AutoFrameKeyframe[], AnalyzeMotionFramingError>> {
     try {
-      const input = new Input({ source: new BlobSource(render.blob), formats: ALL_FORMATS })
-      const videoTrack = await input.getPrimaryVideoTrack()
+      const { videoTrack } = await openRenderVideoTrack(render)
       if (!videoTrack) {
         return err('UNSUPPORTED_API')
       }
