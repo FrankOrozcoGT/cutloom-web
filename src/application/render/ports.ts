@@ -67,6 +67,7 @@ export interface RenderEnginePort {
     options: RenderOptions,
     subtitleSegments: SubtitleSegment[],
     onProgress?: RenderProgressListener,
+    signal?: AbortSignal,
   ): Promise<Result<Blob, RenderEngineError>>
 }
 
@@ -103,5 +104,6 @@ export interface VideoDecoderPort {
     segment: ClipRenderSegment,
     onVideoFrame: VideoFrameHandler,
     onAudioSample: AudioSampleHandler,
+    signal?: AbortSignal,
   ): Promise<void>
 }

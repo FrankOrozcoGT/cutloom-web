@@ -1,6 +1,6 @@
 import { EnsureRenderUseCase, GenerateRenderUseCase } from '@application/render/GenerateRenderUseCase'
 import type { GenerateRenderError } from '@application/render/GenerateRenderUseCase'
-import { ExtractShortUseCase, type ExtractShortError, type ShortFraming } from '@application/shorts/ExtractShortUseCase'
+import type { ExtractShortError, ShortFraming } from '@application/shorts/ports'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
@@ -20,7 +20,9 @@ export type ExportWorkerRequest = {
   framing?: ShortFraming
 }
 
-export type ExportWorkerMessage = ExportWorkerRequest
+export type ExportWorkerAbortRequest = { type: 'abort' }
+
+export type ExportWorkerMessage = ExportWorkerRequest | ExportWorkerAbortRequest
 
 export type ExportWorkerResponse =
   | { type: 'done'; blob: Blob }
@@ -48,10 +50,21 @@ const renderStorage = new IndexedDBRenderAdapter()
 const compositor = new OffscreenCanvasCompositor()
 const renderEngine = new RenderEngineAdapter(new VideoDecoderAdapter(), new VideoEncoderAdapter(compositor), compositor)
 const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(renderEngine, renderStorage))
-const extractShortUseCase = new ExtractShortUseCase(new ShortExtractorAdapter())
+const shortExtractor = new ShortExtractorAdapter()
+
+// Un AbortController por export en curso — se recrea en cada mensaje 'export' nuevo, así que un 'abort' recibido después de que el export anterior ya terminó no afecta al siguiente.
+let currentAbortController: AbortController | null = null
 
 self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
   const message = event.data
+
+  if (message.type === 'abort') {
+    currentAbortController?.abort()
+    return
+  }
+
+  const abortController = new AbortController()
+  currentAbortController = abortController
 
   try {
     const timelineResult = await timelineStorage.getByProject(message.projectId)
@@ -64,7 +77,7 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
     const assets = await videoStorage.getByProject(message.projectId)
     const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
 
-    const renderResult = await ensureRenderUseCase.execute(timeline, assetsById)
+    const renderResult = await ensureRenderUseCase.execute(timeline, assetsById, [], undefined, abortController.signal)
     if (!renderResult.ok) {
       const response: ExportWorkerResponse = { type: 'error', error: renderResult.error }
       self.postMessage(response)
@@ -77,7 +90,7 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
       return
     }
 
-    const shortResult = await extractShortUseCase.execute(
+    const shortResult = await shortExtractor.extract(
       renderResult.value,
       message.range.startMs,
       message.range.endMs,

@@ -28,6 +28,7 @@ export class RenderEngineAdapter implements RenderEnginePort {
     options: RenderOptions,
     subtitleSegments: SubtitleSegment[],
     onProgress?: RenderProgressListener,
+    signal?: AbortSignal,
   ): Promise<Result<Blob, RenderEngineError>> {
     const hasWebCodecs = typeof VideoDecoder !== 'undefined' && typeof VideoEncoder !== 'undefined'
     const hasCanvas = typeof OffscreenCanvas !== 'undefined'
@@ -55,7 +56,12 @@ export class RenderEngineAdapter implements RenderEnginePort {
 
     let completedSegments = 0
     for (const segment of segments) {
-      const writeError = await this.renderSegment(segment, options, cues)
+      if (signal?.aborted) {
+        await this.muxer.abort()
+        return err('ABORTED')
+      }
+
+      const writeError = await this.renderSegment(segment, options, cues, signal)
 
       if (writeError) {
         await this.muxer.abort()
@@ -81,6 +87,7 @@ export class RenderEngineAdapter implements RenderEnginePort {
     segment: RenderSegment,
     options: RenderOptions,
     subtitleSegments: SubtitleSegment[],
+    signal?: AbortSignal,
   ): Promise<RenderEngineError | null> {
     let writeError: RenderEngineError | null = null
 
@@ -94,6 +101,10 @@ export class RenderEngineAdapter implements RenderEnginePort {
 
       for (let i = 0; i < frameCount; i += 1) {
         if (writeError) break
+        if (signal?.aborted) {
+          writeError = 'ABORTED'
+          break
+        }
         const frameTimestamp = gapStartSeconds + i * frameDurationSeconds
         const remaining = gapDurationSeconds - i * frameDurationSeconds
         const duration = Math.min(frameDurationSeconds, remaining)
@@ -114,6 +125,10 @@ export class RenderEngineAdapter implements RenderEnginePort {
       segment,
       async (frame, timestampSeconds, durationSeconds) => {
         if (writeError) return
+        if (signal?.aborted) {
+          writeError = 'ABORTED'
+          return
+        }
         const activeSubtitle = findActiveSubtitle(subtitleSegments, timestampSeconds * 1000)
         this.composer.compose(frame, {
           dimensions: { width: options.width, height: options.height },
@@ -126,11 +141,16 @@ export class RenderEngineAdapter implements RenderEnginePort {
       },
       async (data, timestampSeconds) => {
         if (writeError) return
+        if (signal?.aborted) {
+          writeError = 'ABORTED'
+          return
+        }
         const result = await this.muxer.writeAudioSample(data, timestampSeconds)
         if (!result.ok) {
           writeError = result.error
         }
       },
+      signal,
     )
 
     return writeError

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ExportWorkerMessage, ExportWorkerResponse } from '@infrastructure/video/export.worker'
-import type { ShortFraming } from '@application/shorts/ExtractShortUseCase'
+import type { ShortFraming } from '@application/shorts/ports'
 
 function toFileName(projectName: string | undefined, projectId: string): string {
   const base = projectName?.trim() || projectId
@@ -29,6 +29,7 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   ENCODING_ERROR: 'Ocurrió un error durante la codificación del video.',
   INSUFFICIENT_MEMORY: 'No hay memoria suficiente para exportar. Cierra otras pestañas e intenta de nuevo.',
   STORAGE_ERROR: 'No se pudo leer el timeline o los videos guardados.',
+  ABORTED: 'Exportación cancelada.',
 }
 
 /** Mensaje legible para un error conocido — reusado por cualquier consumidor de exportProjectToBlob (ej. usePublish) además de este hook, para no duplicar el switch. */
@@ -38,6 +39,7 @@ export function exportErrorCodeMessage(error: string): string {
 
 export function useExport() {
   const [exporting, setExporting] = useState(false)
+  const [aborting, setAborting] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [completed, setCompleted] = useState(false)
@@ -83,6 +85,7 @@ export function useExport() {
       const worker = getOrCreateWorker()
 
       setExporting(true)
+      setAborting(false)
       setProgress(0)
       setError(null)
       setCompleted(false)
@@ -97,6 +100,7 @@ export function useExport() {
           }
           setError(exportErrorCodeMessage(message.error))
           setExporting(false)
+          setAborting(false)
           if (mode.kind === RunExportModeKind.Blob) {
             mode.resolve({ ok: false, error: toExportFailure(message.error) })
           }
@@ -106,6 +110,7 @@ export function useExport() {
         if (mode.kind === RunExportModeKind.Blob) {
           setProgress(100)
           setExporting(false)
+          setAborting(false)
           setCompleted(true)
           mode.resolve({ ok: true, blob: message.blob })
           return
@@ -123,6 +128,7 @@ export function useExport() {
 
         setProgress(100)
         setExporting(false)
+        setAborting(false)
         setCompleted(true)
         setDownloadedFileName(fileName)
       }
@@ -131,6 +137,7 @@ export function useExport() {
         console.error('Export worker falló:', event.message)
         setError('Ocurrió un error inesperado durante la exportación.')
         setExporting(false)
+        setAborting(false)
         worker.terminate()
         workerRef.current = null
         if (mode.kind === RunExportModeKind.Blob) {
@@ -165,13 +172,22 @@ export function useExport() {
     [runExport],
   )
 
+  const abortExport = useCallback(() => {
+    if (!workerRef.current) return
+    setAborting(true)
+    const message: ExportWorkerMessage = { type: 'abort' }
+    workerRef.current.postMessage(message)
+  }, [])
+
   return {
     exporting,
+    aborting,
     progress,
     error,
     completed,
     downloadedFileName,
     exportProject,
     exportProjectToBlob,
+    abortExport,
   }
 }

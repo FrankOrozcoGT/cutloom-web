@@ -42,14 +42,16 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     segment: ClipRenderSegment,
     onVideoFrame: VideoFrameHandler,
     onAudioSample: AudioSampleHandler,
+    signal?: AbortSignal,
   ): Promise<void> {
     const input = new Input({ source: new BlobSource(segment.asset.blob), formats: ALL_FORMATS })
     const startSeconds = segment.sourceStartMs / 1000
     const endSeconds = segment.sourceEndMs / 1000
     const outputStartSeconds = segment.outputStartMs / 1000
 
-    await this.decodeVideoTrack(input, segment, startSeconds, endSeconds, outputStartSeconds, onVideoFrame)
-    await this.decodeAudioTrack(input, segment, startSeconds, endSeconds, outputStartSeconds, onAudioSample)
+    await this.decodeVideoTrack(input, segment, startSeconds, endSeconds, outputStartSeconds, onVideoFrame, signal)
+    if (signal?.aborted) return
+    await this.decodeAudioTrack(input, segment, startSeconds, endSeconds, outputStartSeconds, onAudioSample, signal)
   }
 
   private async decodeVideoTrack(
@@ -59,6 +61,7 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     endSeconds: number,
     outputStartSeconds: number,
     onVideoFrame: VideoFrameHandler,
+    signal?: AbortSignal,
   ): Promise<void> {
     let track: Awaited<ReturnType<Input['getPrimaryVideoTrack']>> = null
 
@@ -93,6 +96,10 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
 
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
+        if (signal?.aborted) {
+          sample.close()
+          break
+        }
         const frame = sample.toVideoFrame()
         const duration = sample.duration || averageFrameDuration
         const outputTimestampSeconds = remapper.toOutputSeconds(sample.timestamp)
@@ -115,6 +122,7 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
     endSeconds: number,
     outputStartSeconds: number,
     onAudioSample: AudioSampleHandler,
+    signal?: AbortSignal,
   ): Promise<void> {
     let track: Awaited<ReturnType<Input['getPrimaryAudioTrack']>> = null
 
@@ -139,6 +147,10 @@ export class VideoDecoderAdapter implements VideoDecoderPort {
 
     try {
       for await (const sample of sink.samples(startSeconds, endSeconds)) {
+        if (signal?.aborted) {
+          sample.close()
+          break
+        }
         const data = sample.toAudioData()
         const outputTimestampSeconds = remapper.toOutputSeconds(sample.timestamp)
         try {

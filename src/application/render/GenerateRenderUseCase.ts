@@ -37,13 +37,14 @@ export class GenerateRenderUseCase {
     assetsById: Record<string, VideoAsset>,
     subtitleSegments: SubtitleSegment[] = [],
     onProgress?: RenderProgressListener,
+    signal?: AbortSignal,
   ): Promise<Result<Render, GenerateRenderError>> {
     const segmentsResult = buildRenderSegments(timeline, assetsById)
     if (!segmentsResult.ok) {
       return err(segmentsResult.error)
     }
 
-    const renderResult = await this.renderEngine.render(segmentsResult.value, DEFAULT_RENDER_OPTIONS, subtitleSegments, onProgress)
+    const renderResult = await this.renderEngine.render(segmentsResult.value, DEFAULT_RENDER_OPTIONS, subtitleSegments, onProgress, signal)
     if (!renderResult.ok) {
       return err(renderResult.error)
     }
@@ -78,11 +79,14 @@ export class EnsureRenderUseCase {
   async execute(
     timeline: Timeline,
     assetsById: Record<string, VideoAsset>,
+    subtitleSegments: SubtitleSegment[] = [],
+    onProgress?: RenderProgressListener,
+    signal?: AbortSignal,
   ): Promise<Result<Render, GenerateRenderError>> {
     const existingResult = await this.renderStorage.getByProject(timeline.projectId)
     if (existingResult.ok && existingResult.value) {
       return ok(existingResult.value)
     }
-    return this.generateRenderUseCase.execute(timeline, assetsById)
+    return this.generateRenderUseCase.execute(timeline, assetsById, subtitleSegments, onProgress, signal)
   }
 }

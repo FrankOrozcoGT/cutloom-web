@@ -141,11 +141,13 @@ export function Timeline({
   const silenceCarouselRef = useRef<HTMLDivElement>(null)
   const {
     exporting,
+    aborting: exportAborting,
     progress: exportProgress,
     error: exportError,
     completed: exportCompleted,
     downloadedFileName,
     exportProject,
+    abortExport,
   } = useExport()
 
   const handleFitToScreen = useCallback(() => {
@@ -498,6 +500,16 @@ export function Timeline({
           >
             {exporting ? `Exportando… ${exportProgress}%` : 'Exportar'}
           </button>
+          {exporting && (
+            <button
+              type="button"
+              onClick={abortExport}
+              disabled={exportAborting}
+              className="rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-text-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50 sm:py-1"
+            >
+              {exportAborting ? 'Cancelando…' : 'Cancelar'}
+            </button>
+          )}
         </div>
       </div>
 
