@@ -14,6 +14,7 @@ import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
 import { publishingUseCase, publishBlobStorage } from '@ui/publishing/composition'
 import { startPlatformOAuth } from '@ui/publishing/oauth'
 import { useExport, type ExportFailure } from '@ui/hooks/useExport'
+import type { ShortFraming } from '@application/shorts/ExtractShortUseCase'
 
 /**
  * Tope de subidas simultáneas — subir TODOS los archivos de un bulk en
@@ -341,8 +342,9 @@ export function usePublish({ projectId, projectName }: UsePublishParams) {
       for (const item of selected) {
         setItem(item.sourceId, { state: 'exporting', uploadProgress: null, requestedPlatforms: platforms })
         const range = item.videoType === 'short' ? item.range : undefined
-        const cropOffsetX = item.videoType === 'short' ? item.cropOffsetX : undefined
-        const exportResult = await exportProjectToBlob(projectId, projectName, range, cropOffsetX)
+        const framing: ShortFraming | undefined =
+          item.videoType === 'short' ? { mode: 'fixed', cropOffsetX: item.cropOffsetX ?? 0.5 } : undefined
+        const exportResult = await exportProjectToBlob(projectId, projectName, range, framing)
         if (!exportResult.ok) {
           setItem(item.sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Export, failure: exportResult.error } })
           setIsPublishing(false)

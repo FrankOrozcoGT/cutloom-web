@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ExportWorkerMessage, ExportWorkerResponse } from '@infrastructure/video/export.worker'
+import type { ShortFraming } from '@application/shorts/ExtractShortUseCase'
 
 function toFileName(projectName: string | undefined, projectId: string): string {
   const base = projectName?.trim() || projectId
@@ -76,7 +77,7 @@ export function useExport() {
       projectId: string,
       projectName: string | undefined,
       range: { startMs: number; endMs: number } | undefined,
-      cropOffsetX: number | undefined,
+      framing: ShortFraming | undefined,
       mode: RunExportMode,
     ) => {
       const worker = getOrCreateWorker()
@@ -137,15 +138,15 @@ export function useExport() {
         }
       }
 
-      const request: ExportWorkerMessage = { type: 'export', projectId, range, cropOffsetX }
+      const request: ExportWorkerMessage = { type: 'export', projectId, range, framing }
       worker.postMessage(request)
     },
     [getOrCreateWorker],
   )
 
   const exportProject = useCallback(
-    (projectId: string, projectName?: string, range?: { startMs: number; endMs: number }, cropOffsetX?: number) => {
-      runExport(projectId, projectName, range, cropOffsetX, { kind: RunExportModeKind.Download })
+    (projectId: string, projectName?: string, range?: { startMs: number; endMs: number }, framing?: ShortFraming) => {
+      runExport(projectId, projectName, range, framing, { kind: RunExportModeKind.Download })
     },
     [runExport],
   )
@@ -155,10 +156,10 @@ export function useExport() {
       projectId: string,
       projectName?: string,
       range?: { startMs: number; endMs: number },
-      cropOffsetX?: number,
+      framing?: ShortFraming,
     ): Promise<{ ok: true; blob: Blob } | { ok: false; error: ExportFailure }> => {
       return new Promise((resolve) => {
-        runExport(projectId, projectName, range, cropOffsetX, { kind: RunExportModeKind.Blob, resolve })
+        runExport(projectId, projectName, range, framing, { kind: RunExportModeKind.Blob, resolve })
       })
     },
     [runExport],
