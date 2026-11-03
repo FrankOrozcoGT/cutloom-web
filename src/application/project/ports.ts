@@ -6,7 +6,9 @@ export type ProjectStorageError = 'UNKNOWN_ERROR'
 /** Errores de ProjectUseCase.delete: identifican en qué paso de la cascada de borrado falló, en vez de colapsar todo a un único código genérico que dificultaría rastrear el origen real. */
 export type ProjectDeleteError =
   | ProjectStorageError
+  | 'DELETE_PROXIES_FAILED'
   | 'DELETE_TIMELINE_FAILED'
+  | 'DELETE_RENDER_FAILED'
   | 'DELETE_SUBTITLES_FAILED'
   | 'DELETE_SHORTS_FAILED'
   | 'DELETE_PUBLISHING_FAILED'
