@@ -92,7 +92,7 @@ export interface AutoFrameKeyframe {
   cropOffsetX: number
 }
 
-/** Interpola el offset horizontal en atMs (relativo al inicio del short) entre los dos keyframes que lo rodean — keyframes vienen ordenados por atMs (ver smoothMotionPath/AnalyzeMotionFramingUseCase). Única fuente de verdad, usada tanto al reproducir en vivo como al quemar la trayectoria en la exportación final, para que ambos coincidan. */
+/** Interpola el offset horizontal en atMs (relativo al inicio del short) entre los dos keyframes que lo rodean — keyframes vienen ordenados por atMs (ver smoothMotionPath/MotionFramingAnalyzerPort). Única fuente de verdad, usada tanto al reproducir en vivo como al quemar la trayectoria en la exportación final, para que ambos coincidan. */
 export function interpolateCropOffsetX(keyframes: AutoFrameKeyframe[], atMs: number): number {
   if (keyframes.length === 0) return 0.5
   if (atMs <= keyframes[0].atMs) return keyframes[0].cropOffsetX
@@ -215,9 +215,11 @@ export function smoothMotionPath(
       current = target
     } else {
       const distance = Math.hypot(target.x - current.x, target.y - current.y)
-      if (point !== null && distance <= deadZoneRadius) {
-        // movimiento real pero dentro de la zona muerta: no se mueve
-      } else {
+      // Movimiento real dentro de la zona muerta: no se mueve. Fuera de la
+      // zona muerta (o viajando hacia restPoint, que no respeta zona muerta)
+      // avanza un paso de EMA hacia el destino.
+      const isRealMotionInsideDeadZone = point !== null && distance <= deadZoneRadius
+      if (!isRealMotionInsideDeadZone) {
         current = {
           x: current.x + (target.x - current.x) * emaAlpha,
           y: current.y + (target.y - current.y) * emaAlpha,
