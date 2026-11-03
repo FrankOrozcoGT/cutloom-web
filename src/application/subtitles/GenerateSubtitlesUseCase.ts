@@ -21,7 +21,7 @@ export function isSubtitlesError(value: string): value is SubtitlesError {
   return (SUBTITLES_ERROR_CODES as readonly string[]).includes(value)
 }
 
-/** Transcribe audio ya extraído (ver GenerateRenderAndExtractAudioUseCase) y lo mapea a segmentos de dominio. */
+/** Transcribe audio ya extraído (ver ExtractSubtitlesAudioUseCase) y lo mapea a segmentos de dominio. */
 export class GenerateSubtitlesUseCase {
   private readonly transcriber: WhisperTranscriberPort
 
