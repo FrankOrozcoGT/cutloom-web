@@ -1,6 +1,6 @@
 import { EnsureRenderUseCase, GenerateRenderUseCase } from '@application/render/GenerateRenderUseCase'
 import type { GenerateRenderError } from '@application/render/GenerateRenderUseCase'
-import { ExtractShortUseCase, type ExtractShortError } from '@application/shorts/ExtractShortUseCase'
+import { ExtractShortUseCase, type ExtractShortError, type ShortFraming } from '@application/shorts/ExtractShortUseCase'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
 import { IndexedDBAdapter } from '@infrastructure/storage/IndexedDBAdapter'
 import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
@@ -16,7 +16,8 @@ export type ExportWorkerRequest = {
   projectId: string
   /** Acota la exportación a [startMs, endMs) del render — presente para exportar un short, ausente para el video completo. */
   range?: { startMs: number; endMs: number }
-  cropOffsetX?: number
+  /** Encuadre del short — ignorado si range no está presente. */
+  framing?: ShortFraming
 }
 
 export type ExportWorkerMessage = ExportWorkerRequest
@@ -80,7 +81,7 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
       renderResult.value,
       message.range.startMs,
       message.range.endMs,
-      message.cropOffsetX ?? 0.5,
+      message.framing ?? { mode: 'fixed', cropOffsetX: 0.5 },
     )
     const response: ExportWorkerResponse = shortResult.ok
       ? { type: 'done', blob: shortResult.value }

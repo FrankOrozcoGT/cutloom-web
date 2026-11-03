@@ -1,4 +1,4 @@
-import type { ProjectShorts } from '@domain/shorts'
+import type { AutoFrameKeyframe, NormalizedRect, ProjectShorts } from '@domain/shorts'
 import { err, ok, type Result } from '@application/result'
 import type { ShortsStorageError, ShortsStoragePort } from '@application/shorts/ports'
 import { openCutloomDB, runReadModifyWrite, runTransaction, SHORTS_STORE } from './database'
@@ -93,6 +93,68 @@ export class IndexedDBShortsAdapter implements ShortsStoragePort {
           throw new Error('NOT_FOUND')
         }
         return { ...existing, cropOffsetXByShort: { ...existing.cropOffsetXByShort, [shortKeyValue]: cropOffsetX } }
+      })
+      return ok(undefined)
+    } catch {
+      return err('STORAGE_ERROR')
+    }
+  }
+
+  async updateAutoFrameEnabled(
+    projectId: string,
+    shortKeyValue: string,
+    enabled: boolean,
+  ): Promise<Result<void, ShortsStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      await runReadModifyWrite<StoredProjectShorts | undefined>(db, SHORTS_STORE, projectId, (existing) => {
+        if (!existing) {
+          throw new Error('NOT_FOUND')
+        }
+        return {
+          ...existing,
+          autoFrameEnabledByShort: { ...existing.autoFrameEnabledByShort, [shortKeyValue]: enabled },
+        }
+      })
+      return ok(undefined)
+    } catch {
+      return err('STORAGE_ERROR')
+    }
+  }
+
+  async updateAutoFraming(
+    projectId: string,
+    shortKeyValue: string,
+    keyframes: AutoFrameKeyframe[],
+  ): Promise<Result<void, ShortsStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      await runReadModifyWrite<StoredProjectShorts | undefined>(db, SHORTS_STORE, projectId, (existing) => {
+        if (!existing) {
+          throw new Error('NOT_FOUND')
+        }
+        return {
+          ...existing,
+          autoFramingByShort: { ...existing.autoFramingByShort, [shortKeyValue]: keyframes },
+        }
+      })
+      return ok(undefined)
+    } catch {
+      return err('STORAGE_ERROR')
+    }
+  }
+
+  async updateMotionExcludeRect(
+    projectId: string,
+    rect: NormalizedRect | null,
+  ): Promise<Result<void, ShortsStorageError>> {
+    try {
+      const db = await openCutloomDB()
+      await runReadModifyWrite<StoredProjectShorts | undefined>(db, SHORTS_STORE, projectId, (existing) => {
+        if (!existing) {
+          throw new Error('NOT_FOUND')
+        }
+        return { ...existing, motionExcludeRect: rect ?? undefined, autoFramingByShort: undefined }
       })
       return ok(undefined)
     } catch {
