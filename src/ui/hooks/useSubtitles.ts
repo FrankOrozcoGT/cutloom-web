@@ -1,0 +1,235 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  DEFAULT_LANGUAGE,
+  editSegmentText,
+  editSegmentTiming,
+  importSrt,
+  importVtt,
+  type LanguageCode,
+  type SubtitleParseError,
+  type Subtitles,
+} from '@domain/subtitles'
+import type { ExtractAudioError } from '@application/subtitles/ExtractSubtitlesAudioUseCase'
+import type { GenerateSubtitlesAndRenderError } from '@application/subtitles/GenerateSubtitlesAndRenderUseCase'
+import type { SubtitlesStorageError } from '@application/subtitles/ports'
+import type { SubtitlesWorkerRequest, SubtitlesWorkerResponse } from '@infrastructure/subtitles/subtitles.worker'
+import { extractSubtitlesAudioUseCase, subtitlesStorage } from '@ui/subtitles/composition'
+
+export type SubtitlesState = 'idle' | 'extracting_audio' | 'transcribing' | 'rendering' | 'success' | 'error'
+
+interface UseSubtitlesResult {
+  state: SubtitlesState
+  subtitles: Subtitles | null
+  error: GenerateSubtitlesAndRenderError | ExtractAudioError | SubtitleParseError | SubtitlesStorageError | null
+  language: LanguageCode
+  setLanguage: (language: LanguageCode) => void
+  /** Extremo (ms, tiempo de timeline) del último segmento ya transcrito durante 'transcribing'; null si no hay progreso aún. */
+  processedUntilMs: number | null
+  generate: () => Promise<void>
+  editText: (segmentId: string, text: string) => Promise<void>
+  /** Aplica varios cambios de texto de una sola vez sobre el mismo snapshot — llamar editText en loop pisa los cambios entre sí porque cada llamada parte del `subtitles` capturado en su propio closure, no del resultado de la anterior. */
+  editMultipleTexts: (changes: { segmentId: string; text: string }[]) => Promise<void>
+  editTiming: (segmentId: string, startMs: number, endMs: number) => Promise<void>
+  importFile: (content: string, format: 'srt' | 'vtt') => Promise<void>
+  /** Restaura un snapshot (o lo limpia con null) sin pasar por las validaciones de edición — usado por undo/redo del timeline. */
+  restore: (subtitles: Subtitles | null) => Promise<void>
+}
+
+export function useSubtitles(projectId: string): UseSubtitlesResult {
+  const [state, setState] = useState<SubtitlesState>('idle')
+  const [subtitles, setSubtitles] = useState<Subtitles | null>(null)
+  const [error, setError] = useState<
+    GenerateSubtitlesAndRenderError | ExtractAudioError | SubtitleParseError | SubtitlesStorageError | null
+  >(null)
+  const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
+  const [processedUntilMs, setProcessedUntilMs] = useState<number | null>(null)
+  const workerRef = useRef<Worker | null>(null)
+
+  useEffect(() => {
+    return () => {
+      workerRef.current?.terminate()
+      workerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    setSubtitles(null)
+    setState('idle')
+    setError(null)
+    if (!projectId) return
+
+    void subtitlesStorage.getByProject(projectId).then((result) => {
+      if (!result.ok || !result.value) return
+      setSubtitles(result.value)
+      setLanguage(result.value.language)
+      setState('success')
+    })
+  }, [projectId])
+
+  const persist = useCallback(async (next: Subtitles): Promise<boolean> => {
+    setSubtitles(next)
+    const result = await subtitlesStorage.save(next)
+    if (!result.ok) {
+      setError(result.error)
+      setState('error')
+      return false
+    }
+    return true
+  }, [])
+
+  const restore = useCallback(
+    async (next: Subtitles | null) => {
+      setSubtitles(next)
+      if (next) {
+        const result = await subtitlesStorage.save(next)
+        if (!result.ok) {
+          setError(result.error)
+          setState('error')
+          return
+        }
+      } else {
+        const result = await subtitlesStorage.deleteByProject(projectId)
+        if (!result.ok) {
+          setError(result.error)
+          setState('error')
+          return
+        }
+      }
+      setState(next ? 'success' : 'idle')
+    },
+    [projectId],
+  )
+
+  const generate = useCallback(async () => {
+    setState('extracting_audio')
+    setError(null)
+    setProcessedUntilMs(null)
+
+    // La extracción de audio depende de OfflineAudioContext (Web Audio API),
+    // que no existe dentro de un Web Worker — corre acá en el hilo principal.
+    // La transcripción y el render (cómputo pesado) van al worker.
+    const extractResult = await extractSubtitlesAudioUseCase.execute(projectId, (extractedUntilMs) => {
+      setProcessedUntilMs(extractedUntilMs)
+    })
+    if (!extractResult.ok) {
+      setError(extractResult.error)
+      setState('error')
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      const worker = new Worker(new URL('@infrastructure/subtitles/subtitles.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      workerRef.current = worker
+
+      worker.onmessage = (event: MessageEvent<SubtitlesWorkerResponse>) => {
+        const message = event.data
+
+        if (message.type === 'progress') {
+          setState('transcribing')
+          setProcessedUntilMs(Math.round(message.segment.end * 1000))
+          return
+        }
+
+        if (message.type === 'error') {
+          console.error('Generación de subtítulos/render falló:', message.error)
+          setError(typeof message.error === 'string' ? 'UNKNOWN_ERROR' : message.error)
+          setState('error')
+          setProcessedUntilMs(null)
+          worker.terminate()
+          workerRef.current = null
+          resolve()
+          return
+        }
+
+        // 'done' llega recién después de transcribir Y renderizar — el render
+        // (decode/encode del original) es la parte más pesada de este flujo.
+        setState('rendering')
+        setProcessedUntilMs(null)
+        setSubtitles(message.result.subtitlesResult.subtitles)
+        setState('success')
+        worker.terminate()
+        workerRef.current = null
+        resolve()
+      }
+
+      worker.onerror = (event) => {
+        console.error('Worker de subtítulos falló:', event.message)
+        setError('UNKNOWN_ERROR')
+        setState('error')
+        setProcessedUntilMs(null)
+        worker.terminate()
+        workerRef.current = null
+        resolve()
+      }
+
+      const audio = extractResult.value
+      const request: SubtitlesWorkerRequest = { type: 'generate', projectId, language, audio }
+      worker.postMessage(request, [audio.buffer])
+    })
+  }, [projectId, language])
+
+  const editMultipleTexts = useCallback(
+    async (changes: { segmentId: string; text: string }[]) => {
+      if (!subtitles) return
+      let segments = subtitles.segments
+      for (const { segmentId, text } of changes) {
+        const result = editSegmentText(segments, segmentId, text)
+        if (result.ok) segments = result.value
+      }
+      await persist({ ...subtitles, segments })
+    },
+    [subtitles, persist],
+  )
+
+  const editText = useCallback(
+    async (segmentId: string, text: string) => {
+      await editMultipleTexts([{ segmentId, text }])
+    },
+    [editMultipleTexts],
+  )
+
+  const editTiming = useCallback(
+    async (segmentId: string, startMs: number, endMs: number) => {
+      if (!subtitles) return
+      const result = editSegmentTiming(subtitles.segments, segmentId, startMs, endMs)
+      if (!result.ok) return
+      await persist({ ...subtitles, segments: result.value })
+    },
+    [subtitles, persist],
+  )
+
+  const importFile = useCallback(
+    async (content: string, format: 'srt' | 'vtt') => {
+      const result = format === 'srt' ? importSrt(content) : importVtt(content)
+      if (!result.ok) {
+        setError(result.error)
+        setState('error')
+        return
+      }
+      setError(null)
+      const next: Subtitles = { projectId, segments: result.value, language }
+      const persisted = await persist(next)
+      if (persisted) {
+        setState('success')
+      }
+    },
+    [projectId, language, persist],
+  )
+
+  return {
+    state,
+    subtitles,
+    error,
+    language,
+    setLanguage,
+    processedUntilMs,
+    generate,
+    editText,
+    editMultipleTexts,
+    editTiming,
+    importFile,
+    restore,
+  }
+}

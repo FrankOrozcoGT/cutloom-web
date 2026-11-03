@@ -14,12 +14,6 @@ import { PUBLISHING_ERROR_MESSAGES } from '@ui/publishing/errorMessages'
 import { publishingUseCase, publishBlobStorage } from '@ui/publishing/composition'
 import { startPlatformOAuth } from '@ui/publishing/oauth'
 import { useExport, type ExportFailure } from '@ui/hooks/useExport'
-import {
-  DEFAULT_EXPORT_OPTIONS,
-  fileExtensionFor,
-  SHORT_EXPORT_OPTIONS,
-  type ExportOptions,
-} from '@application/video/exportTypes'
 
 /**
  * Tope de subidas simultáneas — subir TODOS los archivos de un bulk en
@@ -111,10 +105,6 @@ export interface MetadataWizardInput {
 
 /** Pausa entre llamadas de generate-metadata del wizard — evita ráfagas contra el backend cuando la serie tiene varios shorts. */
 const METADATA_GENERATION_DELAY_MS = 800
-
-function exportOptionsFor(item: PublishSeriesItem): ExportOptions {
-  return item.videoType === 'short' ? SHORT_EXPORT_OPTIONS : DEFAULT_EXPORT_OPTIONS
-}
 
 /** Requiere revision ya garantizado no-nulo por el caller (ver guard en publish()) — el tipo de retorno no-nulo refleja que no hay ningún caso real donde esto deba filtrarse en silencio. */
 type PublishSeriesItemWithRevision = PublishSeriesItem & { revision: MetadataRevision }
@@ -350,16 +340,15 @@ export function usePublish({ projectId, projectName }: UsePublishParams) {
       const videoMetaBySourceId: Record<string, { fileName: string; size: number }> = {}
       for (const item of selected) {
         setItem(item.sourceId, { state: 'exporting', uploadProgress: null, requestedPlatforms: platforms })
-        const options = exportOptionsFor(item)
         const range = item.videoType === 'short' ? item.range : undefined
         const cropOffsetX = item.videoType === 'short' ? item.cropOffsetX : undefined
-        const exportResult = await exportProjectToBlob(projectId, projectName, options, range, cropOffsetX)
+        const exportResult = await exportProjectToBlob(projectId, projectName, range, cropOffsetX)
         if (!exportResult.ok) {
           setItem(item.sourceId, { state: 'failed', error: { kind: PublishItemFailureKind.Export, failure: exportResult.error } })
           setIsPublishing(false)
           return
         }
-        const fileName = `${item.sourceId}.${fileExtensionFor(options.format)}`
+        const fileName = `${item.sourceId}.mp4`
         // Se guarda en IndexedDB (disco) de una, y la referencia al Blob exportado sale de scope acá
         // — nada la retiene en memoria JS entre esta fase y la de subida más abajo.
         await publishBlobStorage.save(item.sourceId, exportResult.blob, fileName)
