@@ -166,12 +166,14 @@ export function EditorPage() {
 
   const loadAssets = useCallback(async () => {
     if (!projectId) return
-    const [storedAssets, storedProxies] = await Promise.all([
+    const [assetsResult, proxiesResult] = await Promise.all([
       videoStorage.getByProject(projectId),
       proxyStorage.getByProject(projectId),
     ])
-    setAssets(storedAssets)
-    setProxies(storedProxies)
+    if (assetsResult.ok) setAssets(assetsResult.value)
+    else console.error('EditorPage: fallo al cargar los videos del proyecto', assetsResult.error)
+    if (proxiesResult.ok) setProxies(proxiesResult.value)
+    else console.error('EditorPage: fallo al cargar los proxies del proyecto', proxiesResult.error)
   }, [projectId])
 
   useEffect(() => {

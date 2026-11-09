@@ -13,16 +13,16 @@ export interface FilePicker {
 
 export interface VideoStorage {
   save(file: File, projectId: string, durationMs: number): Promise<Result<VideoAsset, StorageError>>
-  getAll(): Promise<VideoAsset[]>
-  getByProject(projectId: string): Promise<VideoAsset[]>
+  getAll(): Promise<Result<VideoAsset[], StorageError>>
+  getByProject(projectId: string): Promise<Result<VideoAsset[], StorageError>>
   delete(id: string): Promise<Result<void, StorageError>>
   deleteByProject(projectId: string): Promise<Result<void, StorageError>>
 }
 
 export interface ProxyStorage {
   save(proxy: ProxyAsset): Promise<Result<void, StorageError>>
-  getByVideoAsset(videoAssetId: string): Promise<ProxyAsset | null>
-  getByProject(projectId: string): Promise<ProxyAsset[]>
+  getByVideoAsset(videoAssetId: string): Promise<Result<ProxyAsset | null, StorageError>>
+  getByProject(projectId: string): Promise<Result<ProxyAsset[], StorageError>>
   deleteByProject(projectId: string): Promise<Result<void, StorageError>>
 }
 

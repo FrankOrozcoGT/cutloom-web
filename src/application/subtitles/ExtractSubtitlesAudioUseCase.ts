@@ -1,10 +1,10 @@
 import { err, ok, type Result } from '@application/result'
 import { buildRenderSegments, type BuildRenderSegmentsError } from '@application/render/buildRenderSegments'
 import type { TimelineStorage } from '@application/timeline/ports'
-import type { VideoStorage } from '@application/video/ports'
+import type { StorageError, VideoStorage } from '@application/video/ports'
 import type { AudioExtractError, AudioExtractorPort, AudioExtractProgressListener } from './ports'
 
-export type ExtractAudioError = BuildRenderSegmentsError | AudioExtractError | 'UNKNOWN_ERROR'
+export type ExtractAudioError = BuildRenderSegmentsError | AudioExtractError | StorageError | 'UNKNOWN_ERROR' | 'EMPTY_TIMELINE'
 
 /**
  * Extrae el audio del timeline vigente (sin generar todavía el render con
@@ -34,8 +34,11 @@ export class ExtractSubtitlesAudioUseCase {
     }
     const timeline = timelineResult.value
 
-    const assets = await this.videoStorage.getByProject(projectId)
-    const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
+    const assetsResult = await this.videoStorage.getByProject(projectId)
+    if (!assetsResult.ok) {
+      return err(assetsResult.error)
+    }
+    const assetsById = Object.fromEntries(assetsResult.value.map((asset) => [asset.id, asset]))
 
     const segmentsResult = buildRenderSegments(timeline, assetsById)
     if (!segmentsResult.ok) {

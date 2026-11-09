@@ -2,10 +2,10 @@ import { buildProjectShorts, type ShortScore } from '@domain/shorts'
 import { err, type Result } from '@application/result'
 import { EnsureRenderUseCase, type GenerateRenderError } from '@application/render/GenerateRenderUseCase'
 import type { TimelineStorage } from '@application/timeline/ports'
-import type { VideoStorage } from '@application/video/ports'
+import type { StorageError, VideoStorage } from '@application/video/ports'
 import type { ShortsStoragePort, ShortsStorageError } from './ports'
 
-export type SaveShortsResultError = ShortsStorageError | GenerateRenderError | 'EMPTY_TIMELINE'
+export type SaveShortsResultError = ShortsStorageError | GenerateRenderError | StorageError | 'EMPTY_TIMELINE'
 
 /**
  * Persiste el resultado de un score de shorts recién generado, recortado
@@ -38,8 +38,11 @@ export class SaveShortsResultUseCase {
     }
     const timeline = timelineResult.value
 
-    const assets = await this.videoStorage.getByProject(projectId)
-    const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
+    const assetsResult = await this.videoStorage.getByProject(projectId)
+    if (!assetsResult.ok) {
+      return err(assetsResult.error)
+    }
+    const assetsById = Object.fromEntries(assetsResult.value.map((asset) => [asset.id, asset]))
 
     const renderResult = await this.ensureRenderUseCase.execute(timeline, assetsById)
     if (!renderResult.ok) {

@@ -72,8 +72,12 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
     }
     const timeline = timelineResult.value
 
-    const assets = await videoStorage.getByProject(message.projectId)
-    const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
+    const assetsResult = await videoStorage.getByProject(message.projectId)
+    if (!assetsResult.ok) {
+      postError(assetsResult.error)
+      return
+    }
+    const assetsById = Object.fromEntries(assetsResult.value.map((asset) => [asset.id, asset]))
 
     const renderResult = await ensureRenderUseCase.execute(
       timeline,

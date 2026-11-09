@@ -28,16 +28,26 @@ export class IndexedDBAdapter implements VideoStorage {
     }
   }
 
-  async getAll(): Promise<VideoAsset[]> {
-    const db = await openCutloomDB()
-    return runTransaction(db, VIDEOS_STORE, 'readonly', (store) => store.getAll())
+  async getAll(): Promise<Result<VideoAsset[], StorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const result = await runTransaction(db, VIDEOS_STORE, 'readonly', (store) => store.getAll())
+      return ok(result)
+    } catch {
+      return err('UNKNOWN_ERROR')
+    }
   }
 
-  async getByProject(projectId: string): Promise<VideoAsset[]> {
-    const db = await openCutloomDB()
-    return runTransaction(db, VIDEOS_STORE, 'readonly', (store) =>
-      store.index(VIDEOS_BY_PROJECT_INDEX).getAll(projectId),
-    )
+  async getByProject(projectId: string): Promise<Result<VideoAsset[], StorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const result = await runTransaction(db, VIDEOS_STORE, 'readonly', (store) =>
+        store.index(VIDEOS_BY_PROJECT_INDEX).getAll(projectId),
+      )
+      return ok(result)
+    } catch {
+      return err('UNKNOWN_ERROR')
+    }
   }
 
   async delete(id: string): Promise<Result<void, StorageError>> {

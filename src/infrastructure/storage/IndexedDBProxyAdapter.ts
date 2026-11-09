@@ -17,19 +17,28 @@ export class IndexedDBProxyAdapter implements ProxyStorage {
     }
   }
 
-  async getByVideoAsset(videoAssetId: string): Promise<ProxyAsset | null> {
-    const db = await openCutloomDB()
-    const results = await runTransaction(db, PROXIES_STORE, 'readonly', (store) =>
-      store.index(PROXIES_BY_VIDEO_ASSET_INDEX).getAll(videoAssetId),
-    )
-    return (results as ProxyAsset[])[0] ?? null
+  async getByVideoAsset(videoAssetId: string): Promise<Result<ProxyAsset | null, StorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const results = await runTransaction(db, PROXIES_STORE, 'readonly', (store) =>
+        store.index(PROXIES_BY_VIDEO_ASSET_INDEX).getAll(videoAssetId),
+      )
+      return ok((results as ProxyAsset[])[0] ?? null)
+    } catch {
+      return err('UNKNOWN_ERROR')
+    }
   }
 
-  async getByProject(projectId: string): Promise<ProxyAsset[]> {
-    const db = await openCutloomDB()
-    return runTransaction(db, PROXIES_STORE, 'readonly', (store) =>
-      store.index(PROXIES_BY_PROJECT_INDEX).getAll(projectId),
-    )
+  async getByProject(projectId: string): Promise<Result<ProxyAsset[], StorageError>> {
+    try {
+      const db = await openCutloomDB()
+      const result = await runTransaction(db, PROXIES_STORE, 'readonly', (store) =>
+        store.index(PROXIES_BY_PROJECT_INDEX).getAll(projectId),
+      )
+      return ok(result)
+    } catch {
+      return err('UNKNOWN_ERROR')
+    }
   }
 
   async deleteByProject(projectId: string): Promise<Result<void, StorageError>> {

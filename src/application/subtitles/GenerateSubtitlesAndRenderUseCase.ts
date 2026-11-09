@@ -3,11 +3,11 @@ import type { Render } from '@domain/render'
 import { err, ok, type Result } from '@application/result'
 import { GenerateRenderUseCase, type GenerateRenderError } from '@application/render/GenerateRenderUseCase'
 import type { TimelineStorage } from '@application/timeline/ports'
-import type { VideoStorage } from '@application/video/ports'
+import type { StorageError, VideoStorage } from '@application/video/ports'
 import type { SubtitlesStoragePort, WhisperProgressListener } from './ports'
 import { GenerateSubtitlesUseCase, type SubtitlesError, type SubtitlesResult } from './GenerateSubtitlesUseCase'
 
-export type GenerateSubtitlesAndRenderError = SubtitlesError | GenerateRenderError | 'STORAGE_ERROR'
+export type GenerateSubtitlesAndRenderError = SubtitlesError | GenerateRenderError | StorageError | 'STORAGE_ERROR' | 'EMPTY_TIMELINE'
 
 /**
  * Transcribe el audio ya extraído y, siempre que la transcripción tenga
@@ -59,8 +59,11 @@ export class GenerateSubtitlesAndRenderUseCase {
     }
     const timeline = timelineResult.value
 
-    const assets = await this.videoStorage.getByProject(projectId)
-    const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
+    const assetsResult = await this.videoStorage.getByProject(projectId)
+    if (!assetsResult.ok) {
+      return err(assetsResult.error)
+    }
+    const assetsById = Object.fromEntries(assetsResult.value.map((asset) => [asset.id, asset]))
 
     const renderResult = await this.generateRenderUseCase.execute(
       timeline,
