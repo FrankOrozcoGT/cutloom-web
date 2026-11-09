@@ -141,9 +141,17 @@ export function useTimelineRenderer({
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null)
-  // Ancla para derivar el tiempo real transcurrido desde AudioContext.currentTime:
-  // playheadMs del timeline que correspondía al instante en que arrancó la sesión de audio vigente.
-  const playbackAnchorRef = useRef<{ contextTimeAtStart: number; playheadMsAtStart: number } | null>(null)
+  // Ancla para derivar el tiempo real transcurrido desde el instante en que
+  // arrancó la sesión vigente — 'audio' mientras hay un clip activo con
+  // AudioContext.currentTime como reloj (coherente con el audio sonando);
+  // 'wall' durante un hueco del timeline (findActiveClip devuelve null, ver
+  // domain/timeline.ts: "silencio/vacío"), con performance.now() como reloj
+  // de pared, porque ahí no hay ningún audio corriendo con el que anclarse.
+  const playbackAnchorRef = useRef<
+    | { clock: 'audio'; contextTimeAtStart: number; playheadMsAtStart: number }
+    | { clock: 'wall'; wallTimeAtStartMs: number; playheadMsAtStart: number }
+    | null
+  >(null)
   // Id del clip que sirvió la sesión de audio vigente — permite al loop de
   // render detectar "cruzamos a otro clip" sin comparar ningún número.
   const sessionClipIdRef = useRef<string | null>(null)
@@ -174,20 +182,33 @@ export function useTimelineRenderer({
   }
 
   function currentPlayheadMs(): number {
-    if (!isPlaying || !playbackAnchorRef.current || !audioContextRef.current) return playheadMsRef.current
-    const elapsedSeconds = audioContextRef.current.currentTime - playbackAnchorRef.current.contextTimeAtStart
-    return playbackAnchorRef.current.playheadMsAtStart + elapsedSeconds * 1000
+    const anchor = playbackAnchorRef.current
+    if (!isPlaying || !anchor) return playheadMsRef.current
+    if (anchor.clock === 'wall') {
+      return anchor.playheadMsAtStart + (performance.now() - anchor.wallTimeAtStartMs)
+    }
+    if (!audioContextRef.current) return playheadMsRef.current
+    const elapsedSeconds = audioContextRef.current.currentTime - anchor.contextTimeAtStart
+    return anchor.playheadMsAtStart + elapsedSeconds * 1000
   }
 
-  // Arranca una sesión de audio nueva a partir de anchorMs, para el clip
-  // activo en ese punto. Único lugar que decodifica/arranca audio — tanto
-  // el useEffect de abajo (isPlaying/seekVersion) como el loop de render
-  // (cruce de clip) pasan por acá.
+  // Arranca una sesión nueva a partir de anchorMs. Único lugar que
+  // decodifica/arranca audio o fija el reloj de pared del hueco — tanto el
+  // useEffect de abajo (isPlaying/seekVersion) como el loop de render
+  // (cruce de clip o entrada/salida de un hueco) pasan por acá.
   function startAudioSession(anchorMs: number) {
     const active = findActiveClip(timeline, anchorMs)
     const proxy = active ? proxies[active.clip.assetId] : null
     stopAudio()
-    if (!active || !proxy) return
+
+    if (!active || !proxy) {
+      // Hueco del timeline (ver findActiveClip: "silencio/vacío") — sin
+      // clip activo no hay audio con el que anclarse, así que el reloj de
+      // esta sesión es wall-time: avanza igual aunque no sueñe nada.
+      sessionClipIdRef.current = null
+      playbackAnchorRef.current = { clock: 'wall', wallTimeAtStartMs: performance.now(), playheadMsAtStart: anchorMs }
+      return
+    }
 
     sessionClipIdRef.current = active.clip.id
     const token = ++sessionTokenRef.current
@@ -201,7 +222,7 @@ export function useTimelineRenderer({
         const buffer = await buildAudioBuffer(audioContext, entry, active)
         if (sessionTokenRef.current !== token) return
 
-        playbackAnchorRef.current = { contextTimeAtStart: audioContext.currentTime, playheadMsAtStart: anchorMs }
+        playbackAnchorRef.current = { clock: 'audio', contextTimeAtStart: audioContext.currentTime, playheadMsAtStart: anchorMs }
 
         if (!buffer) return
         const source = audioContext.createBufferSource()
@@ -244,7 +265,8 @@ export function useTimelineRenderer({
       if (isPlaying) onPlayheadChange(nowMs)
 
       const active = findActiveClip(timeline, nowMs)
-      if (isPlaying && active && active.clip.id !== sessionClipIdRef.current) {
+      const sessionMatchesActiveClip = active ? active.clip.id === sessionClipIdRef.current : sessionClipIdRef.current === null
+      if (isPlaying && !sessionMatchesActiveClip) {
         startAudioSession(nowMs)
       }
 
