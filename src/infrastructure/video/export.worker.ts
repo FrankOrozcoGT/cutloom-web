@@ -1,5 +1,6 @@
 import { EnsureRenderUseCase, GenerateRenderUseCase } from '@application/render/GenerateRenderUseCase'
 import type { GenerateRenderError } from '@application/render/GenerateRenderUseCase'
+import type { RenderProgressEvent } from '@application/render/ports'
 import type { ExtractShortError } from '@application/shorts/ports'
 import type { EffectiveShortFraming } from '@domain/shorts'
 import { IndexedDBTimelineAdapter } from '@infrastructure/storage/IndexedDBTimelineAdapter'
@@ -23,6 +24,7 @@ export type ExportWorkerAbortRequest = { type: 'abort' }
 export type ExportWorkerMessage = ExportWorkerRequest | ExportWorkerAbortRequest
 
 export type ExportWorkerResponse =
+  | { type: 'progress'; event: RenderProgressEvent }
   | { type: 'done'; blob: Blob }
   | { type: 'error'; error: GenerateRenderError | ExtractShortError | string }
 
@@ -73,7 +75,16 @@ self.onmessage = async (event: MessageEvent<ExportWorkerMessage>) => {
     const assets = await videoStorage.getByProject(message.projectId)
     const assetsById = Object.fromEntries(assets.map((asset) => [asset.id, asset]))
 
-    const renderResult = await ensureRenderUseCase.execute(timeline, assetsById, [], undefined, abortController.signal)
+    const renderResult = await ensureRenderUseCase.execute(
+      timeline,
+      assetsById,
+      [],
+      (event) => {
+        const response: ExportWorkerResponse = { type: 'progress', event }
+        self.postMessage(response)
+      },
+      abortController.signal,
+    )
     if (!renderResult.ok) {
       const response: ExportWorkerResponse = { type: 'error', error: renderResult.error }
       self.postMessage(response)

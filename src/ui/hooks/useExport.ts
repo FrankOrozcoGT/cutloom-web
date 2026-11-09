@@ -94,6 +94,12 @@ export function useExport() {
       worker.onmessage = (event: MessageEvent<ExportWorkerResponse>) => {
         const message = event.data
 
+        if (message.type === 'progress') {
+          const { completedSegments, totalSegments } = message.event
+          setProgress(totalSegments > 0 ? Math.round((completedSegments / totalSegments) * 100) : 0)
+          return
+        }
+
         if (message.type === 'error') {
           if (message.error !== 'ABORTED') {
             console.error('Export falló:', message.error)
