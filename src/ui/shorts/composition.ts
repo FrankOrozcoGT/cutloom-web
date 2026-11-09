@@ -6,16 +6,14 @@ import { ShortsApiAdapter } from '@infrastructure/shorts/adapter'
 import { ShortExtractorAdapter } from '@infrastructure/shorts/ShortExtractorAdapter'
 import { MotionFramingAnalyzerAdapter } from '@infrastructure/shorts/MotionFramingAnalyzerAdapter'
 import { httpClient } from '@infrastructure/http/client'
-import { IndexedDBRenderAdapter } from '@infrastructure/storage/IndexedDBRenderAdapter'
 import { createRenderEngine } from '@infrastructure/video/createRenderEngine'
-import { shortsStorage, videoStorage } from '@ui/video/composition'
+import { shortsStorage, videoStorage, renderStorage } from '@ui/video/composition'
 import { timelineStorage } from '@ui/timeline/composition'
 
 export const shortsApi = new ShortsApiAdapter(httpClient)
 export const detectShortsUseCase = new DetectShortsUseCase(shortsApi)
 export const scoreShortsUseCase = new ScoreShortsUseCase(shortsApi)
 
-const renderStorage = new IndexedDBRenderAdapter()
 const ensureRenderUseCase = new EnsureRenderUseCase(renderStorage, new GenerateRenderUseCase(createRenderEngine(), renderStorage))
 
 export const saveShortsResultUseCase = new SaveShortsResultUseCase(
