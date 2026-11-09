@@ -54,7 +54,7 @@ interface ShortCardProps {
   autoFrameKeyframes: AutoFrameKeyframe[] | null
   isAnalyzingAutoFrame: boolean
   /** Recibe el short entero (no un closure ya armado por el caller) para que ShortCard pueda memoizar un callback de identidad estable con useCallback — necesario porque el useEffect que dispara el análisis automático debe poder declararlo en sus deps sin re-ejecutarse en cada render del padre. */
-  onAnalyzeAutoFrame: (short: Pick<ShortScore, 'startMs' | 'endMs'>) => Promise<void>
+  onAnalyzeAutoFrame: (short: Pick<ShortScore, 'startMs' | 'endMs'>) => Promise<boolean>
 }
 
 /**

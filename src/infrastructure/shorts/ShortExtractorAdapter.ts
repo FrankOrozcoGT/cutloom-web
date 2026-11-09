@@ -68,7 +68,12 @@ export class ShortExtractorAdapter implements ShortExtractorPort {
                 processedWidth: SHORT_WIDTH,
                 processedHeight: SHORT_HEIGHT,
                 process: async (sample: VideoSample) => {
-                  const atMs = sample.timestamp * 1000 - startMs
+                  // sample.timestamp ya es relativo al inicio del tramo recortado
+                  // (trim.start de Conversion.init de abajo), no al render completo
+                  // — restar startMs otra vez lo volvía negativo durante todo el
+                  // clip, clavando interpolateCropOffsetX en su primer keyframe y
+                  // anulando el seguimiento real del movimiento.
+                  const atMs = sample.timestamp * 1000
                   const cropOffsetX = interpolateCropOffsetX(framing.keyframes, atMs)
                   const crop = verticalCropRect(sourceWidth, sourceHeight, cropOffsetX)
                   return sample.transform({ width: SHORT_WIDTH, height: SHORT_HEIGHT, fit: 'cover', crop })

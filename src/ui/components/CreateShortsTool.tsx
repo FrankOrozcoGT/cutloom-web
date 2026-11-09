@@ -41,7 +41,7 @@ interface CreateShortsToolProps {
   analyzingShortKey: string | null
   analyzeState: AnalyzeAutoFrameState
   onToggleAutoFrame: (short: { startMs: number; endMs: number }, enabled: boolean) => void
-  onAnalyzeAutoFrame: (short: { startMs: number; endMs: number }) => Promise<void>
+  onAnalyzeAutoFrame: (short: { startMs: number; endMs: number }) => Promise<boolean>
   /** Región del avatar/webcam a ignorar en el análisis de movimiento — una sola por proyecto, marcada a mano sobre un frame del render (ver MotionExcludeRectSelector). null = no hay región marcada. */
   motionExcludeRect: NormalizedRect | null
   onChangeMotionExcludeRect: (rect: NormalizedRect | null) => void
@@ -74,6 +74,7 @@ export function CreateShortsTool({
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isExcludeRectSelectorOpen, setIsExcludeRectSelectorOpen] = useState(false)
   const [isSettingAllAuto, setIsSettingAllAuto] = useState(false)
+  const [setAllAutoFeedback, setSetAllAutoFeedback] = useState<{ message: string; hasFailures: boolean } | null>(null)
   const isCreating = state === 'detecting' || state === 'extracting_audio' || state === 'scoring'
 
   // Estado de encuadre del proyecto en la forma que necesita
@@ -90,23 +91,32 @@ export function CreateShortsTool({
 
   const isAutoFrameEffectivelyEnabled = (key: string): boolean => resolveShortFraming(framingState, key).mode === 'auto'
 
-  // Activa el modo automático en todos los shorts que todavía no lo tengan
-  // y calcula el que le falte — secuencial (un short a la vez, no
-  // Promise.all) a propósito: cada análisis decodifica el tramo completo
-  // del render, correrlos todos en paralelo saturaría CPU/memoria sin
-  // necesidad, el usuario puede esperar un poco más.
+  // Siempre fuerza el análisis de cada short, sin importar si ya estaba en
+  // modo automático o ya tenía keyframes calculados — un short puede estar
+  // "en automático" por el default y sin embargo nunca haberse analizado
+  // con éxito (ShortCard reintenta solo al montar, no en cada click). El
+  // click del usuario nunca puede terminar sin ningún efecto observable:
+  // siempre deja feedback explícito de éxito o fallo.
   const handleSetAllAuto = async () => {
     setIsSettingAllAuto(true)
+    setSetAllAutoFeedback(null)
+    let failures = 0
     for (const short of shorts) {
       const key = shortKey(short)
       if (!isAutoFrameEffectivelyEnabled(key)) {
         onToggleAutoFrame(short, true)
       }
-      if (!autoFramingByShort[key]) {
-        await onAnalyzeAutoFrame(short)
+      const succeeded = await onAnalyzeAutoFrame(short)
+      if (!succeeded) {
+        failures += 1
       }
     }
     setIsSettingAllAuto(false)
+    setSetAllAutoFeedback(
+      failures === 0
+        ? { message: `Encuadre automático calculado para ${shorts.length} short${shorts.length === 1 ? '' : 's'}.`, hasFailures: false }
+        : { message: `No se pudo calcular el encuadre automático de ${failures} de ${shorts.length} shorts.`, hasFailures: true },
+    )
   }
 
   const handleSetAllManual = () => {
@@ -135,6 +145,10 @@ export function CreateShortsTool({
 
       {warnings.length > 0 && (
         <ErrorBanner variant="warning">{warnings.map(describeShortsWarning).join(' · ')}</ErrorBanner>
+      )}
+
+      {setAllAutoFeedback && (
+        <ErrorBanner variant={setAllAutoFeedback.hasFailures ? 'danger' : 'warning'}>{setAllAutoFeedback.message}</ErrorBanner>
       )}
 
       {isStale && shorts.length > 0 && (

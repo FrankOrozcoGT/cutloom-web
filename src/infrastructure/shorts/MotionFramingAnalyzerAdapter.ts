@@ -20,18 +20,8 @@ import { openRenderVideoTrack } from './openRenderVideoTrack'
 const ANALYSIS_WIDTH = 160
 const ANALYSIS_HEIGHT = 90
 
-/**
- * Cuántas muestras por segundo se analizan. La interpolación lineal entre
- * keyframes (interpolateCropOffsetX) es matemáticamente la misma en el
- * preview en vivo y en la exportación final, pero el preview además recibe
- * un suavizado visual implícito del propio motor de render del navegador
- * entre actualizaciones de CSS — el video exportado no tiene ese extra, cada
- * frame es un crop exacto, así que el movimiento se percibe menos fluido con
- * pocos keyframes por segundo aunque la curva sea la misma. 10/s da un
- * keyframe cada 3 frames reales a 30fps, bastante más fino que 4/s sin
- * acercarse al costo de analizar cada frame.
- */
-const SAMPLES_PER_SECOND = 10
+/** Cuántas muestras por segundo se analizan — más que esto es trabajo redundante para un cursor/contenido que no cambia frame a frame. */
+const SAMPLES_PER_SECOND = 4
 
 /** Valor de diferencia (0-255, luma) por debajo del cual un pixel se considera "sin cambio" — ruido de compresión/grano, no movimiento real. */
 const DIFF_THRESHOLD = 25
@@ -41,13 +31,13 @@ const DEAD_ZONE_RADIUS = 0.04
 
 /**
  * Qué tan rápido el encuadre alcanza su destino en cada muestra — valor bajo
- * = paneo lento y fluido, alto = reacciona casi instantáneo. Depende de
- * SAMPLES_PER_SECOND: con más muestras por segundo, el EMA da más pasos en
- * el mismo tiempo real, así que un alpha por-muestra más chico mantiene la
- * misma velocidad de paneo en el tiempo (no se vuelve más nervioso solo por
- * samplear más seguido).
+ * = paneo lento, alto = reacciona casi instantáneo. Con SAMPLES_PER_SECOND=4
+ * (una muestra cada 250ms), 0.15 tardaba más de 2 segundos en acercarse al
+ * 90% del destino — el encuadre se sentía "atascado" entre dos puntos reales
+ * de movimiento. 0.5 llega al 90% en ~3 muestras (~0.75s), suficientemente
+ * rápido para seguir un cursor sin perder la suavidad del EMA.
  */
-const EMA_ALPHA = 0.065
+const EMA_ALPHA = 0.5
 
 /** Cuánto tiempo sin movimiento debe sostenerse antes de empezar a volver al centro del avatar — evita que una pausa breve del cursor dispare un viaje de ida y vuelta innecesario. */
 const REST_HOLD_MS = 1500
@@ -128,6 +118,7 @@ export class MotionFramingAnalyzerAdapter implements MotionFramingAnalyzerPort {
         atMs: sampleAtMs[index],
         cropOffsetX: point.x,
       }))
+
 
       return ok(keyframes)
     } catch (e) {

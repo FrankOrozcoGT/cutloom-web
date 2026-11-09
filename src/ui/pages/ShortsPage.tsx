@@ -157,21 +157,22 @@ export function ShortsPage() {
   // "Reencuadrar todos" (CreateShortsTool.handleReframeAll). Encolar acá,
   // en el único lugar que de verdad invoca analyzeAndSave, es la fuente de
   // verdad — no depende de que cada caller coordine entre sí.
-  const analysisQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const analysisQueueRef = useRef<Promise<unknown>>(Promise.resolve())
 
   const handleAnalyzeAutoFrame = useCallback(
-    (short: { startMs: number; endMs: number }): Promise<void> => {
-      const run = async () => {
-        if (!projectId || !render) return
+    (short: { startMs: number; endMs: number }): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        if (!projectId || !render) return false
         const key = shortKey(short)
         setAnalyzingShortKey(key)
         const keyframes = await analyzeAndSave(projectId, key, render, short.startMs, short.endMs, motionExcludeRect)
         setAnalyzingShortKey(null)
         if (keyframes) {
           setAutoFramingByShort((prev) => ({ ...prev, [key]: keyframes }))
-        } else {
-          setPersistError('No se pudo calcular el encuadre automático de uno de los shorts. Intenta de nuevo.')
+          return true
         }
+        setPersistError('No se pudo calcular el encuadre automático de uno de los shorts. Intenta de nuevo.')
+        return false
       }
       const next = analysisQueueRef.current.then(run)
       analysisQueueRef.current = next
