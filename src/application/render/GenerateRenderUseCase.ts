@@ -1,5 +1,5 @@
 import { timelineFingerprint, type Timeline } from '@domain/timeline'
-import type { Render } from '@domain/render'
+import { isRenderStale, type Render } from '@domain/render'
 import type { SubtitleSegment } from '@domain/subtitles'
 import type { VideoAsset } from '@domain/video'
 import { err, ok, type Result } from '@application/result'
@@ -66,7 +66,7 @@ export class GenerateRenderUseCase {
   }
 }
 
-/** Devuelve el render vigente del proyecto, generando uno nuevo si todavía no existe ninguno — usado por shorts, nunca por subtítulos (que siempre regenera). */
+/** Devuelve el render vigente del proyecto, regenerándolo si no existe todavía o si el timeline cambió desde que se generó (ver domain/render.isRenderStale) — usado por shorts, nunca por subtítulos (que siempre regenera). */
 export class EnsureRenderUseCase {
   private readonly renderStorage: RenderStorage
   private readonly generateRenderUseCase: GenerateRenderUseCase
@@ -84,7 +84,7 @@ export class EnsureRenderUseCase {
     signal?: AbortSignal,
   ): Promise<Result<Render, GenerateRenderError>> {
     const existingResult = await this.renderStorage.getByProject(timeline.projectId)
-    if (existingResult.ok && existingResult.value) {
+    if (existingResult.ok && existingResult.value && !isRenderStale(existingResult.value, timelineFingerprint(timeline))) {
       return ok(existingResult.value)
     }
     return this.generateRenderUseCase.execute(timeline, assetsById, subtitleSegments, onProgress, signal)
