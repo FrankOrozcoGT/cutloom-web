@@ -74,7 +74,7 @@ export class MotionFramingAnalyzerAdapter implements MotionFramingAnalyzerPort {
 
       const sink = new CanvasSink(videoTrack, { width: ANALYSIS_WIDTH, height: ANALYSIS_HEIGHT, fit: 'fill' })
       const canvas = new OffscreenCanvas(ANALYSIS_WIDTH, ANALYSIS_HEIGHT)
-      const context = canvas.getContext('2d')
+      const context = canvas.getContext('2d', { willReadFrequently: true })
       if (!context) {
         return err('UNSUPPORTED_API')
       }
