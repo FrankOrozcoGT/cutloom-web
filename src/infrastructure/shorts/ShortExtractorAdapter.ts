@@ -52,16 +52,18 @@ export class ShortExtractorAdapter implements ShortExtractorPort {
                 codec: 'avc',
               }
             : {
-                width: SHORT_WIDTH,
-                height: SHORT_HEIGHT,
-                // 'fill' es el no-op correcto acá: process() ya devuelve el
-                // sample transformado exactamente a SHORT_WIDTH/SHORT_HEIGHT
-                // (ver sample.transform abajo), así que no hace falta que
-                // Conversion vuelva a escalar/recortar nada — fit es
-                // obligatorio en mediabunny en cuanto width y height están
-                // ambos presentes, sin importar que el fit real ya se haya
-                // resuelto dentro de process.
-                fit: 'fill',
+                // Sin width/height/fit acá: Conversion aplicaría su propio
+                // resize ANTES de pasar el sample a process (ver doc de
+                // process: "after transformations and frame rate
+                // corrections") — con fit:'fill' eso estiraba el frame
+                // horizontal original a 1080x1920 sin preservar aspect
+                // ratio, y el crop de abajo, calculado sobre las
+                // dimensiones del track original (nunca las del sample ya
+                // estirado que de verdad llega), recortaba sobre coordenadas
+                // que no correspondían a lo que process recibía: resultado,
+                // el short se veía alargado y solo con la mitad superior.
+                // El único resize/crop real debe pasar por sample.transform
+                // de abajo, sobre el sample crudo tal cual sale del decoder.
                 codec: 'avc',
                 processedWidth: SHORT_WIDTH,
                 processedHeight: SHORT_HEIGHT,
