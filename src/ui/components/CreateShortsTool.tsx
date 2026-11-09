@@ -73,7 +73,7 @@ export function CreateShortsTool({
 }: CreateShortsToolProps) {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isExcludeRectSelectorOpen, setIsExcludeRectSelectorOpen] = useState(false)
-  const [isReframingAll, setIsReframingAll] = useState(false)
+  const [isSettingAllAuto, setIsSettingAllAuto] = useState(false)
   const isCreating = state === 'detecting' || state === 'extracting_audio' || state === 'scoring'
 
   // Estado de encuadre del proyecto en la forma que necesita
@@ -90,17 +90,29 @@ export function CreateShortsTool({
 
   const isAutoFrameEffectivelyEnabled = (key: string): boolean => resolveShortFraming(framingState, key).mode === 'auto'
 
-  // Secuencial (un short a la vez, no Promise.all) a propósito: cada análisis
-  // decodifica el tramo completo del render — correrlos todos en paralelo
-  // saturaría CPU/memoria sin necesidad, el usuario puede esperar un poco más.
-  const handleReframeAll = async () => {
-    setIsReframingAll(true)
+  // Activa el modo automático en todos los shorts que todavía no lo tengan
+  // y calcula el que le falte — secuencial (un short a la vez, no
+  // Promise.all) a propósito: cada análisis decodifica el tramo completo
+  // del render, correrlos todos en paralelo saturaría CPU/memoria sin
+  // necesidad, el usuario puede esperar un poco más.
+  const handleSetAllAuto = async () => {
+    setIsSettingAllAuto(true)
     for (const short of shorts) {
-      if (isAutoFrameEffectivelyEnabled(shortKey(short))) {
+      const key = shortKey(short)
+      if (!isAutoFrameEffectivelyEnabled(key)) {
+        onToggleAutoFrame(short, true)
+      }
+      if (!autoFramingByShort[key]) {
         await onAnalyzeAutoFrame(short)
       }
     }
-    setIsReframingAll(false)
+    setIsSettingAllAuto(false)
+  }
+
+  const handleSetAllManual = () => {
+    for (const short of shorts) {
+      onToggleAutoFrame(short, false)
+    }
   }
 
   if (!hasSubtitles) {
@@ -142,11 +154,19 @@ export function CreateShortsTool({
           </button>
           <button
             type="button"
-            onClick={() => void handleReframeAll()}
-            disabled={isReframingAll || analyzeState === 'analyzing'}
+            onClick={() => void handleSetAllAuto()}
+            disabled={isSettingAllAuto || analyzeState === 'analyzing'}
             className="rounded border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-hover disabled:opacity-60"
           >
-            {isReframingAll ? 'Reencuadrando…' : 'Reencuadrar todos'}
+            {isSettingAllAuto ? 'Calculando…' : 'Automático para todos'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSetAllManual}
+            disabled={isSettingAllAuto || analyzeState === 'analyzing'}
+            className="rounded border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-hover disabled:opacity-60"
+          >
+            Manual para todos
           </button>
           {motionExcludeRect && (
             <button

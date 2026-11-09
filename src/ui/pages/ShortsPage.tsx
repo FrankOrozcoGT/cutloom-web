@@ -169,6 +169,8 @@ export function ShortsPage() {
         setAnalyzingShortKey(null)
         if (keyframes) {
           setAutoFramingByShort((prev) => ({ ...prev, [key]: keyframes }))
+        } else {
+          setPersistError('No se pudo calcular el encuadre automático de uno de los shorts. Intenta de nuevo.')
         }
       }
       const next = analysisQueueRef.current.then(run)

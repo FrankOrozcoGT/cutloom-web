@@ -147,14 +147,18 @@ export type ShortFramingState = Pick<
  * que un short publicado nunca quede con un encuadre distinto al que el
  * usuario vio/descargó.
  *
- * Sin preferencia explícita por short, el default es auto si el proyecto
- * ya tiene una región de avatar marcada (motionExcludeRect) — ver criterio
- * en CreateShortsTool. El modo auto solo aplica si además hay una
- * trayectoria ya calculada; si falta, cae a fixed con el offset manual
- * (o 0.5 si tampoco hay ese).
+ * Sin preferencia explícita por short, el default es siempre auto — no
+ * puede depender de que ya exista una región de avatar marcada
+ * (motionExcludeRect): al crear shorts por primera vez esa región todavía
+ * no existe, así que condicionar el default a ella deja el auto-encuadre
+ * apagado justo cuando recién se generaron. motionExcludeRect, cuando
+ * existe, solo mejora el cálculo (excluye esa zona del análisis de
+ * movimiento) — nunca es requisito para activar el modo. El modo auto solo
+ * aplica si además hay una trayectoria ya calculada; si falta, cae a fixed
+ * con el offset manual (o 0.5 si tampoco hay ese).
  */
 export function resolveShortFraming(state: ShortFramingState, shortKeyValue: string): EffectiveShortFraming {
-  const autoFrameEnabled = state.autoFrameEnabledByShort?.[shortKeyValue] ?? state.motionExcludeRect !== undefined
+  const autoFrameEnabled = state.autoFrameEnabledByShort?.[shortKeyValue] ?? true
   const keyframes = state.autoFramingByShort?.[shortKeyValue]
 
   if (autoFrameEnabled && keyframes) {
