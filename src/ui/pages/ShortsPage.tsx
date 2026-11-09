@@ -101,6 +101,12 @@ export function ShortsPage() {
 
   // Persiste apenas el score termina, para que el listado de proyectos sepa
   // que este proyecto ya tiene shorts sin tener que volver a esta pantalla.
+  // SaveShortsResultUseCase genera el render si todavía no existía (ver
+  // EnsureRenderUseCase) — el estado local `render` de esta pantalla, leído
+  // una sola vez al montar, nunca se enteraba de ese render nuevo, así que
+  // la grilla (que exige `render` no nulo) quedaba sin mostrarse hasta
+  // recargar la página. Por eso se vuelve a leer acá, apenas se confirma
+  // que el guardado terminó bien.
   const persistedRef = useRef<typeof shortsState.shorts | null>(null)
   useEffect(() => {
     if (!shortsState.justCreated) return
@@ -112,7 +118,11 @@ export function ShortsPage() {
     void saveShortsResultUseCase.execute(projectId, shortsState.shorts, shortsState.warnings).then((result) => {
       if (!result.ok) {
         setPersistError('No se pudieron guardar los shorts generados. Verifica el espacio de almacenamiento disponible.')
+        return
       }
+      void renderStorage.getByProject(projectId).then((renderResult) => {
+        if (renderResult.ok) setRender(renderResult.value)
+      })
     })
   }, [shortsState.justCreated, shortsState.createShortsState, shortsState.shorts, shortsState.warnings, projectId])
 
