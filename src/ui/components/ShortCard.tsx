@@ -265,6 +265,7 @@ export function ShortCard({
       <div
         className="relative aspect-[9/16] w-full cursor-pointer overflow-hidden bg-black"
         onClick={() => setIsPlaying((prev) => !prev)}
+        style={{ containerType: 'size' }}
       >
         <video
           ref={videoRef}
@@ -311,12 +312,14 @@ export function ShortCard({
         {isPlaying && activeSegment && (
           <div
             className="pointer-events-none absolute inset-x-0 flex justify-center"
-            style={{ bottom: `${SUBTITLE_STYLE.bottomMarginRatio * 100}%` }}
+            style={{ bottom: `${SUBTITLE_STYLE.bottomMarginRatio * 100}cqh` }}
           >
             <span
               className="line-clamp-2 rounded text-center font-bold text-white"
               style={{
-                maxWidth: `${SUBTITLE_STYLE.maxWidthRatio * 100}%`,
+                maxWidth: `${SUBTITLE_STYLE.maxWidthRatio * 100}cqw`,
+                fontSize: `${SUBTITLE_STYLE.fontSizeRatio * 100}cqh`,
+                lineHeight: SUBTITLE_STYLE.lineHeightRatio,
                 WebkitTextStroke: '0.06em black',
                 paintOrder: 'stroke fill',
               }}
