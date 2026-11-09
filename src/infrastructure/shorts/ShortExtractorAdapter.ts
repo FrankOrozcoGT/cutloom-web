@@ -53,6 +53,14 @@ export class ShortExtractorAdapter implements ShortExtractorPort {
             : {
                 width: SHORT_WIDTH,
                 height: SHORT_HEIGHT,
+                // 'fill' es el no-op correcto acá: process() ya devuelve el
+                // sample transformado exactamente a SHORT_WIDTH/SHORT_HEIGHT
+                // (ver sample.transform abajo), así que no hace falta que
+                // Conversion vuelva a escalar/recortar nada — fit es
+                // obligatorio en mediabunny en cuanto width y height están
+                // ambos presentes, sin importar que el fit real ya se haya
+                // resuelto dentro de process.
+                fit: 'fill',
                 codec: 'avc',
                 processedWidth: SHORT_WIDTH,
                 processedHeight: SHORT_HEIGHT,
