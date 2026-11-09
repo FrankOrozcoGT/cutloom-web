@@ -8,7 +8,7 @@ import type { ExtractShortError, ShortExtractorPort } from '@application/shorts/
 import { describeError } from '@infrastructure/errors'
 import { openRenderVideoTrack } from './openRenderVideoTrack'
 
-/** Recorta el ancho fuente al aspect ratio vertical destino, deslizando la ventana horizontalmente según cropOffsetX (0 = borde izquierdo, 0.5 = centrado, 1 = borde derecho). */
+/** Recorta el ancho fuente al aspect ratio vertical destino, deslizando la ventana horizontalmente según cropOffsetX (0 = borde izquierdo, 0.5 = centrado, 1 = borde derecho). mediabunny exige left/top/width/height enteros — cropOffsetX interpolado (ver interpolateCropOffsetX) casi nunca da un left redondo, así que se trunca acá, en el único punto que construye el CropRectangle real. */
 function verticalCropRect(sourceWidth: number, sourceHeight: number, cropOffsetX: number): CropRectangle {
   const targetRatio = SHORT_WIDTH / SHORT_HEIGHT
   const sourceRatio = sourceWidth / sourceHeight
@@ -17,9 +17,10 @@ function verticalCropRect(sourceWidth: number, sourceHeight: number, cropOffsetX
     return { left: 0, top: 0, width: sourceWidth, height: sourceHeight }
   }
 
-  const croppedWidth = sourceHeight * targetRatio
+  const croppedWidth = Math.round(sourceHeight * targetRatio)
   const maxLeft = sourceWidth - croppedWidth
-  return { left: maxLeft * cropOffsetX, top: 0, width: croppedWidth, height: sourceHeight }
+  const left = Math.min(maxLeft, Math.max(0, Math.round(maxLeft * cropOffsetX)))
+  return { left, top: 0, width: croppedWidth, height: sourceHeight }
 }
 
 /** Recorta [startMs, endMs) del render ya existente y aplica el encuadre vertical — nunca decodifica los VideoAsset originales, trabaja siempre sobre el render ya aplanado. */
