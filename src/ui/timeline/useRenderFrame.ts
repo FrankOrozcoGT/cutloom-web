@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ALL_FORMATS, BlobSource, Input, VideoSampleSink } from 'mediabunny'
 import type { Render } from '@domain/render'
+import { captureFrame } from '@infrastructure/video/captureFrame'
 
 /**
  * Captura un único frame estático del Render del proyecto en atMs — mismo
@@ -19,25 +19,7 @@ export function useRenderFrame(render: Render | null, atMs: number): string | nu
     }
 
     let cancelled = false
-    void (async () => {
-      const input = new Input({ source: new BlobSource(render.blob), formats: ALL_FORMATS })
-      const track = await input.getPrimaryVideoTrack()
-      if (!track) return null
-      const sink = new VideoSampleSink(track)
-      const sample = await sink.getSample(atMs / 1000)
-      if (!sample) return null
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = sample.displayWidth
-        canvas.height = sample.displayHeight
-        const context = canvas.getContext('2d')
-        if (!context) return null
-        sample.draw(context, 0, 0)
-        return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
-      } finally {
-        sample.close()
-      }
-    })().then((blob) => {
+    void captureFrame(render.blob, atMs / 1000).then((blob) => {
       if (cancelled || !blob) return
       const url = URL.createObjectURL(blob)
       if (frameUrlRef.current) URL.revokeObjectURL(frameUrlRef.current)
