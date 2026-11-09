@@ -140,16 +140,30 @@ export function ShortsPage() {
     [projectId, setAutoFrameEnabled],
   )
 
+  // Cola secuencial: cada análisis decodifica el render completo del
+  // proyecto, así que nunca deben correr dos a la vez — ni cuando varias
+  // ShortCard disparan su propio análisis automático al montarse juntas
+  // (ver useEffect en ShortCard.tsx) ni cuando eso coincide con
+  // "Reencuadrar todos" (CreateShortsTool.handleReframeAll). Encolar acá,
+  // en el único lugar que de verdad invoca analyzeAndSave, es la fuente de
+  // verdad — no depende de que cada caller coordine entre sí.
+  const analysisQueueRef = useRef<Promise<void>>(Promise.resolve())
+
   const handleAnalyzeAutoFrame = useCallback(
-    async (short: { startMs: number; endMs: number }) => {
-      if (!projectId || !render) return
-      const key = shortKey(short)
-      setAnalyzingShortKey(key)
-      const keyframes = await analyzeAndSave(projectId, key, render, short.startMs, short.endMs, motionExcludeRect)
-      setAnalyzingShortKey(null)
-      if (keyframes) {
-        setAutoFramingByShort((prev) => ({ ...prev, [key]: keyframes }))
+    (short: { startMs: number; endMs: number }): Promise<void> => {
+      const run = async () => {
+        if (!projectId || !render) return
+        const key = shortKey(short)
+        setAnalyzingShortKey(key)
+        const keyframes = await analyzeAndSave(projectId, key, render, short.startMs, short.endMs, motionExcludeRect)
+        setAnalyzingShortKey(null)
+        if (keyframes) {
+          setAutoFramingByShort((prev) => ({ ...prev, [key]: keyframes }))
+        }
       }
+      const next = analysisQueueRef.current.then(run)
+      analysisQueueRef.current = next
+      return next
     },
     [projectId, render, motionExcludeRect, analyzeAndSave],
   )
