@@ -9,6 +9,27 @@ import { GenerateSubtitlesUseCase, type SubtitlesError, type SubtitlesResult } f
 
 export type GenerateSubtitlesAndRenderError = SubtitlesError | GenerateRenderError | StorageError | 'STORAGE_ERROR' | 'EMPTY_TIMELINE'
 
+const GENERATE_SUBTITLES_AND_RENDER_ERROR_CODES: readonly GenerateSubtitlesAndRenderError[] = [
+  'NO_SPEECH',
+  'UNSUPPORTED_API',
+  'INSUFFICIENT_HARDWARE',
+  'UNKNOWN_ERROR',
+  'EMPTY_TIMELINE',
+  'MISSING_ASSET',
+  'UNSUPPORTED_CODEC',
+  'MUX_FAILED',
+  'ENCODING_ERROR',
+  'INSUFFICIENT_MEMORY',
+  'ABORTED',
+  'STORAGE_FULL',
+  'STORAGE_ERROR',
+]
+
+/** Distingue un código de error tipado real (siempre uno de estos literales) de un mensaje crudo (ej. "UNCAUGHT: ...") que el worker puede mandar ante una excepción no tipada — ambos son `string` en runtime, así que un `typeof` no alcanza para diferenciarlos. */
+export function isGenerateSubtitlesAndRenderError(value: string): value is GenerateSubtitlesAndRenderError {
+  return (GENERATE_SUBTITLES_AND_RENDER_ERROR_CODES as readonly string[]).includes(value)
+}
+
 /**
  * Transcribe el audio ya extraído y, siempre que la transcripción tenga
  * éxito, genera un render nuevo del timeline vigente con esos subtítulos
