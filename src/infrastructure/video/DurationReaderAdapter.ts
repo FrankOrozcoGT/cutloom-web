@@ -2,8 +2,8 @@ import { err, ok, type Result } from '@application/result'
 import type { DurationError, DurationReader } from '@application/video/ports'
 
 export class DurationReaderAdapter implements DurationReader {
-  async read(file: File): Promise<Result<number, DurationError>> {
-    const url = URL.createObjectURL(file)
+  async read(blob: Blob): Promise<Result<number, DurationError>> {
+    const url = URL.createObjectURL(blob)
     try {
       const video = document.createElement('video')
       video.muted = true

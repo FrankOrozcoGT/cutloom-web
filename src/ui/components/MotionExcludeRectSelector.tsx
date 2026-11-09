@@ -3,7 +3,9 @@ import { X } from 'lucide-react'
 import type { Render } from '@domain/render'
 import type { NormalizedRect } from '@domain/shorts'
 import { useRenderFrame } from '@ui/timeline/useRenderFrame'
-import { useObjectUrl } from '@ui/hooks/useObjectUrl'
+import { DurationReaderAdapter } from '@infrastructure/video/DurationReaderAdapter'
+
+const durationReader = new DurationReaderAdapter()
 
 interface MotionExcludeRectSelectorProps {
   render: Render
@@ -26,7 +28,6 @@ function normalizeDrag(startX: number, startY: number, endX: number, endY: numbe
  * cualquier tamaño, según cómo haya grabado cada usuario.
  */
 export function MotionExcludeRectSelector({ render, rect, onChange, onClose }: MotionExcludeRectSelectorProps) {
-  const renderUrl = useObjectUrl(render.blob)
   const [durationMs, setDurationMs] = useState(0)
   const [selectedAtMs, setSelectedAtMs] = useState(0)
   const frameUrl = useRenderFrame(render, selectedAtMs)
@@ -34,20 +35,19 @@ export function MotionExcludeRectSelector({ render, rect, onChange, onClose }: M
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null)
 
-  // Lee la duración real del render con un <video> oculto (nunca se reproduce,
-  // solo carga metadata) — así el slider de abajo puede cubrir todo el rango
-  // real en vez de un valor inventado, y el usuario puede ir a cualquier
-  // punto del video (no solo el primer frame) para marcar el avatar en un
-  // momento donde efectivamente se lo vea.
+  // Así el slider de abajo puede cubrir todo el rango real en vez de un
+  // valor inventado, y el usuario puede ir a cualquier punto del video (no
+  // solo el primer frame) para marcar el avatar en un momento donde
+  // efectivamente se lo vea.
   useEffect(() => {
-    if (!renderUrl) return
-    const video = document.createElement('video')
-    video.preload = 'metadata'
-    video.src = renderUrl
-    const handleLoadedMetadata = () => setDurationMs(Math.round(video.duration * 1000))
-    video.addEventListener('loadedmetadata', handleLoadedMetadata)
-    return () => video.removeEventListener('loadedmetadata', handleLoadedMetadata)
-  }, [renderUrl])
+    let cancelled = false
+    void durationReader.read(render.blob).then((result) => {
+      if (!cancelled && result.ok) setDurationMs(result.value)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [render.blob])
 
   const toNormalized = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const bounds = containerRef.current?.getBoundingClientRect()

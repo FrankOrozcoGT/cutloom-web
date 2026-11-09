@@ -130,7 +130,7 @@ export interface ProjectShorts {
   motionExcludeRect?: NormalizedRect
 }
 
-/** Encuadre efectivo de un short — fijo (un solo offset) o automático (trayectoria ya calculada). Misma forma que ShortFraming de application/shorts/ports.ts, pero vive en domain porque resolveShortFraming no puede depender de application. */
+/** Encuadre efectivo de un short — fijo (un solo offset) o automático (trayectoria ya calculada). Usado por ShortExtractorPort/MotionFramingAnalyzerPort (application/shorts/ports.ts), pero vive en domain porque resolveShortFraming no puede depender de application. */
 export type EffectiveShortFraming = { mode: 'fixed'; cropOffsetX: number } | { mode: 'auto'; keyframes: AutoFrameKeyframe[] }
 
 /** Subconjunto de ProjectShorts que resolveShortFraming necesita — evita que sus callers tengan que construir un ProjectShorts completo (con projectId/renderId/shorts/etc.) solo para resolver un encuadre. */

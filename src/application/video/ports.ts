@@ -31,7 +31,7 @@ export interface ThumbnailGenerator {
 }
 
 export interface DurationReader {
-  read(file: File): Promise<Result<number, DurationError>>
+  read(blob: Blob): Promise<Result<number, DurationError>>
 }
 
 /** Progreso de la generación del proxy, 0 a 1. */
